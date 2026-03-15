@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiUser } from '@/lib/supabase/get-user-api'
+import { requireAdmin } from '@/lib/supabase/require-admin'
 
 export async function GET(_request: NextRequest) {
   try {
-    const { supabase, error } = await getApiUser()
+    const { supabase, error } = await requireAdmin()
     if (error) return error
 
     const { data: creators, error: queryError } = await supabase

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiUser } from '@/lib/supabase/get-user-api'
+import { requireAdmin } from '@/lib/supabase/require-admin'
 
 export async function PATCH(
   _request: NextRequest,
@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const { supabase, error } = await getApiUser()
+    const { supabase, userId, error } = await requireAdmin()
     if (error) return error
 
     const { data: course, error: updateError } = await supabase
@@ -22,6 +22,15 @@ export async function PATCH(
       console.error('Approve course error:', updateError)
       return NextResponse.json({ error: 'Failed to approve course' }, { status: 500 })
     }
+
+    // Audit log
+    await supabase.from('admin_audit_log').insert({
+      admin_user_id: userId,
+      action: 'course.approve',
+      target_type: 'course',
+      target_id: id,
+      metadata: { previous_status: 'in_review', new_status: 'published' },
+    })
 
     return NextResponse.json({ course })
   } catch (err) {

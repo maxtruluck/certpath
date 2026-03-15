@@ -17,31 +17,31 @@ export async function PATCH(
       return NextResponse.json({ error: 'Reason is required' }, { status: 400 })
     }
 
-    const { data: course, error: updateError } = await supabase
-      .from('courses')
-      .update({ status: 'draft' })
+    const { data: creator, error: updateError } = await supabase
+      .from('creators')
+      .update({ status: 'suspended' })
       .eq('id', id)
-      .eq('status', 'in_review')
-      .select('id, title, status')
+      .eq('status', 'approved')
+      .select('id, status, user_id')
       .single()
 
-    if (updateError || !course) {
-      console.error('Reject course error:', updateError)
-      return NextResponse.json({ error: 'Failed to reject course' }, { status: 500 })
+    if (updateError || !creator) {
+      console.error('Suspend creator error:', updateError)
+      return NextResponse.json({ error: 'Failed to suspend creator' }, { status: 500 })
     }
 
     // Audit log
     await supabase.from('admin_audit_log').insert({
       admin_user_id: userId,
-      action: 'course.reject',
-      target_type: 'course',
+      action: 'creator.suspend',
+      target_type: 'creator',
       target_id: id,
-      metadata: { reason, previous_status: 'in_review', new_status: 'draft' },
+      metadata: { reason, previous_status: 'approved', new_status: 'suspended' },
     })
 
-    return NextResponse.json({ course, reason })
+    return NextResponse.json({ creator })
   } catch (err) {
-    console.error('PATCH /api/admin/courses/[id]/reject error:', err)
+    console.error('PATCH /api/admin/creators/[id]/suspend error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
