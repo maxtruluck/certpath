@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       if (code) {
         await supabase.auth.exchangeCodeForSession(code);
       }
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return NextResponse.redirect(new URL('/home', request.url));
     }
 
     return NextResponse.json({ error: 'Unknown auth action' }, { status: 404 });
@@ -67,5 +67,5 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
   }
-  return NextResponse.redirect(new URL('/dashboard', request.url));
+  return NextResponse.redirect(new URL('/home', request.url));
 }

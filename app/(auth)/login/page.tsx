@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/Button';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,7 +26,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/dashboard');
+    router.push('/home');
     router.refresh();
   }
 
@@ -45,63 +44,73 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-1.5">
-            <span className="text-3xl font-bold text-cp-green">Cert</span>
-            <span className="text-3xl font-bold text-cp-text">Path</span>
+          <Link href="/" className="inline-flex items-center">
+            <span className="text-3xl font-bold text-gray-900">open</span>
+            <span className="text-3xl font-bold text-blue-500">ED</span>
           </Link>
-          <p className="text-cp-text-muted mt-2">Welcome back</p>
+          <p className="text-gray-500 mt-2 text-sm">Welcome back</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           {error && (
-            <div className="bg-cp-danger/20 text-cp-danger text-sm p-3 rounded-xl">{error}</div>
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl">{error}</div>
           )}
           <div>
-            <label htmlFor="email" className="block text-sm text-cp-text-muted mb-1">Email</label>
+            <label htmlFor="email" className="block text-sm text-gray-500 mb-1">Email</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-cp-surface border border-cp-surface-light rounded-xl text-cp-text focus:outline-none focus:border-cp-green transition-colors"
+              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm text-cp-text-muted mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm text-gray-500 mb-1">Password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-cp-surface border border-cp-surface-light rounded-xl text-cp-text focus:outline-none focus:border-cp-green transition-colors"
-              placeholder="••••••••"
+              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+              placeholder="Enter your password"
             />
           </div>
-          <Button type="submit" loading={loading} className="w-full">
-            Log In
-          </Button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+          >
+            {loading ? 'Logging in...' : 'Log in'}
+          </button>
         </form>
 
         <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-cp-surface-light" /></div>
-          <div className="relative flex justify-center text-sm"><span className="bg-cp-bg px-2 text-cp-text-muted">or continue with</span></div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+          <div className="relative flex justify-center text-sm"><span className="bg-white px-2 text-gray-400">or continue with</span></div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" onClick={() => handleOAuth('google')} className="w-full">
+          <button
+            onClick={() => handleOAuth('google')}
+            className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
             Google
-          </Button>
-          <Button variant="secondary" onClick={() => handleOAuth('github')} className="w-full">
+          </button>
+          <button
+            onClick={() => handleOAuth('github')}
+            className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
             GitHub
-          </Button>
+          </button>
         </div>
 
-        <p className="text-center text-sm text-cp-text-muted">
+        <p className="text-center text-sm text-gray-500">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-cp-green hover:text-cp-green-light">Sign up</Link>
+          <Link href="/signup" className="text-blue-500 hover:text-blue-600 font-medium">Sign up</Link>
         </p>
       </div>
     </div>

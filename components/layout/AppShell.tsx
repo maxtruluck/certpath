@@ -1,25 +1,31 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { TopBar } from './TopBar';
 import { BottomNav } from './BottomNav';
-import { XPToast } from '@/components/gamification/XPToast';
 
 interface AppShellProps {
   children: React.ReactNode;
   streak?: number;
   totalXp?: number;
   hideBottomNav?: boolean;
+  userInitial?: string;
 }
 
-export function AppShell({ children, streak = 0, totalXp = 0, hideBottomNav = false }: AppShellProps) {
+export function AppShell({ children, hideBottomNav = false, userInitial = 'O' }: AppShellProps) {
+  const pathname = usePathname();
+
+  // Hide bottom nav on practice/session routes
+  const isPracticeRoute = pathname?.startsWith('/practice') || pathname?.startsWith('/session');
+  const showBottomNav = !hideBottomNav && !isPracticeRoute;
+
   return (
-    <div className="min-h-[100dvh] bg-cp-bg-secondary">
-      <TopBar streak={streak} totalXp={totalXp} />
+    <div className="min-h-[100dvh] bg-white">
+      <TopBar userInitial={userInitial} />
       <main className="max-w-lg mx-auto px-4 pb-24 pt-4">
         {children}
       </main>
-      {!hideBottomNav && <BottomNav />}
-      <XPToast />
+      {showBottomNav && <BottomNav />}
     </div>
   );
 }

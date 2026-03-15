@@ -1,25 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { StreakBadge } from '@/components/gamification/StreakBadge';
-import { LevelBadge } from '@/components/gamification/LevelBadge';
 
 interface TopBarProps {
   streak?: number;
   totalXp?: number;
+  userInitial?: string;
 }
 
-export function TopBar({ streak = 0, totalXp = 0 }: TopBarProps) {
+export function TopBar({ userInitial = 'O' }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b-2 border-cp-border">
+    <header className="sticky top-0 z-50 bg-white border-b border-cp-border">
       <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-14">
-        <Link href="/dashboard" className="flex items-center group">
-          <span className="text-xl font-black gradient-text">CertPath</span>
+        <Link href="/home" className="flex items-center">
+          <span className="text-xl font-bold text-cp-text tracking-tight">open</span>
+          <span className="text-xl font-bold text-cp-primary tracking-tight">ED</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <StreakBadge streak={streak} />
-          <LevelBadge totalXp={totalXp} showProgress />
-        </div>
+        <Link
+          href="/profile"
+          className="w-8 h-8 rounded-full bg-cp-surface-light border border-cp-border flex items-center justify-center text-sm font-semibold text-cp-text-secondary hover:bg-cp-surface-hover transition-colors"
+        >
+          {userInitial}
+        </Link>
       </div>
     </header>
   );

@@ -1,184 +1,180 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js'
 
-interface Achievement {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  icon_emoji: string;
-  xp_reward: number;
-  criteria_type: string;
-  criteria_value: Record<string, unknown>;
+export interface EarnedAchievement {
+  id: string
+  slug: string
+  title: string
+  description: string
+  icon: string
+  xp_reward: number
 }
 
-interface EarnedAchievement extends Achievement {
-  earned_at: string;
+interface SessionData {
+  courseId: string
+  accuracy: number
+  totalQuestions: number
+  totalCorrect: number
+  totalTimeMs: number
+  completedAt: string
 }
 
 export async function checkAchievements(
   supabase: SupabaseClient,
   userId: string,
-  sessionData: {
-    certificationId: string;
-    accuracy: number;
-    totalQuestions: number;
-    totalTimeMs: number;
-    completedAt: Date;
-  }
+  sessionData: SessionData,
 ): Promise<EarnedAchievement[]> {
-  // Get unearned achievements
-  const { data: allAchievements } = await supabase
-    .from('achievements')
-    .select('*');
+  // Fetch all achievements and which ones user already has
+  const [{ data: allAchievements }, { data: earned }] = await Promise.all([
+    supabase.from('achievements').select('*'),
+    supabase.from('user_achievements').select('achievement_id').eq('user_id', userId),
+  ])
 
-  const { data: earnedAchievementRows } = await supabase
-    .from('user_achievements')
-    .select('achievement_id')
-    .eq('user_id', userId);
+  if (!allAchievements) return []
+  const earnedIds = new Set((earned || []).map((e: { achievement_id: string }) => e.achievement_id))
+  const unearnedAchievements = allAchievements.filter((a: { id: string }) => !earnedIds.has(a.id))
 
-  const earnedIds = new Set((earnedAchievementRows ?? []).map((r) => r.achievement_id));
-  const unearned = (allAchievements ?? []).filter((a) => !earnedIds.has(a.id)) as Achievement[];
+  if (unearnedAchievements.length === 0) return []
 
-  const newlyEarned: EarnedAchievement[] = [];
+  // Gather user stats for evaluation
+  const [{ data: coursesData }, { data: streakData }, { data: lastSessionData }] = await Promise.all([
+    supabase
+      .from('user_courses')
+      .select('status, readiness_score, questions_seen, sessions_completed, last_session_at')
+      .eq('user_id', userId),
+    supabase.from('user_streaks').select('current_streak').eq('user_id', userId).single(),
+    supabase
+      .from('user_courses')
+      .select('last_session_at')
+      .eq('user_id', userId)
+      .not('last_session_at', 'is', null)
+      .order('last_session_at', { ascending: false })
+      .limit(2),
+  ])
 
-  for (const achievement of unearned) {
-    const earned = await evaluateCriteria(supabase, userId, achievement, sessionData);
-    if (earned) {
-      // Insert user_achievement
-      await supabase.from('user_achievements').insert({
-        user_id: userId,
-        achievement_id: achievement.id,
-      });
+  const courses = coursesData || []
+  const totalQuestionsSeen = courses.reduce((s: number, c: { questions_seen: number }) => s + (c.questions_seen || 0), 0)
+  const totalSessions = courses.reduce((s: number, c: { sessions_completed: number }) => s + (c.sessions_completed || 0), 0)
+  const currentStreak = streakData?.current_streak || 0
+  const hasCompletedCourse = courses.some((c: { status: string }) => c.status === 'completed')
+  const maxReadiness = Math.max(0, ...courses.map((c: { readiness_score: number }) => c.readiness_score || 0))
 
-      // Award XP
-      await supabase.from('user_xp_log').insert({
-        user_id: userId,
-        xp_amount: achievement.xp_reward,
-        source: 'achievement',
-        reference_id: achievement.id,
-      });
+  // Check days since previous session (for comeback achievement)
+  let daysSinceLastSession = 0
+  if (lastSessionData && lastSessionData.length >= 2) {
+    const prev = new Date(lastSessionData[1].last_session_at)
+    const now = new Date(sessionData.completedAt)
+    daysSinceLastSession = Math.floor((now.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+  }
 
+  const completedHour = new Date(sessionData.completedAt).getHours()
+
+  // Evaluate each unearned achievement
+  const newlyEarned: EarnedAchievement[] = []
+
+  for (const achievement of unearnedAchievements) {
+    let met = false
+    const slug = achievement.slug as string
+
+    switch (slug) {
+      case 'first_session':
+        met = totalSessions >= 1
+        break
+      case 'ten_sessions':
+        met = totalSessions >= 10
+        break
+      case 'fifty_sessions':
+        met = totalSessions >= 50
+        break
+      case 'perfect_session':
+        met = sessionData.accuracy === 100 && sessionData.totalQuestions >= 5
+        break
+      case 'streak_3':
+        met = currentStreak >= 3
+        break
+      case 'streak_7':
+        met = currentStreak >= 7
+        break
+      case 'streak_30':
+        met = currentStreak >= 30
+        break
+      case 'questions_100':
+        met = totalQuestionsSeen >= 100
+        break
+      case 'questions_500':
+        met = totalQuestionsSeen >= 500
+        break
+      case 'questions_1000':
+        met = totalQuestionsSeen >= 1000
+        break
+      case 'course_complete':
+        met = hasCompletedCourse
+        break
+      case 'mastery_80':
+        met = maxReadiness >= 80
+        break
+      case 'mastery_90':
+        met = maxReadiness >= 90
+        break
+      case 'speed_demon':
+        met = sessionData.totalTimeMs < 180000 && sessionData.totalQuestions >= 10
+        break
+      case 'night_owl':
+        met = completedHour >= 22 || completedHour < 4
+        break
+      case 'early_bird':
+        met = completedHour >= 5 && completedHour < 7
+        break
+      case 'comeback':
+        met = daysSinceLastSession >= 7
+        break
+    }
+
+    if (met) {
       newlyEarned.push({
-        ...achievement,
-        earned_at: new Date().toISOString(),
-      });
+        id: achievement.id,
+        slug: achievement.slug,
+        title: achievement.title,
+        description: achievement.description,
+        icon: achievement.icon,
+        xp_reward: achievement.xp_reward,
+      })
     }
   }
 
-  return newlyEarned;
-}
+  // Award achievements and XP
+  if (newlyEarned.length > 0) {
+    const achievementInserts = newlyEarned.map(a => ({
+      user_id: userId,
+      achievement_id: a.id,
+    }))
 
-async function evaluateCriteria(
-  supabase: SupabaseClient,
-  userId: string,
-  achievement: Achievement,
-  sessionData: {
-    certificationId: string;
-    accuracy: number;
-    totalQuestions: number;
-    totalTimeMs: number;
-    completedAt: Date;
+    const xpInserts = newlyEarned
+      .filter(a => a.xp_reward > 0)
+      .map(a => ({
+        user_id: userId,
+        event_type: 'achievement',
+        xp_amount: a.xp_reward,
+        metadata: { achievement_slug: a.slug },
+      }))
+
+    const totalAchievementXp = newlyEarned.reduce((s, a) => s + a.xp_reward, 0)
+
+    await Promise.all([
+      supabase.from('user_achievements').insert(achievementInserts),
+      xpInserts.length > 0 ? supabase.from('xp_events').insert(xpInserts) : Promise.resolve(),
+      totalAchievementXp > 0
+        ? supabase
+            .from('profiles')
+            .select('total_xp')
+            .eq('id', userId)
+            .single()
+            .then(({ data }) => {
+              const current = data?.total_xp || 0
+              return supabase.from('profiles').update({ total_xp: current + totalAchievementXp }).eq('id', userId)
+            })
+        : Promise.resolve(),
+    ])
   }
-): Promise<boolean> {
-  const criteria = achievement.criteria_value;
 
-  switch (achievement.criteria_type) {
-    case 'streak': {
-      const { data: streak } = await supabase
-        .from('user_streaks')
-        .select('current_streak')
-        .eq('user_id', userId)
-        .single();
-      return (streak?.current_streak ?? 0) >= (criteria.streak_days as number);
-    }
-
-    case 'sessions': {
-      if (criteria.total_questions) {
-        const { data: cert } = await supabase
-          .from('user_certifications')
-          .select('questions_attempted')
-          .eq('user_id', userId)
-          .eq('certification_id', sessionData.certificationId)
-          .single();
-        return (cert?.questions_attempted ?? 0) >= (criteria.total_questions as number);
-      }
-      if (criteria.sessions) {
-        // Count unique session dates
-        const { count } = await supabase
-          .from('user_xp_log')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('source', 'session_complete');
-        return (count ?? 0) >= (criteria.sessions as number);
-      }
-      return false;
-    }
-
-    case 'accuracy': {
-      if (criteria.domain_score) {
-        const { data: scores } = await supabase
-          .from('user_domain_scores')
-          .select('score')
-          .eq('user_id', userId)
-          .gte('score', criteria.domain_score as number);
-        return (scores?.length ?? 0) > 0;
-      }
-      return false;
-    }
-
-    case 'certification': {
-      if (criteria.readiness) {
-        const { data: cert } = await supabase
-          .from('user_certifications')
-          .select('readiness_score')
-          .eq('user_id', userId)
-          .eq('certification_id', sessionData.certificationId)
-          .single();
-        return (cert?.readiness_score ?? 0) >= (criteria.readiness as number);
-      }
-      if (criteria.completed) {
-        const { data: cert } = await supabase
-          .from('user_certifications')
-          .select('status')
-          .eq('user_id', userId)
-          .eq('certification_id', sessionData.certificationId)
-          .single();
-        return cert?.status === 'completed';
-      }
-      return false;
-    }
-
-    case 'custom': {
-      if (criteria.after_hour) {
-        return sessionData.completedAt.getHours() >= (criteria.after_hour as number);
-      }
-      if (criteria.before_hour) {
-        return sessionData.completedAt.getHours() < (criteria.before_hour as number);
-      }
-      if (criteria.questions && criteria.time_ms) {
-        return (
-          sessionData.totalQuestions >= (criteria.questions as number) &&
-          sessionData.totalTimeMs <= (criteria.time_ms as number)
-        );
-      }
-      if (criteria.career_path) {
-        const { count } = await supabase
-          .from('user_career_paths')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId);
-        return (count ?? 0) > 0;
-      }
-      if (criteria.certs_enrolled) {
-        const { count } = await supabase
-          .from('user_certifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId);
-        return (count ?? 0) >= (criteria.certs_enrolled as number);
-      }
-      return false;
-    }
-
-    default:
-      return false;
-  }
+  return newlyEarned
 }

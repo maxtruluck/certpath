@@ -1,106 +1,148 @@
+/**
+ * Readiness Score Calculation
+ *
+ * Computes a learner's exam readiness as a weighted average of per-topic
+ * retrievability scores, weighted by each module's weight_percent.
+ *
+ * Topic score = average retrievability of all cards the user has in that topic.
+ * Module score = average of its topic scores.
+ * Readiness = SUM(module_score * module.weight_percent / 100).
+ *
+ * Recalculated after every session and stored on user_courses.readiness_score.
+ */
+
 import { SupabaseClient } from '@supabase/supabase-js';
+import { retrievability } from './fsrs';
 
-const RECENCY_HALF_LIFE_DAYS = 14;
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
+/**
+ * Calculate the readiness score (0-1) for a user's enrollment in a course.
+ */
 export async function calculateReadinessScore(
   supabase: SupabaseClient,
   userId: string,
-  certificationId: string
+  courseId: string,
 ): Promise<number> {
-  // Get domains with weights
-  const { data: domains } = await supabase
-    .from('domains')
+  // Fetch modules with their weights
+  const { data: modules } = await supabase
+    .from('modules')
     .select('id, weight_percent')
-    .eq('certification_id', certificationId);
+    .eq('course_id', courseId);
 
-  if (!domains || domains.length === 0) return 0;
+  if (!modules || modules.length === 0) return 0;
 
-  // Get domain scores
-  const { data: scores } = await supabase
-    .from('user_domain_scores')
-    .select('domain_id, score, questions_attempted, last_practiced_at')
+  // Fetch all topics for this course
+  const { data: topics } = await supabase
+    .from('topics')
+    .select('id, module_id')
+    .eq('course_id', courseId);
+
+  if (!topics || topics.length === 0) return 0;
+
+  // Build module -> topics mapping
+  const moduleTopics = new Map<string, string[]>();
+  for (const topic of topics) {
+    const list = moduleTopics.get(topic.module_id) ?? [];
+    list.push(topic.id);
+    moduleTopics.set(topic.module_id, list);
+  }
+
+  // Fetch all user card states for this course
+  const { data: cardStates } = await supabase
+    .from('user_card_states')
+    .select('topic_id, stability, due_date, last_review_date')
     .eq('user_id', userId)
-    .eq('certification_id', certificationId);
+    .eq('course_id', courseId)
+    .neq('state', 'new');
 
-  const scoreMap = new Map(
-    (scores ?? []).map((s) => [s.domain_id, s])
-  );
+  if (!cardStates || cardStates.length === 0) return 0;
 
-  // Get total questions per domain
-  const { data: questionCounts } = await supabase
-    .from('questions')
-    .select('domain_id')
-    .eq('certification_id', certificationId)
-    .eq('is_active', true);
+  const now = new Date();
 
-  const domainQuestionCounts = new Map<string, number>();
-  (questionCounts ?? []).forEach((q) => {
-    domainQuestionCounts.set(q.domain_id, (domainQuestionCounts.get(q.domain_id) ?? 0) + 1);
-  });
+  // Group cards by topic and compute average retrievability
+  const topicCards = new Map<string, number[]>();
+  for (const card of cardStates) {
+    const elapsedDays = card.last_review_date
+      ? Math.max(0, daysBetween(new Date(card.last_review_date), now))
+      : 0;
+    const R = retrievability(elapsedDays, card.stability);
 
+    const list = topicCards.get(card.topic_id) ?? [];
+    list.push(R);
+    topicCards.set(card.topic_id, list);
+  }
+
+  // Compute topic scores (average retrievability)
+  const topicScores = new Map<string, number>();
+  for (const [topicId, rValues] of Array.from(topicCards.entries())) {
+    const avg = rValues.reduce((sum, r) => sum + r, 0) / rValues.length;
+    topicScores.set(topicId, avg);
+  }
+
+  // Compute weighted readiness across modules
   let readiness = 0;
+  let totalWeight = 0;
 
-  for (const domain of domains) {
-    const score = scoreMap.get(domain.id);
-    if (!score || score.questions_attempted === 0) continue;
+  for (const mod of modules) {
+    const weight = mod.weight_percent ?? 0;
+    if (weight === 0) continue;
 
-    const totalQuestions = domainQuestionCounts.get(domain.id) ?? 1;
+    const modTopicIds = moduleTopics.get(mod.id) ?? [];
+    if (modTopicIds.length === 0) continue;
 
-    // Coverage factor: penalize low question coverage
-    const coverageFactor = Math.min(1, score.questions_attempted / (totalQuestions * 0.5));
+    // Module score = average of its topic scores (only scored topics count)
+    const scoredTopics = modTopicIds
+      .map((tid) => topicScores.get(tid))
+      .filter((s): s is number => s !== undefined);
 
-    // Recency factor: decay for domains not practiced recently
-    let recencyFactor = 1;
-    if (score.last_practiced_at) {
-      const daysSince = Math.floor(
-        (Date.now() - new Date(score.last_practiced_at).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      recencyFactor = Math.pow(0.5, daysSince / RECENCY_HALF_LIFE_DAYS);
-    }
+    if (scoredTopics.length === 0) continue;
 
-    const domainScore = score.score * coverageFactor * recencyFactor;
-    readiness += domainScore * (domain.weight_percent / 100);
+    const moduleScore = scoredTopics.reduce((sum, s) => sum + s, 0) / scoredTopics.length;
+
+    readiness += moduleScore * (weight / 100);
+    totalWeight += weight;
+  }
+
+  // Normalize if not all modules have been started
+  // (penalizes unstarted modules by counting them as 0)
+  const totalWeightAll = modules.reduce((sum, m) => sum + (m.weight_percent ?? 0), 0);
+  if (totalWeightAll > 0 && totalWeight < totalWeightAll) {
+    // readiness already only accounts for started modules;
+    // unstarted modules contribute 0, so no adjustment needed
+    // since we multiply by weight/100 above.
   }
 
   return Math.min(1, Math.max(0, readiness));
 }
 
-export async function updateDomainScore(
+/**
+ * Recalculate and persist the readiness score for a user's course enrollment.
+ * Call this after every completed session.
+ */
+export async function updateReadinessScore(
   supabase: SupabaseClient,
   userId: string,
-  domainId: string,
-  certificationId: string,
-  isCorrect: boolean
-): Promise<void> {
-  // Get existing score
-  const { data: existing } = await supabase
-    .from('user_domain_scores')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('domain_id', domainId)
-    .single();
+  courseId: string,
+): Promise<number> {
+  const score = await calculateReadinessScore(supabase, userId, courseId);
 
-  if (existing) {
-    const attempted = existing.questions_attempted + 1;
-    const correct = existing.questions_correct + (isCorrect ? 1 : 0);
-    await supabase
-      .from('user_domain_scores')
-      .update({
-        questions_attempted: attempted,
-        questions_correct: correct,
-        score: correct / attempted,
-        last_practiced_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id);
-  } else {
-    await supabase.from('user_domain_scores').insert({
-      user_id: userId,
-      domain_id: domainId,
-      certification_id: certificationId,
-      questions_attempted: 1,
-      questions_correct: isCorrect ? 1 : 0,
-      score: isCorrect ? 1 : 0,
-      last_practiced_at: new Date().toISOString(),
-    });
-  }
+  await supabase
+    .from('user_courses')
+    .update({ readiness_score: score })
+    .eq('user_id', userId)
+    .eq('course_id', courseId);
+
+  return score;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function daysBetween(a: Date, b: Date): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.floor((b.getTime() - a.getTime()) / msPerDay);
 }

@@ -33,7 +33,13 @@ export function ProgressBar({ value, color = 'auto', size = 'md', showLabel = fa
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      <div className={`flex-1 rounded-full bg-cp-bg-secondary overflow-hidden ${heights[size]}`}>
+      <div
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className={`flex-1 rounded-full bg-cp-bg-secondary overflow-hidden ${heights[size]}`}
+      >
         <div
           className={`${heights[size]} rounded-full transition-all duration-700 ease-out progress-shine ${barColors[resolvedColor]}`}
           style={{ width: `${pct}%` }}

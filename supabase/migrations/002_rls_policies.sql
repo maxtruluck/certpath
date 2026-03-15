@@ -1,68 +1,65 @@
+-- OpenED Row Level Security Policies
+
 -- Enable RLS on all tables
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE certifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE domains ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE creators ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE modules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE topics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_certifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_question_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_domain_scores ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_streaks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_xp_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_achievements ENABLE ROW LEVEL SECURITY;
-ALTER TABLE career_paths ENABLE ROW LEVEL SECURITY;
-ALTER TABLE career_path_milestones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_career_paths ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_card_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE review_log ENABLE ROW LEVEL SECURITY;
 
--- Users: own data only
-CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
+-- profiles: users can read/update own profile
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 
--- Certifications: public read
-CREATE POLICY "Anyone can view certifications" ON certifications FOR SELECT USING (true);
+-- creators: public read for approved, users manage own
+CREATE POLICY "Anyone can view approved creators" ON creators FOR SELECT USING (status = 'approved');
+CREATE POLICY "Users can insert own creator application" ON creators FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own creator record" ON creators FOR SELECT USING (auth.uid() = user_id);
 
--- Domains: public read
-CREATE POLICY "Anyone can view domains" ON domains FOR SELECT USING (true);
+-- courses: public read for published, creators manage own
+CREATE POLICY "Anyone can view published courses" ON courses FOR SELECT USING (status = 'published');
+CREATE POLICY "Creators can manage own courses" ON courses FOR ALL USING (
+  creator_id IN (SELECT id FROM creators WHERE user_id = auth.uid())
+);
 
--- Questions: public read (active only)
-CREATE POLICY "Anyone can view active questions" ON questions FOR SELECT USING (is_active = true);
+-- modules: public read for published courses
+CREATE POLICY "Anyone can view modules of published courses" ON modules FOR SELECT USING (
+  course_id IN (SELECT id FROM courses WHERE status = 'published')
+);
+CREATE POLICY "Creators can manage own modules" ON modules FOR ALL USING (
+  course_id IN (SELECT id FROM courses WHERE creator_id IN (SELECT id FROM creators WHERE user_id = auth.uid()))
+);
 
--- User Certifications: own data
-CREATE POLICY "Users can view own certs" ON user_certifications FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own certs" ON user_certifications FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own certs" ON user_certifications FOR UPDATE USING (auth.uid() = user_id);
+-- topics: public read for published courses
+CREATE POLICY "Anyone can view topics of published courses" ON topics FOR SELECT USING (
+  course_id IN (SELECT id FROM courses WHERE status = 'published')
+);
+CREATE POLICY "Creators can manage own topics" ON topics FOR ALL USING (
+  course_id IN (SELECT id FROM courses WHERE creator_id IN (SELECT id FROM creators WHERE user_id = auth.uid()))
+);
 
--- User Question History: own data
-CREATE POLICY "Users can view own history" ON user_question_history FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own history" ON user_question_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- questions: public read active questions of published courses
+CREATE POLICY "Anyone can view active questions of published courses" ON questions FOR SELECT USING (
+  is_active = true AND course_id IN (SELECT id FROM courses WHERE status = 'published')
+);
+CREATE POLICY "Creators can manage own questions" ON questions FOR ALL USING (
+  creator_id IN (SELECT id FROM creators WHERE user_id = auth.uid())
+);
 
--- User Domain Scores: own data
-CREATE POLICY "Users can view own scores" ON user_domain_scores FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own scores" ON user_domain_scores FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own scores" ON user_domain_scores FOR UPDATE USING (auth.uid() = user_id);
+-- user_courses: users manage own enrollments
+CREATE POLICY "Users can view own enrollments" ON user_courses FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own enrollments" ON user_courses FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own enrollments" ON user_courses FOR UPDATE USING (auth.uid() = user_id);
 
--- User Streaks: own data
-CREATE POLICY "Users can view own streak" ON user_streaks FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can update own streak" ON user_streaks FOR UPDATE USING (auth.uid() = user_id);
+-- user_card_states: users manage own card states
+CREATE POLICY "Users can view own card states" ON user_card_states FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own card states" ON user_card_states FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own card states" ON user_card_states FOR UPDATE USING (auth.uid() = user_id);
 
--- User XP Log: own data
-CREATE POLICY "Users can view own xp" ON user_xp_log FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own xp" ON user_xp_log FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Achievements: public read
-CREATE POLICY "Anyone can view achievements" ON achievements FOR SELECT USING (true);
-
--- User Achievements: own data
-CREATE POLICY "Users can view own achievements" ON user_achievements FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own achievements" ON user_achievements FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Career Paths: public read
-CREATE POLICY "Anyone can view career paths" ON career_paths FOR SELECT USING (true);
-
--- Career Path Milestones: public read
-CREATE POLICY "Anyone can view milestones" ON career_path_milestones FOR SELECT USING (true);
-
--- User Career Paths: own data
-CREATE POLICY "Users can view own career paths" ON user_career_paths FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own career paths" ON user_career_paths FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own career paths" ON user_career_paths FOR UPDATE USING (auth.uid() = user_id);
+-- review_log: users can view/insert own reviews
+CREATE POLICY "Users can view own reviews" ON review_log FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own reviews" ON review_log FOR INSERT WITH CHECK (auth.uid() = user_id);

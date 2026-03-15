@@ -10,20 +10,24 @@ interface ApiAuthResult {
 }
 
 export async function getApiUser(): Promise<ApiAuthResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (user) {
-    return { supabase, userId: user.id };
-  }
+  // Always get the service client for API routes (bypasses RLS, needed for cross-table writes)
+  const serviceClient = await createServiceClient();
 
   if (DEMO_MODE) {
-    const serviceClient = await createServiceClient();
     return { supabase: serviceClient, userId: DEMO_USER_ID };
   }
 
+  // Check auth from cookies
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+
+  if (user) {
+    // Use service client for data operations but authenticated user's ID
+    return { supabase: serviceClient, userId: user.id };
+  }
+
   return {
-    supabase,
+    supabase: serviceClient,
     userId: '',
     error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
   };

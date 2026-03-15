@@ -1,0 +1,124 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getApiUser } from '@/lib/supabase/get-user-api'
+
+export async function GET(request: NextRequest) {
+  try {
+    const { supabase, userId, error } = await getApiUser()
+    if (error) return error
+
+    const { searchParams } = request.nextUrl
+    const category = searchParams.get('category')
+    const difficulty = searchParams.get('difficulty')
+    const search = searchParams.get('search')
+    const sort = searchParams.get('sort') || 'published_at'
+    const cursor = searchParams.get('cursor')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50)
+
+    // Build base query for published courses with creator info
+    let query = supabase
+      .from('courses')
+      .select(`
+        *,
+        creator:creators(id, creator_name, bio, expertise_areas, credentials),
+        user_progress:user_courses!left(id, status, readiness_score, questions_seen, questions_correct, sessions_completed, last_session_at, enrolled_at, completed_at)
+      `)
+      .eq('status', 'published')
+
+    // Filter user_progress to current user
+    query = query.eq('user_courses.user_id', userId)
+
+    // Apply filters
+    if (category) {
+      query = query.eq('category', category)
+    }
+    if (difficulty) {
+      query = query.eq('difficulty', difficulty)
+    }
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`)
+    }
+
+    // Cursor-based pagination
+    if (cursor) {
+      const sortColumn = sort === 'title' ? 'title' : 'published_at'
+      query = query.gt(sortColumn, cursor)
+    }
+
+    // Sorting
+    if (sort === 'title') {
+      query = query.order('title', { ascending: true })
+    } else {
+      query = query.order('published_at', { ascending: false })
+    }
+
+    // Fetch limit + 1 to determine has_more
+    query = query.limit(limit + 1)
+
+    const { data: courses, error: queryError } = await query
+
+    if (queryError) {
+      console.error('Courses query error:', queryError)
+      return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
+    }
+
+    const hasMore = (courses?.length || 0) > limit
+    const resultCourses = courses?.slice(0, limit) || []
+
+    // Get stats for each course (question_count, module_count, topic_count)
+    const courseIds = resultCourses.map((c: any) => c.id)
+
+    let statsMap: Record<string, { question_count: number; module_count: number; topic_count: number }> = {}
+
+    if (courseIds.length > 0) {
+      const [modulesRes, topicsRes, questionsRes] = await Promise.all([
+        supabase
+          .from('modules')
+          .select('course_id')
+          .in('course_id', courseIds),
+        supabase
+          .from('topics')
+          .select('course_id')
+          .in('course_id', courseIds),
+        supabase
+          .from('questions')
+          .select('course_id')
+          .in('course_id', courseIds)
+          .eq('is_active', true),
+      ])
+
+      for (const id of courseIds) {
+        statsMap[id] = {
+          module_count: (modulesRes.data || []).filter((m: any) => m.course_id === id).length,
+          topic_count: (topicsRes.data || []).filter((t: any) => t.course_id === id).length,
+          question_count: (questionsRes.data || []).filter((q: any) => q.course_id === id).length,
+        }
+      }
+    }
+
+    // Shape response
+    const shaped = resultCourses.map((c: any) => {
+      const { user_progress, ...course } = c
+      return {
+        ...course,
+        stats: statsMap[c.id] || { module_count: 0, topic_count: 0, question_count: 0 },
+        user_progress: user_progress?.[0] || null,
+      }
+    })
+
+    // Determine next cursor
+    let nextCursor: string | null = null
+    if (hasMore && resultCourses.length > 0) {
+      const last = resultCourses[resultCourses.length - 1]
+      nextCursor = sort === 'title' ? last.title : last.published_at
+    }
+
+    return NextResponse.json({
+      courses: shaped,
+      next_cursor: nextCursor,
+      has_more: hasMore,
+    })
+  } catch (err) {
+    console.error('GET /api/courses error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

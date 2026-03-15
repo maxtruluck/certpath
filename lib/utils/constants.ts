@@ -8,18 +8,6 @@ export const XP = {
   PERFECT_SESSION: 50,
 } as const;
 
-// SM-2 Parameters
-export const SM2 = {
-  INITIAL_EASE_FACTOR: 2.5,
-  MIN_EASE_FACTOR: 1.3,
-  INITIAL_INTERVAL: 1,
-  SECOND_INTERVAL: 3,
-  EASE_BONUS: 0.1,
-  EASE_PENALTY: 0.2,
-  MAX_INTERVAL: 180,
-  FUZZ_FACTOR: 0.1,
-} as const;
-
 // Session Parameters
 export const SESSION = {
   DEFAULT_QUESTION_COUNT: 12,

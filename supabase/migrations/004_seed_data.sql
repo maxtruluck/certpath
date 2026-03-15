@@ -1,465 +1,134 @@
--- Seed CompTIA Security+ SY0-701
-INSERT INTO certifications (id, name, short_name, slug, description, icon_emoji, color_hex, exam_fee_usd, avg_salary_bump_usd, exam_duration_minutes, passing_score, max_score, total_questions_on_exam, provider_name, provider_url, display_order)
-VALUES (
-  'a0000000-0000-0000-0000-000000000001',
-  'CompTIA Security+ SY0-701',
-  'Security+',
-  'comptia-security-plus',
-  'The CompTIA Security+ certification validates the baseline skills necessary to perform core security functions and pursue an IT security career.',
-  '🔒',
-  '#e74c3c',
-  39200,
-  1500000,
-  90,
-  750,
-  900,
-  83,
-  'CompTIA',
-  'https://www.comptia.org/certifications/security',
-  1
-);
+-- OpenED Seed Data: Security+ course with creator
 
--- Seed Domains for Security+ SY0-701
-INSERT INTO domains (id, certification_id, name, slug, description, weight_percent, display_order) VALUES
-('d0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'General Security Concepts', 'general-security-concepts', 'Fundamental security concepts, controls, and terminology', 12, 1),
-('d0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'Threats, Vulnerabilities, and Mitigations', 'threats-vulnerabilities-mitigations', 'Types of threats, vulnerabilities, and mitigation strategies', 22, 2),
-('d0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Security Architecture', 'security-architecture', 'Security architecture models, frameworks, and design principles', 18, 3),
-('d0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'Security Operations', 'security-operations', 'Security operations, monitoring, and incident response', 28, 4),
-('d0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Security Program Management and Oversight', 'security-program-management', 'Governance, risk management, compliance, and security programs', 20, 5);
+-- Demo user profile (bypasses auth.users FK for development)
+INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, confirmation_token, recovery_token)
+VALUES ('a1111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'demo@opened.app', '$2a$10$demo', now(), now(), now(), '', '')
+ON CONFLICT (id) DO NOTHING;
 
--- Seed Career Paths
-INSERT INTO career_paths (id, name, slug, starting_role, target_role, starting_salary_usd, target_salary_usd, estimated_months, description) VALUES
-('c0000000-0000-0000-0000-000000000001', 'IT Helpdesk to Security Engineer', 'helpdesk-to-security-engineer', 'Help Desk Analyst', 'Security Engineer', 4200000, 11500000, 24, 'Start from help desk support and work your way up to a security engineering role through key certifications.'),
-('c0000000-0000-0000-0000-000000000002', 'Career Changer to Cloud Engineer', 'career-changer-to-cloud-engineer', 'Non-IT Role', 'Cloud Engineer', 3800000, 10500000, 24, 'Transition from a non-IT career into cloud engineering with a structured certification path.'),
-('c0000000-0000-0000-0000-000000000003', 'Junior IT to Cybersecurity Analyst', 'junior-it-to-cybersecurity-analyst', 'IT Support', 'Cybersecurity Analyst', 4000000, 8500000, 18, 'Move from IT support into a cybersecurity analyst role with focused security certifications.');
+INSERT INTO profiles (id, display_name, role, onboarding_complete)
+VALUES ('a1111111-1111-1111-1111-111111111111', 'John Doe', 'creator', true)
+ON CONFLICT (id) DO NOTHING;
 
--- Seed Career Path Milestones
-INSERT INTO career_path_milestones (career_path_id, certification_id, milestone_order, projected_salary_usd, salary_bump_usd) VALUES
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 1, 5500000, 1300000),
-('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 2, 5000000, 1200000),
-('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 1, 5200000, 1200000);
+-- Creator: Jason Dion (uses demo user ID)
+INSERT INTO creators (id, user_id, creator_name, bio, expertise_areas, credentials, status) VALUES
+  ('c0000000-0000-0000-0000-000000000001', 'a1111111-1111-1111-1111-111111111111', 'Jason Dion', '15+ years in cybersecurity education. CompTIA certified instructor with 2.8M+ enrolled students.', ARRAY['cybersecurity', 'comptia', 'networking'], 'CISSP, Security+, Network+, CySA+', 'approved');
 
--- Seed Achievements
-INSERT INTO achievements (slug, name, description, icon_emoji, xp_reward, criteria_type, criteria_value) VALUES
-('first_steps', 'First Steps', 'Complete your first practice session', '👣', 50, 'sessions', '{"sessions": 1}'),
-('week_warrior', 'Week Warrior', 'Maintain a 7-day streak', '🔥', 100, 'streak', '{"streak_days": 7}'),
-('two_week_titan', 'Two Week Titan', 'Maintain a 14-day streak', '⚡', 200, 'streak', '{"streak_days": 14}'),
-('month_master', 'Month Master', 'Maintain a 30-day streak', '👑', 500, 'streak', '{"streak_days": 30}'),
-('sharpshooter', 'Sharpshooter', '90%+ accuracy on 3 consecutive sessions', '🎯', 150, 'accuracy', '{"accuracy_pct": 90, "sessions": 3}'),
-('domain_dominator', 'Domain Dominator', 'Score 90%+ on any single domain', '🏰', 200, 'accuracy', '{"domain_score": 0.9}'),
-('halfway_there', 'Halfway There', 'Reach 50% readiness score', '🚀', 150, 'certification', '{"readiness": 0.5}'),
-('exam_ready', 'Exam Ready', 'Reach 80% readiness score', '✅', 300, 'certification', '{"readiness": 0.8}'),
-('certified', 'Certified!', 'Mark a certification as passed', '🎓', 1000, 'certification', '{"completed": true}'),
-('speed_demon', 'Speed Demon', 'Answer 10 questions in under 3 minutes', '⚡', 100, 'custom', '{"questions": 10, "time_ms": 180000}'),
-('night_owl', 'Night Owl', 'Complete a session after 10 PM', '🦉', 50, 'custom', '{"after_hour": 22}'),
-('early_bird', 'Early Bird', 'Complete a session before 7 AM', '🌅', 50, 'custom', '{"before_hour": 7}'),
-('question_hunter', 'Question Hunter', 'Attempt 500 total questions', '🏹', 200, 'sessions', '{"total_questions": 500}'),
-('path_pioneer', 'Path Pioneer', 'Enroll in a career path', '🗺️', 50, 'custom', '{"career_path": true}'),
-('double_down', 'Double Down', 'Enroll in a second certification', '✌️', 100, 'custom', '{"certs_enrolled": 2}');
+-- Courses
+INSERT INTO courses (id, creator_id, title, slug, description, category, difficulty, is_free, price_cents, exam_fee_cents, passing_score, max_score, exam_duration_minutes, total_questions_on_exam, provider_name, provider_url, status, published_at) VALUES
+  ('ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'CompTIA Security+ SY0-701', 'comptia-security-plus-sy0-701', 'Master the CompTIA Security+ SY0-701 exam with 830 practice questions across all 5 domains, adaptive spaced repetition, and detailed explanations.', 'certification', 'intermediate', false, 1499, 40400, 750, 900, 90, 90, 'CompTIA', 'https://www.comptia.org/certifications/security', 'published', now()),
+  ('ca000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'CompTIA A+ Core 1', 'comptia-a-plus-core-1', 'Comprehensive preparation for the CompTIA A+ Core 1 (220-1101) exam.', 'certification', 'beginner', false, 1499, 35800, 675, 900, 90, 90, 'CompTIA', 'https://www.comptia.org/certifications/a', 'published', now()),
+  ('ca000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'World Geography', 'world-geography', 'Learn about countries, capitals, continents, and geographic features.', 'general_knowledge', 'beginner', true, 0, NULL, NULL, NULL, NULL, NULL, 'openED', NULL, 'published', now());
 
--- Seed initial questions for Security+ (50 starter questions across domains)
--- Domain 1: General Security Concepts (6 questions)
-INSERT INTO questions (certification_id, domain_id, question_text, question_type, options, correct_option_ids, explanation, difficulty, tags, source) VALUES
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'Which of the following BEST describes the concept of least privilege?',
- 'multiple_choice',
- '[{"id":"a","text":"Users should have the minimum access necessary to perform their job functions"},{"id":"b","text":"Users should have access to all systems in case of emergencies"},{"id":"c","text":"Administrators should have unlimited access to all resources"},{"id":"d","text":"Access should be granted based on seniority in the organization"}]',
- ARRAY['a'],
- 'The principle of least privilege states that users should only have the minimum level of access required to perform their job duties. This reduces the attack surface and limits potential damage from compromised accounts.',
- 1, ARRAY['access-control', 'least-privilege', 'security-concepts'], 'ai_generated'),
+-- Modules for Security+
+INSERT INTO modules (id, course_id, title, description, weight_percent, display_order) VALUES
+  ('b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'General Security Concepts', 'Fundamental security concepts, threat types, and security controls.', 12, 1),
+  ('b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Threats, Vulnerabilities, and Mitigations', 'Common threat actors, attack vectors, and vulnerability types.', 22, 2),
+  ('b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'Security Architecture', 'Network architecture, secure infrastructure, and resilience.', 18, 3),
+  ('b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'Security Operations', 'Security monitoring, incident response, and data management.', 28, 4),
+  ('b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'Security Program Management', 'Governance, risk, compliance, and security awareness.', 20, 5);
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'What is the primary purpose of a security baseline?',
- 'multiple_choice',
- '[{"id":"a","text":"To document all known vulnerabilities in a system"},{"id":"b","text":"To establish a minimum standard of security controls for systems"},{"id":"c","text":"To create a backup of security configurations"},{"id":"d","text":"To monitor network traffic for suspicious activity"}]',
- ARRAY['b'],
- 'A security baseline defines the minimum set of security controls that must be implemented on a system. It serves as a reference point for configuration management and helps ensure consistent security across the organization.',
- 2, ARRAY['baseline', 'security-controls', 'configuration'], 'ai_generated'),
+-- Topics
+INSERT INTO topics (id, module_id, course_id, title, description, display_order, guidebook_content) VALUES
+  ('d0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'Security Concepts', 'CIA triad, AAA framework', 1, '## Security Concepts
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'A company implements a policy where employees must use both a smart card and a PIN to access the building. Which security concept does this represent?',
- 'multiple_choice',
- '[{"id":"a","text":"Single sign-on"},{"id":"b","text":"Multifactor authentication"},{"id":"c","text":"Role-based access control"},{"id":"d","text":"Discretionary access control"}]',
- ARRAY['b'],
- 'Multifactor authentication (MFA) requires two or more different types of authentication factors: something you have (smart card), something you know (PIN), or something you are (biometrics). Using a smart card and PIN combines two different factors.',
- 2, ARRAY['mfa', 'authentication', 'access-control'], 'ai_generated'),
+The **CIA Triad** forms the foundation of information security:
+- **Confidentiality**: Ensuring information is only accessible to authorized individuals
+- **Integrity**: Ensuring data remains accurate and unaltered
+- **Availability**: Ensuring systems and data are accessible when needed
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'Which of the following describes the CIA triad component that ensures data has not been tampered with or altered?',
- 'multiple_choice',
- '[{"id":"a","text":"Confidentiality"},{"id":"b","text":"Integrity"},{"id":"c","text":"Availability"},{"id":"d","text":"Authentication"}]',
- ARRAY['b'],
- 'Integrity is the CIA triad component that ensures data has not been modified, altered, or corrupted in an unauthorized manner. Controls like hashing, digital signatures, and checksums help verify data integrity.',
- 1, ARRAY['cia-triad', 'integrity', 'security-concepts'], 'ai_generated'),
+*Exam tip: CIA triad questions appear in almost every Security+ exam.*'),
+  ('d0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'Security Controls', 'Technical, managerial, operational, physical controls', 2, '## Security Controls
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'An organization wants to ensure that if one security control fails, another control will prevent the attack. This concept is known as:',
- 'multiple_choice',
- '[{"id":"a","text":"Defense in depth"},{"id":"b","text":"Security through obscurity"},{"id":"c","text":"Risk transference"},{"id":"d","text":"Single point of failure"}]',
- ARRAY['a'],
- 'Defense in depth is a security strategy that uses multiple layers of security controls. If one layer fails, the next layer provides protection. This approach provides redundancy and reduces the risk of a single point of failure.',
- 2, ARRAY['defense-in-depth', 'layered-security', 'security-concepts'], 'ai_generated'),
+- **Technical**: Firewalls, encryption, IDS/IPS
+- **Managerial**: Policies, risk assessments
+- **Operational**: Guards, procedures, training
+- **Physical**: Locks, fences, cameras'),
+  ('d0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'Change Management', 'Change management processes', 3, NULL),
+  ('d0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'Cryptography', 'Symmetric, asymmetric, hashing, PKI', 4, '## Cryptography
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
- 'Which type of access control model uses labels and clearances to determine access?',
- 'multiple_choice',
- '[{"id":"a","text":"Discretionary Access Control (DAC)"},{"id":"b","text":"Mandatory Access Control (MAC)"},{"id":"c","text":"Role-Based Access Control (RBAC)"},{"id":"d","text":"Attribute-Based Access Control (ABAC)"}]',
- ARRAY['b'],
- 'Mandatory Access Control (MAC) uses security labels (classifications) on objects and clearances for subjects to determine access. The system enforces access decisions based on these labels, and users cannot change them.',
- 3, ARRAY['mac', 'access-control', 'clearance'], 'ai_generated'),
+**Symmetric**: Same key encrypts/decrypts (AES)
+**Asymmetric**: Public/private key pair (RSA, ECC)
+**Hashing**: One-way function (SHA-256)
 
--- Domain 2: Threats, Vulnerabilities, and Mitigations (11 questions)
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'An attacker sends a carefully crafted email that appears to come from the CEO, asking the CFO to wire money urgently. This attack is BEST described as:',
- 'multiple_choice',
- '[{"id":"a","text":"Phishing"},{"id":"b","text":"Spear phishing"},{"id":"c","text":"Whaling"},{"id":"d","text":"Vishing"}]',
- ARRAY['c'],
- 'Whaling is a type of spear phishing that specifically targets high-profile individuals like executives (the "big fish"). It involves highly personalized emails designed to manipulate senior leadership into taking actions like wire transfers.',
- 3, ARRAY['social-engineering', 'whaling', 'phishing'], 'ai_generated'),
+*Exam tip: Know symmetric (fast, shared key) vs asymmetric (slow, key pair).*');
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'Which type of malware disguises itself as legitimate software while performing malicious activities in the background?',
- 'multiple_choice',
- '[{"id":"a","text":"Worm"},{"id":"b","text":"Trojan"},{"id":"c","text":"Rootkit"},{"id":"d","text":"Ransomware"}]',
- ARRAY['b'],
- 'A Trojan (or Trojan horse) is malware that disguises itself as legitimate, useful software to trick users into installing it. Once installed, it performs malicious activities without the user''s knowledge.',
- 1, ARRAY['malware', 'trojan', 'threats'], 'ai_generated'),
+INSERT INTO topics (id, module_id, course_id, title, description, display_order, guidebook_content) VALUES
+  ('d0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Threat Actors', 'Nation-states, hacktivists, insiders', 1, NULL),
+  ('d0000000-0000-0000-0000-000000000006', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Threat Vectors', 'Attack surfaces and vectors', 2, NULL),
+  ('d0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Social Engineering', 'Phishing, vishing, smishing, pretexting', 3, '## Social Engineering
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'A web application vulnerability allows an attacker to inject malicious SQL statements through user input fields. This is known as:',
- 'multiple_choice',
- '[{"id":"a","text":"Cross-site scripting (XSS)"},{"id":"b","text":"SQL injection"},{"id":"c","text":"Cross-site request forgery (CSRF)"},{"id":"d","text":"Buffer overflow"}]',
- ARRAY['b'],
- 'SQL injection occurs when an attacker inserts malicious SQL code into input fields that are directly used in database queries. This can allow unauthorized data access, modification, or deletion. Input validation and parameterized queries prevent it.',
- 2, ARRAY['sql-injection', 'web-vulnerabilities', 'injection'], 'ai_generated'),
+- **Phishing** — fraudulent emails with deceptive links
+- **Vishing** — voice-based phishing
+- **Smishing** — SMS-based phishing
+- **Pretexting** — fabricating a scenario to gain trust
+- **Tailgating** — following authorized personnel into secure areas
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'What type of attack exploits the trust a website has in a user''s browser by sending unauthorized requests?',
- 'multiple_choice',
- '[{"id":"a","text":"SQL injection"},{"id":"b","text":"Cross-site scripting"},{"id":"c","text":"Cross-site request forgery"},{"id":"d","text":"Directory traversal"}]',
- ARRAY['c'],
- 'Cross-site request forgery (CSRF) exploits the trust a website has in an authenticated user''s browser. The attacker tricks the user into making unintended requests to a site where they''re authenticated, using their existing session.',
- 3, ARRAY['csrf', 'web-vulnerabilities', 'attack-types'], 'ai_generated'),
+*Exam tip: phishing = email, vishing = voice, smishing = SMS.*'),
+  ('d0000000-0000-0000-0000-000000000008', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Vulnerabilities', 'Software and configuration vulnerabilities', 4, NULL),
+  ('d0000000-0000-0000-0000-000000000009', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'Malicious Activity', 'Malware types, indicators of compromise', 5, NULL);
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'A zero-day vulnerability refers to:',
- 'multiple_choice',
- '[{"id":"a","text":"A vulnerability that has been patched within 24 hours"},{"id":"b","text":"A vulnerability that is unknown to the vendor and has no available patch"},{"id":"c","text":"A vulnerability rated as zero severity"},{"id":"d","text":"A vulnerability found in legacy systems only"}]',
- ARRAY['b'],
- 'A zero-day vulnerability is a software flaw unknown to the vendor, meaning no patch exists. Attackers who discover these can exploit them before the vendor becomes aware and develops a fix, making them particularly dangerous.',
- 2, ARRAY['zero-day', 'vulnerabilities', 'threats'], 'ai_generated'),
+INSERT INTO topics (id, module_id, course_id, title, description, display_order) VALUES
+  ('d0000000-0000-0000-0000-000000000010', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'Network Security', 'Firewalls, VPNs, segmentation', 1),
+  ('d0000000-0000-0000-0000-000000000011', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'Secure Infrastructure', 'Cloud, virtualization, containers', 2),
+  ('d0000000-0000-0000-0000-000000000012', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'Data Protection', 'Encryption, DLP, classification', 3),
+  ('d0000000-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'Security Monitoring', 'SIEM, log analysis, alerting', 1),
+  ('d0000000-0000-0000-0000-000000000014', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'Incident Response', 'IR process, containment, recovery', 2),
+  ('d0000000-0000-0000-0000-000000000015', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'Digital Forensics', 'Evidence, chain of custody', 3),
+  ('d0000000-0000-0000-0000-000000000016', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'Automation', 'SOAR, scripting, automation', 4),
+  ('d0000000-0000-0000-0000-000000000017', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'Governance', 'Policies, standards, guidelines', 1),
+  ('d0000000-0000-0000-0000-000000000018', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'Risk Management', 'Risk assessment, frameworks', 2),
+  ('d0000000-0000-0000-0000-000000000019', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'Compliance', 'Regulations, standards, audits', 3),
+  ('d0000000-0000-0000-0000-000000000020', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'Security Awareness', 'Training, phishing simulations', 4);
 
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'Which attack technique involves an attacker positioning themselves between two communicating parties to intercept and potentially alter communications?',
- 'multiple_choice',
- '[{"id":"a","text":"Replay attack"},{"id":"b","text":"On-path (man-in-the-middle) attack"},{"id":"c","text":"Brute force attack"},{"id":"d","text":"Birthday attack"}]',
- ARRAY['b'],
- 'An on-path attack (formerly known as man-in-the-middle) occurs when an attacker positions themselves between two parties to intercept, monitor, and potentially modify communications. Encryption and certificate validation help prevent this.',
- 2, ARRAY['mitm', 'on-path', 'attack-types'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'Ransomware that threatens to publish stolen data unless a ransom is paid is known as:',
- 'multiple_choice',
- '[{"id":"a","text":"Crypto ransomware"},{"id":"b","text":"Locker ransomware"},{"id":"c","text":"Double extortion ransomware"},{"id":"d","text":"Scareware"}]',
- ARRAY['c'],
- 'Double extortion ransomware not only encrypts the victim''s data but also exfiltrates it, threatening to publish the stolen data unless additional ransom is paid. This adds pressure beyond just data recovery.',
- 3, ARRAY['ransomware', 'double-extortion', 'malware'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'An attacker creates a fake Wi-Fi hotspot with a name similar to a legitimate network to capture user credentials. This is an example of:',
- 'multiple_choice',
- '[{"id":"a","text":"Bluejacking"},{"id":"b","text":"Evil twin attack"},{"id":"c","text":"War driving"},{"id":"d","text":"Deauthentication attack"}]',
- ARRAY['b'],
- 'An evil twin attack involves setting up a rogue wireless access point that mimics a legitimate network. Users unknowingly connect to it, allowing the attacker to intercept traffic, capture credentials, and perform man-in-the-middle attacks.',
- 2, ARRAY['evil-twin', 'wireless-attacks', 'social-engineering'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'Which of the following BEST describes a supply chain attack?',
- 'multiple_choice',
- '[{"id":"a","text":"Attacking a company''s physical supply warehouse"},{"id":"b","text":"Compromising a trusted vendor or software component to attack downstream targets"},{"id":"c","text":"Intercepting shipments of hardware"},{"id":"d","text":"Disrupting a company''s logistics network"}]',
- ARRAY['b'],
- 'A supply chain attack compromises a trusted third-party vendor, software library, or component to gain access to the ultimate target. The SolarWinds attack is a notable example where malicious code was inserted into a trusted software update.',
- 4, ARRAY['supply-chain', 'attack-vectors', 'threats'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'Password spraying differs from brute force in that it:',
- 'multiple_choice',
- '[{"id":"a","text":"Uses a dictionary of common passwords against one account"},{"id":"b","text":"Tries a few common passwords against many accounts simultaneously"},{"id":"c","text":"Only targets administrator accounts"},{"id":"d","text":"Uses rainbow tables to crack passwords"}]',
- ARRAY['b'],
- 'Password spraying tries a small number of commonly used passwords against many accounts, rather than many passwords against one account. This technique avoids account lockout policies while still having a chance of success across many users.',
- 3, ARRAY['password-spraying', 'brute-force', 'attack-types'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002',
- 'An attacker discovers credentials stored in a public GitHub repository. This vulnerability is classified as:',
- 'multiple_choice',
- '[{"id":"a","text":"SQL injection"},{"id":"b","text":"Insecure direct object reference"},{"id":"c","text":"Sensitive data exposure"},{"id":"d","text":"Cross-site scripting"}]',
- ARRAY['c'],
- 'Sensitive data exposure occurs when an application or developer fails to properly protect sensitive information. Credentials stored in public repositories are a common example of this vulnerability, exposing authentication data to anyone.',
- 2, ARRAY['data-exposure', 'credentials', 'vulnerabilities'], 'ai_generated'),
-
--- Domain 3: Security Architecture (9 questions)
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Which network architecture concept isolates servers that need to be accessible from the internet while protecting the internal network?',
- 'multiple_choice',
- '[{"id":"a","text":"VLAN"},{"id":"b","text":"DMZ (Demilitarized Zone)"},{"id":"c","text":"VPN"},{"id":"d","text":"NAT"}]',
- ARRAY['b'],
- 'A DMZ (Demilitarized Zone) is a network segment that sits between the external internet and the internal network. It hosts public-facing services like web servers while providing a buffer zone that protects the internal network.',
- 2, ARRAY['dmz', 'network-architecture', 'segmentation'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Which cloud deployment model provides dedicated infrastructure for a single organization?',
- 'multiple_choice',
- '[{"id":"a","text":"Public cloud"},{"id":"b","text":"Private cloud"},{"id":"c","text":"Community cloud"},{"id":"d","text":"Hybrid cloud"}]',
- ARRAY['b'],
- 'A private cloud provides dedicated infrastructure for a single organization. It offers greater control over security and compliance but requires more management overhead and capital investment compared to public cloud services.',
- 1, ARRAY['cloud', 'deployment-models', 'private-cloud'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'In a zero trust architecture, what is the fundamental principle?',
- 'multiple_choice',
- '[{"id":"a","text":"Trust all internal network traffic"},{"id":"b","text":"Never trust, always verify"},{"id":"c","text":"Trust users after initial authentication"},{"id":"d","text":"Trust devices on the corporate network"}]',
- ARRAY['b'],
- 'Zero trust architecture operates on the principle of "never trust, always verify." Every access request is fully authenticated, authorized, and encrypted, regardless of whether it originates from inside or outside the network perimeter.',
- 2, ARRAY['zero-trust', 'architecture', 'security-models'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Which technology allows multiple isolated virtual networks to operate on the same physical network infrastructure?',
- 'multiple_choice',
- '[{"id":"a","text":"VPN"},{"id":"b","text":"VLAN"},{"id":"c","text":"Firewall"},{"id":"d","text":"Proxy server"}]',
- ARRAY['b'],
- 'VLANs (Virtual Local Area Networks) create logically separate networks on the same physical infrastructure. They provide network segmentation, improve security by isolating traffic, and reduce broadcast domains.',
- 2, ARRAY['vlan', 'network-segmentation', 'architecture'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'A company wants to encrypt data at rest on their servers. Which of the following would BEST accomplish this?',
- 'multiple_choice',
- '[{"id":"a","text":"TLS"},{"id":"b","text":"Full disk encryption (FDE)"},{"id":"c","text":"IPSec"},{"id":"d","text":"SSH"}]',
- ARRAY['b'],
- 'Full disk encryption (FDE) encrypts the entire storage volume, protecting data at rest. TLS, IPSec, and SSH are primarily used for data in transit. FDE ensures that if physical media is stolen, the data remains protected.',
- 2, ARRAY['encryption', 'data-at-rest', 'fde'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'What is the primary advantage of microservices architecture from a security perspective?',
- 'multiple_choice',
- '[{"id":"a","text":"Reduced number of attack surfaces"},{"id":"b","text":"Simplified authentication"},{"id":"c","text":"Blast radius containment — a compromise of one service doesn''t affect others"},{"id":"d","text":"Elimination of API vulnerabilities"}]',
- ARRAY['c'],
- 'Microservices architecture isolates services from each other, so if one service is compromised, the attacker''s access is contained to that service. This limits the blast radius of any security breach.',
- 3, ARRAY['microservices', 'architecture', 'blast-radius'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Which of the following provides the MOST secure method for remote access to a corporate network?',
- 'multiple_choice',
- '[{"id":"a","text":"RDP directly exposed to the internet"},{"id":"b","text":"Site-to-site VPN with split tunneling"},{"id":"c","text":"Always-on VPN with full tunnel and MFA"},{"id":"d","text":"SSH with password authentication"}]',
- ARRAY['c'],
- 'An always-on VPN with full tunnel mode routes all traffic through the corporate network and combined with MFA provides strong authentication. This is more secure than split tunneling, exposed RDP, or password-only SSH.',
- 3, ARRAY['vpn', 'remote-access', 'secure-architecture'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Infrastructure as Code (IaC) improves security by:',
- 'multiple_choice',
- '[{"id":"a","text":"Eliminating the need for security reviews"},{"id":"b","text":"Enabling consistent, repeatable, and auditable infrastructure deployments"},{"id":"c","text":"Replacing all manual security testing"},{"id":"d","text":"Removing the need for access controls on infrastructure"}]',
- ARRAY['b'],
- 'Infrastructure as Code allows infrastructure to be defined in version-controlled templates, enabling consistent deployments, automated security scanning of configurations, and complete audit trails of all changes.',
- 3, ARRAY['iac', 'automation', 'cloud-security'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003',
- 'Which load balancing algorithm distributes traffic based on the least number of active connections?',
- 'multiple_choice',
- '[{"id":"a","text":"Round robin"},{"id":"b","text":"Weighted"},{"id":"c","text":"Least connections"},{"id":"d","text":"IP hash"}]',
- ARRAY['c'],
- 'The least connections algorithm directs new requests to the server with the fewest active connections. This provides better distribution when requests have varying processing times, preventing any single server from being overwhelmed.',
- 2, ARRAY['load-balancing', 'high-availability', 'architecture'], 'ai_generated'),
-
--- Domain 4: Security Operations (14 questions)
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'During incident response, which phase involves identifying the scope and impact of a security event?',
- 'multiple_choice',
- '[{"id":"a","text":"Preparation"},{"id":"b","text":"Detection and Analysis"},{"id":"c","text":"Containment"},{"id":"d","text":"Eradication"}]',
- ARRAY['b'],
- 'The Detection and Analysis phase involves identifying that an incident has occurred, determining its scope and impact, and gathering evidence. This phase is critical for understanding what happened before taking containment actions.',
- 2, ARRAY['incident-response', 'detection', 'security-operations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'A SIEM system is BEST described as:',
- 'multiple_choice',
- '[{"id":"a","text":"A firewall that blocks malicious traffic"},{"id":"b","text":"A tool that collects, correlates, and analyzes security events from multiple sources"},{"id":"c","text":"An antivirus solution for servers"},{"id":"d","text":"A backup and recovery system"}]',
- ARRAY['b'],
- 'A Security Information and Event Management (SIEM) system collects and aggregates log data from various sources across the network, correlates events, and provides real-time analysis and alerting for security threats.',
- 2, ARRAY['siem', 'monitoring', 'security-operations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'Which of the following is a valid reason to perform a vulnerability scan?',
- 'multiple_choice',
- '[{"id":"a","text":"To exploit vulnerabilities in production"},{"id":"b","text":"To identify missing patches, misconfigurations, and known vulnerabilities"},{"id":"c","text":"To bypass security controls"},{"id":"d","text":"To test denial of service resilience"}]',
- ARRAY['b'],
- 'Vulnerability scanning identifies known vulnerabilities, missing patches, and misconfigurations in systems. It is a proactive security measure that helps organizations understand their attack surface and prioritize remediation efforts.',
- 1, ARRAY['vulnerability-scanning', 'assessment', 'operations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'In digital forensics, what is the correct order of evidence handling?',
- 'multiple_choice',
- '[{"id":"a","text":"Analyze, Collect, Preserve, Report"},{"id":"b","text":"Collect, Preserve, Analyze, Report"},{"id":"c","text":"Preserve, Collect, Report, Analyze"},{"id":"d","text":"Identify, Preserve, Collect, Analyze, Report"}]',
- ARRAY['d'],
- 'The proper digital forensics process follows: Identify (determine relevant evidence), Preserve (ensure evidence is not altered), Collect (gather evidence properly), Analyze (examine the evidence), and Report (document findings).',
- 3, ARRAY['forensics', 'evidence-handling', 'incident-response'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'Which log source would be MOST useful for detecting unauthorized login attempts?',
- 'multiple_choice',
- '[{"id":"a","text":"Application server logs"},{"id":"b","text":"Authentication/security logs"},{"id":"c","text":"DNS query logs"},{"id":"d","text":"DHCP logs"}]',
- ARRAY['b'],
- 'Authentication and security logs record login attempts (successful and failed), account lockouts, and privilege changes. These are the primary logs for detecting unauthorized access attempts and brute force attacks.',
- 1, ARRAY['logging', 'authentication', 'monitoring'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'What is the primary purpose of a honeypot?',
- 'multiple_choice',
- '[{"id":"a","text":"To store backup data securely"},{"id":"b","text":"To attract and detect attackers while gathering intelligence on their methods"},{"id":"c","text":"To filter spam emails"},{"id":"d","text":"To encrypt sensitive data"}]',
- ARRAY['b'],
- 'A honeypot is a decoy system designed to look like a legitimate target to attract attackers. It helps security teams detect intrusions, study attack methods, and gather threat intelligence without risking production systems.',
- 2, ARRAY['honeypot', 'detection', 'threat-intelligence'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'A company discovers that an employee''s account was used to access sensitive files at 3 AM, which is unusual for that user. This alert was likely generated by:',
- 'multiple_choice',
- '[{"id":"a","text":"Signature-based detection"},{"id":"b","text":"User and Entity Behavior Analytics (UEBA)"},{"id":"c","text":"A web application firewall"},{"id":"d","text":"A packet sniffer"}]',
- ARRAY['b'],
- 'UEBA establishes baseline behavior patterns for users and entities, then detects anomalies like unusual access times, locations, or data volumes. Accessing files at 3 AM would deviate from normal behavior and trigger an alert.',
- 3, ARRAY['ueba', 'anomaly-detection', 'monitoring'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'During containment of a security incident, which action should be taken FIRST?',
- 'multiple_choice',
- '[{"id":"a","text":"Reformat all affected systems"},{"id":"b","text":"Isolate affected systems to prevent spread"},{"id":"c","text":"Notify the media"},{"id":"d","text":"Delete all logs to prevent attacker access"}]',
- ARRAY['b'],
- 'The first containment action should be isolating affected systems to prevent the incident from spreading. This can include disconnecting from the network, disabling accounts, or blocking traffic while preserving evidence for investigation.',
- 2, ARRAY['containment', 'incident-response', 'security-operations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'What is the purpose of a chain of custody in digital forensics?',
- 'multiple_choice',
- '[{"id":"a","text":"To encrypt evidence during transport"},{"id":"b","text":"To document who handled evidence and when, ensuring its integrity"},{"id":"c","text":"To create backup copies of evidence"},{"id":"d","text":"To analyze evidence in a sandbox environment"}]',
- ARRAY['b'],
- 'Chain of custody documents every person who handled the evidence, when they handled it, and what they did with it. This ensures evidence integrity and admissibility in legal proceedings.',
- 2, ARRAY['chain-of-custody', 'forensics', 'evidence'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'An IDS that monitors network traffic by examining packet headers and payloads is classified as:',
- 'multiple_choice',
- '[{"id":"a","text":"Host-based IDS (HIDS)"},{"id":"b","text":"Network-based IDS (NIDS)"},{"id":"c","text":"Wireless IDS"},{"id":"d","text":"Application-based IDS"}]',
- ARRAY['b'],
- 'A Network-based Intrusion Detection System (NIDS) monitors and analyzes network traffic in real-time by examining packet headers and payloads. Unlike HIDS which monitors individual hosts, NIDS observes traffic across the network segment.',
- 2, ARRAY['ids', 'nids', 'network-monitoring'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'Automated patch management is important because it:',
- 'multiple_choice',
- '[{"id":"a","text":"Eliminates all vulnerabilities permanently"},{"id":"b","text":"Reduces the window of exposure to known vulnerabilities"},{"id":"c","text":"Replaces the need for vulnerability scanning"},{"id":"d","text":"Only applies to operating system updates"}]',
- ARRAY['b'],
- 'Automated patch management reduces the time between a patch being released and being applied, minimizing the window during which known vulnerabilities can be exploited. It ensures consistent patching across all systems.',
- 2, ARRAY['patch-management', 'vulnerability-management', 'operations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'Which backup strategy stores only the data that has changed since the last full backup?',
- 'multiple_choice',
- '[{"id":"a","text":"Incremental backup"},{"id":"b","text":"Differential backup"},{"id":"c","text":"Full backup"},{"id":"d","text":"Snapshot"}]',
- ARRAY['b'],
- 'A differential backup stores all data that has changed since the last full backup. Each differential backup grows larger over time but requires only the full backup plus the latest differential to restore, unlike incremental which needs all increments.',
- 3, ARRAY['backup', 'disaster-recovery', 'data-protection'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'SOAR technology helps security teams by:',
- 'multiple_choice',
- '[{"id":"a","text":"Replacing all human analysts with AI"},{"id":"b","text":"Automating repetitive security tasks and orchestrating incident response workflows"},{"id":"c","text":"Encrypting all network traffic"},{"id":"d","text":"Providing physical security monitoring"}]',
- ARRAY['b'],
- 'Security Orchestration, Automation, and Response (SOAR) platforms automate repetitive security tasks, orchestrate workflows across tools, and streamline incident response. They help teams handle more alerts efficiently without replacing human judgment.',
- 3, ARRAY['soar', 'automation', 'incident-response'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000004',
- 'Which of the following would be considered a lagging security indicator?',
- 'multiple_choice',
- '[{"id":"a","text":"Number of unpatched vulnerabilities"},{"id":"b","text":"Number of security incidents in the past quarter"},{"id":"c","text":"Time since last security awareness training"},{"id":"d","text":"Number of open firewall rules"}]',
- ARRAY['b'],
- 'Lagging indicators measure past events and outcomes, like the number of incidents that already occurred. Leading indicators (like unpatched vulnerabilities or outdated training) predict future risk and help prevent incidents.',
- 4, ARRAY['metrics', 'kpi', 'security-operations'], 'ai_generated'),
-
--- Domain 5: Security Program Management and Oversight (10 questions)
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'Which risk response strategy involves purchasing an insurance policy to cover potential losses?',
- 'multiple_choice',
- '[{"id":"a","text":"Risk avoidance"},{"id":"b","text":"Risk mitigation"},{"id":"c","text":"Risk transference"},{"id":"d","text":"Risk acceptance"}]',
- ARRAY['c'],
- 'Risk transference shifts the financial impact of a risk to a third party, typically through insurance policies, outsourcing, or contractual agreements. The risk still exists, but the financial burden is shared or transferred.',
- 1, ARRAY['risk-management', 'risk-transfer', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'GDPR primarily applies to:',
- 'multiple_choice',
- '[{"id":"a","text":"All companies worldwide regardless of where their customers are"},{"id":"b","text":"Organizations that process personal data of EU residents"},{"id":"c","text":"Only companies headquartered in the European Union"},{"id":"d","text":"Only government organizations in Europe"}]',
- ARRAY['b'],
- 'The General Data Protection Regulation (GDPR) applies to any organization that processes personal data of individuals in the European Union, regardless of where the organization is located. It has a broad territorial scope.',
- 2, ARRAY['gdpr', 'compliance', 'regulations'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'A Business Impact Analysis (BIA) is PRIMARILY used to:',
- 'multiple_choice',
- '[{"id":"a","text":"Identify all employees in the organization"},{"id":"b","text":"Determine the impact of disruptions to critical business functions"},{"id":"c","text":"Calculate the total IT budget"},{"id":"d","text":"Audit compliance with security policies"}]',
- ARRAY['b'],
- 'A BIA identifies critical business functions and determines the impact of disruptions to those functions. It establishes Recovery Time Objectives (RTO) and Recovery Point Objectives (RPO) for business continuity planning.',
- 2, ARRAY['bia', 'business-continuity', 'risk-management'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'Which security framework is specifically designed for critical infrastructure in the United States?',
- 'multiple_choice',
- '[{"id":"a","text":"ISO 27001"},{"id":"b","text":"NIST Cybersecurity Framework (CSF)"},{"id":"c","text":"COBIT"},{"id":"d","text":"ITIL"}]',
- ARRAY['b'],
- 'The NIST Cybersecurity Framework (CSF) was developed specifically to help critical infrastructure organizations manage and reduce cybersecurity risk. Its five functions (Identify, Protect, Detect, Respond, Recover) provide a flexible framework.',
- 2, ARRAY['nist', 'framework', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'What is the purpose of a data classification policy?',
- 'multiple_choice',
- '[{"id":"a","text":"To delete unnecessary data"},{"id":"b","text":"To categorize data based on sensitivity and define handling requirements"},{"id":"c","text":"To encrypt all company data"},{"id":"d","text":"To create backups of important files"}]',
- ARRAY['b'],
- 'A data classification policy categorizes data by sensitivity level (e.g., public, internal, confidential, restricted) and defines the security controls and handling procedures required for each level.',
- 1, ARRAY['data-classification', 'policy', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'Third-party risk management should include which of the following?',
- 'multiple_choice',
- '[{"id":"a","text":"Giving vendors unlimited access to internal systems"},{"id":"b","text":"Regular security assessments of vendors and contractual security requirements"},{"id":"c","text":"Avoiding all third-party relationships"},{"id":"d","text":"Only reviewing vendor security at initial onboarding"}]',
- ARRAY['b'],
- 'Third-party risk management requires ongoing security assessments of vendors, contractual security requirements (like SOC 2 compliance), right-to-audit clauses, and regular reviews — not just initial assessment.',
- 2, ARRAY['vendor-management', 'third-party-risk', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'The Recovery Time Objective (RTO) defines:',
- 'multiple_choice',
- '[{"id":"a","text":"How much data loss is acceptable in a disaster"},{"id":"b","text":"The maximum time a system can be down before unacceptable business impact"},{"id":"c","text":"The total cost of recovery"},{"id":"d","text":"How frequently backups should be performed"}]',
- ARRAY['b'],
- 'RTO defines the maximum acceptable downtime for a system or business function. It drives decisions about disaster recovery strategies, redundancy, and failover capabilities needed to meet business requirements.',
- 2, ARRAY['rto', 'business-continuity', 'disaster-recovery'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'Security awareness training should be:',
- 'multiple_choice',
- '[{"id":"a","text":"Conducted once during employee onboarding"},{"id":"b","text":"Ongoing with regular updates covering current threats and company policies"},{"id":"c","text":"Only for IT staff"},{"id":"d","text":"Optional for senior management"}]',
- ARRAY['b'],
- 'Security awareness training should be ongoing and regularly updated to address current threats. All employees, including senior management, should participate. Regular phishing simulations and refresher courses keep security top of mind.',
- 1, ARRAY['security-awareness', 'training', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'Which of the following is an example of a technical security control?',
- 'multiple_choice',
- '[{"id":"a","text":"Security policy"},{"id":"b","text":"Background checks"},{"id":"c","text":"Firewall rules"},{"id":"d","text":"Security awareness training"}]',
- ARRAY['c'],
- 'Technical controls are implemented through technology, such as firewalls, encryption, access controls, and IDS/IPS. Policies and training are administrative controls, while locks and guards are physical controls.',
- 1, ARRAY['security-controls', 'technical-controls', 'governance'], 'ai_generated'),
-
-('a0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000005',
- 'An organization decides to stop offering a service that poses too much security risk. This is an example of:',
- 'multiple_choice',
- '[{"id":"a","text":"Risk acceptance"},{"id":"b","text":"Risk avoidance"},{"id":"c","text":"Risk transference"},{"id":"d","text":"Risk mitigation"}]',
- ARRAY['b'],
- 'Risk avoidance eliminates the risk entirely by not engaging in the activity that creates it. By discontinuing the risky service, the organization completely removes the associated security risk.',
- 1, ARRAY['risk-avoidance', 'risk-management', 'governance'], 'ai_generated');
+-- 50 Questions across all topics
+INSERT INTO questions (id, topic_id, module_id, course_id, creator_id, question_text, question_type, options, correct_option_ids, explanation, difficulty, tags, source) VALUES
+('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which of the following BEST describes the concept of confidentiality in the CIA triad?', 'multiple_choice', '[{"id":"a","text":"Ensuring data is accessible when needed"},{"id":"b","text":"Ensuring data is not modified without authorization"},{"id":"c","text":"Ensuring data is only accessible to authorized individuals"},{"id":"d","text":"Ensuring data can be recovered after a disaster"}]', '{c}', 'Confidentiality ensures that information is only accessible to those authorized to view it.', 2, '{cia-triad,confidentiality}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What are the three components of the AAA framework?', 'multiple_choice', '[{"id":"a","text":"Authentication, Authorization, Accounting"},{"id":"b","text":"Authentication, Access, Auditing"},{"id":"c","text":"Authorization, Access, Accounting"},{"id":"d","text":"Authentication, Administration, Auditing"}]', '{a}', 'AAA stands for Authentication, Authorization, and Accounting.', 2, '{aaa,authentication}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A hashing algorithm ensures which element of the CIA triad?', 'multiple_choice', '[{"id":"a","text":"Confidentiality"},{"id":"b","text":"Integrity"},{"id":"c","text":"Availability"},{"id":"d","text":"Non-repudiation"}]', '{b}', 'Hashing verifies data integrity by producing a unique fixed-length output.', 3, '{cia-triad,integrity,hashing}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which type of authentication factor is a fingerprint scanner?', 'multiple_choice', '[{"id":"a","text":"Something you know"},{"id":"b","text":"Something you have"},{"id":"c","text":"Something you are"},{"id":"d","text":"Somewhere you are"}]', '{c}', 'A fingerprint is a biometric factor — something you are.', 1, '{authentication,biometrics}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000005', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which of the following BEST describes defense in depth?', 'multiple_choice', '[{"id":"a","text":"Using a single, strong security control"},{"id":"b","text":"Implementing multiple layers of security controls"},{"id":"c","text":"Focusing all resources on perimeter security"},{"id":"d","text":"Relying on user training as the primary defense"}]', '{b}', 'Defense in depth uses multiple overlapping security layers.', 2, '{defense-in-depth}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A firewall is an example of which type of security control?', 'multiple_choice', '[{"id":"a","text":"Managerial"},{"id":"b","text":"Operational"},{"id":"c","text":"Technical"},{"id":"d","text":"Physical"}]', '{c}', 'Firewalls are technical controls that filter network traffic.', 1, '{security-controls,firewall}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which control type aims to PREVENT a security incident?', 'multiple_choice', '[{"id":"a","text":"Detective control"},{"id":"b","text":"Corrective control"},{"id":"c","text":"Preventive control"},{"id":"d","text":"Compensating control"}]', '{c}', 'Preventive controls stop incidents before they happen.', 2, '{security-controls,preventive}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000008', 'd0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Security awareness training is which control category?', 'multiple_choice', '[{"id":"a","text":"Technical"},{"id":"b","text":"Physical"},{"id":"c","text":"Operational"},{"id":"d","text":"Compensating"}]', '{c}', 'Training is an operational control involving people and processes.', 2, '{security-controls,operational}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000009', 'd0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'An IDS that alerts on suspicious activity is what type of control?', 'multiple_choice', '[{"id":"a","text":"Preventive"},{"id":"b","text":"Detective"},{"id":"c","text":"Corrective"},{"id":"d","text":"Deterrent"}]', '{b}', 'An IDS monitors and alerts but does not block traffic.', 2, '{security-controls,detective}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000010', 'd0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which are physical security controls? (Select TWO)', 'multiple_select', '[{"id":"a","text":"Encryption"},{"id":"b","text":"Security cameras"},{"id":"c","text":"Bollards"},{"id":"d","text":"ACLs"},{"id":"e","text":"Firewall rules"}]', '{b,c}', 'Security cameras and bollards are physical controls.', 3, '{security-controls,physical}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000011', 'd0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which symmetric encryption algorithm uses 128, 192, or 256-bit keys?', 'multiple_choice', '[{"id":"a","text":"RSA"},{"id":"b","text":"DES"},{"id":"c","text":"AES"},{"id":"d","text":"ECC"}]', '{c}', 'AES supports 128, 192, and 256-bit key lengths.', 2, '{cryptography,aes}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000012', 'd0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Asymmetric encryption uses which of the following?', 'multiple_choice', '[{"id":"a","text":"A single shared key"},{"id":"b","text":"A public and private key pair"},{"id":"c","text":"No keys at all"},{"id":"d","text":"Three rotating keys"}]', '{b}', 'Asymmetric uses a public key for encryption and private key for decryption.', 1, '{cryptography,asymmetric}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000013', 'd0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'SHA-256 is what type of cryptographic function?', 'multiple_choice', '[{"id":"a","text":"Symmetric encryption"},{"id":"b","text":"Asymmetric encryption"},{"id":"c","text":"Hashing"},{"id":"d","text":"Key exchange"}]', '{c}', 'SHA-256 is a hashing algorithm producing a 256-bit digest.', 2, '{cryptography,hashing}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000014', 'd0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which algorithm allows key exchange without transmitting the key?', 'multiple_choice', '[{"id":"a","text":"AES"},{"id":"b","text":"SHA-256"},{"id":"c","text":"Diffie-Hellman"},{"id":"d","text":"MD5"}]', '{c}', 'Diffie-Hellman establishes a shared secret over an insecure channel.', 3, '{cryptography,diffie-hellman}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000015', 'd0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'True or False: MD5 is considered secure for password storage.', 'true_false', '[{"id":"a","text":"True"},{"id":"b","text":"False"}]', '{b}', 'MD5 is cryptographically broken. Use bcrypt or Argon2.', 1, '{cryptography,md5}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000016', 'd0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'An attacker calls IT pretending to be the CEO for a password reset. Which technique?', 'multiple_choice', '[{"id":"a","text":"Pretexting"},{"id":"b","text":"Tailgating"},{"id":"c","text":"Watering hole"},{"id":"d","text":"Shoulder surfing"}]', '{a}', 'Pretexting involves creating a fabricated scenario to gain trust.', 2, '{social-engineering,pretexting}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000017', 'd0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'An email with a misspelled bank URL is an example of:', 'multiple_choice', '[{"id":"a","text":"Vishing"},{"id":"b","text":"Smishing"},{"id":"c","text":"Phishing"},{"id":"d","text":"Pharming"}]', '{c}', 'Phishing uses fraudulent emails with deceptive links.', 1, '{social-engineering,phishing}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000018', 'd0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Following an authorized person through a secure door is:', 'multiple_choice', '[{"id":"a","text":"Phishing"},{"id":"b","text":"Tailgating"},{"id":"c","text":"Pretexting"},{"id":"d","text":"Baiting"}]', '{b}', 'Tailgating involves following authorized personnel through secured entrances.', 1, '{social-engineering,tailgating}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000019', 'd0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Compromising a frequently visited website to attack its visitors is:', 'multiple_choice', '[{"id":"a","text":"Spear phishing"},{"id":"b","text":"Watering hole attack"},{"id":"c","text":"Drive-by download"},{"id":"d","text":"XSS"}]', '{b}', 'A watering hole attack compromises websites the target audience visits.', 3, '{social-engineering,watering-hole}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000020', 'd0000000-0000-0000-0000-000000000007', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which technique uses text messages to trick victims?', 'multiple_choice', '[{"id":"a","text":"Phishing"},{"id":"b","text":"Vishing"},{"id":"c","text":"Smishing"},{"id":"d","text":"Whaling"}]', '{c}', 'Smishing (SMS phishing) uses text messages.', 1, '{social-engineering,smishing}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000021', 'd0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which threat actor has the MOST resources?', 'multiple_choice', '[{"id":"a","text":"Script kiddies"},{"id":"b","text":"Hacktivists"},{"id":"c","text":"Nation-state actors"},{"id":"d","text":"Insider threats"}]', '{c}', 'Nation-state actors are government-sponsored with unlimited resources.', 2, '{threat-actors,nation-state}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000022', 'd0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'An employee stealing data before leaving is what type of threat?', 'multiple_choice', '[{"id":"a","text":"External"},{"id":"b","text":"Insider threat"},{"id":"c","text":"APT"},{"id":"d","text":"Script kiddie"}]', '{b}', 'Insider threats come from within the organization.', 1, '{threat-actors,insider}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000023', 'd0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Hacktivists are primarily motivated by:', 'multiple_choice', '[{"id":"a","text":"Financial gain"},{"id":"b","text":"Political or social causes"},{"id":"c","text":"Espionage"},{"id":"d","text":"Entertainment"}]', '{b}', 'Hacktivists are motivated by political or social causes.', 2, '{threat-actors,hacktivist}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000024', 'd0000000-0000-0000-0000-000000000006', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which is an example of an attack vector?', 'multiple_choice', '[{"id":"a","text":"Security policy"},{"id":"b","text":"Phishing email"},{"id":"c","text":"Firewall rule"},{"id":"d","text":"Audit report"}]', '{b}', 'An attack vector is the method an attacker uses to gain access.', 1, '{threat-vectors}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000025', 'd0000000-0000-0000-0000-000000000005', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Organized cybercrime groups are primarily motivated by:', 'multiple_choice', '[{"id":"a","text":"Political activism"},{"id":"b","text":"National security"},{"id":"c","text":"Financial gain"},{"id":"d","text":"Research"}]', '{c}', 'Organized cybercrime is motivated by financial gain.', 1, '{threat-actors,organized-crime}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000026', 'd0000000-0000-0000-0000-000000000008', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'SQL injection exploits which vulnerability type?', 'multiple_choice', '[{"id":"a","text":"Hardware"},{"id":"b","text":"Input validation"},{"id":"c","text":"Physical"},{"id":"d","text":"Wireless"}]', '{b}', 'SQL injection exploits input validation vulnerabilities.', 2, '{vulnerabilities,sql-injection}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000027', 'd0000000-0000-0000-0000-000000000008', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What is a zero-day vulnerability?', 'multiple_choice', '[{"id":"a","text":"A patched vulnerability"},{"id":"b","text":"Unknown to vendor, no patch available"},{"id":"c","text":"Open-source only"},{"id":"d","text":"Server-only"}]', '{b}', 'Zero-day is unknown to the vendor with no available patch.', 2, '{vulnerabilities,zero-day}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000028', 'd0000000-0000-0000-0000-000000000009', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which malware encrypts files and demands payment?', 'multiple_choice', '[{"id":"a","text":"Trojan"},{"id":"b","text":"Worm"},{"id":"c","text":"Ransomware"},{"id":"d","text":"Adware"}]', '{c}', 'Ransomware encrypts files and demands ransom payment.', 1, '{malware,ransomware}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000029', 'd0000000-0000-0000-0000-000000000009', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What distinguishes a worm from a virus?', 'multiple_choice', '[{"id":"a","text":"Worms need user interaction"},{"id":"b","text":"Worms self-replicate without user interaction"},{"id":"c","text":"Viruses are more dangerous"},{"id":"d","text":"Worms only affect mobile"}]', '{b}', 'Worms self-replicate without user interaction.', 2, '{malware,worm}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000030', 'd0000000-0000-0000-0000-000000000009', 'b0000000-0000-0000-0000-000000000002', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A program appearing legitimate but containing hidden malicious code is a:', 'multiple_choice', '[{"id":"a","text":"Virus"},{"id":"b","text":"Worm"},{"id":"c","text":"Trojan"},{"id":"d","text":"Rootkit"}]', '{c}', 'A Trojan disguises itself as legitimate software.', 1, '{malware,trojan}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000031', 'd0000000-0000-0000-0000-000000000010', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What is the primary purpose of a VLAN?', 'multiple_choice', '[{"id":"a","text":"Encrypt traffic"},{"id":"b","text":"Segment network traffic logically"},{"id":"c","text":"Provide wireless access"},{"id":"d","text":"Load balance servers"}]', '{b}', 'VLANs logically segment a network into separate broadcast domains.', 2, '{network-security,vlan}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000032', 'd0000000-0000-0000-0000-000000000010', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A VPN provides which security benefit?', 'multiple_choice', '[{"id":"a","text":"Prevents all malware"},{"id":"b","text":"Encrypts data in transit"},{"id":"c","text":"Eliminates insider threats"},{"id":"d","text":"Replaces firewalls"}]', '{b}', 'VPNs create encrypted tunnels for data in transit.', 1, '{network-security,vpn}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000033', 'd0000000-0000-0000-0000-000000000010', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which firewall operates at Layer 7?', 'multiple_choice', '[{"id":"a","text":"Packet filtering"},{"id":"b","text":"Stateful"},{"id":"c","text":"WAF"},{"id":"d","text":"Circuit-level gateway"}]', '{c}', 'A WAF operates at Layer 7, inspecting HTTP/HTTPS traffic.', 3, '{network-security,waf}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000034', 'd0000000-0000-0000-0000-000000000011', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'In cloud shared responsibility, who handles data security?', 'multiple_choice', '[{"id":"a","text":"Only provider"},{"id":"b","text":"Only customer"},{"id":"c","text":"Both, depending on service model"},{"id":"d","text":"Neither"}]', '{c}', 'Responsibilities are shared based on IaaS/PaaS/SaaS model.', 3, '{cloud-security}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000035', 'd0000000-0000-0000-0000-000000000012', 'b0000000-0000-0000-0000-000000000003', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'DLP technology is designed to:', 'multiple_choice', '[{"id":"a","text":"Recover lost data"},{"id":"b","text":"Prevent sensitive data from leaving the organization"},{"id":"c","text":"Encrypt all traffic"},{"id":"d","text":"Monitor productivity"}]', '{b}', 'DLP prevents sensitive data from being transmitted outside.', 2, '{data-protection,dlp}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000036', 'd0000000-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What is the primary function of a SIEM?', 'multiple_choice', '[{"id":"a","text":"Block attacks"},{"id":"b","text":"Collect, correlate, and analyze security logs"},{"id":"c","text":"Encrypt data at rest"},{"id":"d","text":"Manage authentication"}]', '{b}', 'SIEM collects and correlates security events from multiple sources.', 2, '{siem,monitoring}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000037', 'd0000000-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which is an indicator of compromise?', 'multiple_choice', '[{"id":"a","text":"Scheduled backups"},{"id":"b","text":"Unusual outbound traffic"},{"id":"c","text":"Successful login"},{"id":"d","text":"Completed patch"}]', '{b}', 'Unusual outbound traffic may indicate data exfiltration.', 2, '{ioc,monitoring}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000038', 'd0000000-0000-0000-0000-000000000014', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'What is the FIRST step in incident response?', 'multiple_choice', '[{"id":"a","text":"Containment"},{"id":"b","text":"Eradication"},{"id":"c","text":"Preparation"},{"id":"d","text":"Recovery"}]', '{c}', 'IR process: Preparation → Detection → Containment → Eradication → Recovery → Lessons Learned.', 2, '{incident-response}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000039', 'd0000000-0000-0000-0000-000000000014', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which phase completely removes the threat?', 'multiple_choice', '[{"id":"a","text":"Detection"},{"id":"b","text":"Containment"},{"id":"c","text":"Eradication"},{"id":"d","text":"Recovery"}]', '{c}', 'Eradication completely removes the threat from the environment.', 2, '{incident-response}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000040', 'd0000000-0000-0000-0000-000000000015', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Chain of custody in forensics ensures:', 'multiple_choice', '[{"id":"a","text":"Evidence encryption"},{"id":"b","text":"Documenting who handled evidence and when"},{"id":"c","text":"Evidence deletion"},{"id":"d","text":"Public sharing"}]', '{b}', 'Chain of custody documents every handler, ensuring integrity for legal proceedings.', 2, '{forensics,chain-of-custody}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000041', 'd0000000-0000-0000-0000-000000000017', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Which document provides MANDATORY rules?', 'multiple_choice', '[{"id":"a","text":"Guideline"},{"id":"b","text":"Policy"},{"id":"c","text":"Standard"},{"id":"d","text":"Procedure"}]', '{b}', 'Policies are mandatory. Standards define requirements. Guidelines are recommendations.', 2, '{governance,policy}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000042', 'd0000000-0000-0000-0000-000000000017', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Least privilege means:', 'multiple_choice', '[{"id":"a","text":"All users get admin access"},{"id":"b","text":"Minimum access needed for the job"},{"id":"c","text":"Access based on seniority"},{"id":"d","text":"No controls for temp workers"}]', '{b}', 'Least privilege gives users only minimum necessary permissions.', 1, '{governance,least-privilege}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000043', 'd0000000-0000-0000-0000-000000000018', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Purchasing insurance is which risk response?', 'multiple_choice', '[{"id":"a","text":"Risk avoidance"},{"id":"b","text":"Risk mitigation"},{"id":"c","text":"Risk transference"},{"id":"d","text":"Risk acceptance"}]', '{c}', 'Risk transference shifts financial impact to a third party.', 2, '{risk-management}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000044', 'd0000000-0000-0000-0000-000000000018', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Quantitative risk assessment uses:', 'multiple_choice', '[{"id":"a","text":"High/Medium/Low ratings"},{"id":"b","text":"Numerical values (ALE, SLE, ARO)"},{"id":"c","text":"Expert opinions only"},{"id":"d","text":"Threat feeds"}]', '{b}', 'Quantitative uses SLE x ARO = ALE. Qualitative uses subjective ratings.', 3, '{risk-management}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000045', 'd0000000-0000-0000-0000-000000000018', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A risk register is:', 'multiple_choice', '[{"id":"a","text":"Firewall rules"},{"id":"b","text":"A document tracking risks and their treatment"},{"id":"c","text":"User access log"},{"id":"d","text":"Scanner output"}]', '{b}', 'A risk register tracks identified risks, their likelihood, impact, and treatment.', 2, '{risk-management}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000046', 'd0000000-0000-0000-0000-000000000019', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'GDPR primarily protects:', 'multiple_choice', '[{"id":"a","text":"US IP"},{"id":"b","text":"Personal data of EU residents"},{"id":"c","text":"Military info"},{"id":"d","text":"Bank data"}]', '{b}', 'GDPR protects personal data of EU residents.', 2, '{compliance,gdpr}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000047', 'd0000000-0000-0000-0000-000000000019', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'PCI DSS applies to organizations that:', 'multiple_choice', '[{"id":"a","text":"Handle classified data"},{"id":"b","text":"Process credit card data"},{"id":"c","text":"Operate in healthcare"},{"id":"d","text":"Develop open-source"}]', '{b}', 'PCI DSS applies to entities processing, storing, or transmitting cardholder data.', 2, '{compliance,pci-dss}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000048', 'd0000000-0000-0000-0000-000000000020', 'b0000000-0000-0000-0000-000000000005', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Most effective way to test security awareness?', 'multiple_choice', '[{"id":"a","text":"Annual written exam"},{"id":"b","text":"Simulated phishing campaigns"},{"id":"c","text":"Security posters"},{"id":"d","text":"Block all external email"}]', '{b}', 'Simulated phishing tests real-world behavior and identifies who clicks.', 2, '{security-awareness}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000049', 'd0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'A key component of change management is:', 'multiple_choice', '[{"id":"a","text":"Implementing changes immediately"},{"id":"b","text":"Documenting, testing, and approving before implementation"},{"id":"c","text":"Only during business hours"},{"id":"d","text":"Any employee can make changes"}]', '{b}', 'Change management requires documentation, testing, and approval before production.', 2, '{change-management}', 'creator_original'),
+('e0000000-0000-0000-0000-000000000050', 'd0000000-0000-0000-0000-000000000016', 'b0000000-0000-0000-0000-000000000004', 'ca000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'SOAR platforms are designed to:', 'multiple_choice', '[{"id":"a","text":"Replace all human analysts"},{"id":"b","text":"Automate and orchestrate security incident response"},{"id":"c","text":"Only scan vulnerabilities"},{"id":"d","text":"Provide VPN access"}]', '{b}', 'SOAR automates repetitive security tasks and orchestrates IR workflows.', 3, '{automation,soar}', 'creator_original');

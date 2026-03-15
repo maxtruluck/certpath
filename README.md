@@ -12,7 +12,7 @@ A mobile-first web app for IT certification prep using spaced repetition and gam
 
 ## Features
 
-- Spaced repetition engine (SM-2 algorithm) for optimal review scheduling
+- Spaced repetition engine (FSRS algorithm) for optimal review scheduling
 - 12-question practice sessions mixing due reviews, weak domains, and new material
 - 5 Security+ domains with 50 seed questions
 - Gamification: XP, streaks, achievements, career path progression
@@ -40,8 +40,9 @@ cp .env.local.example .env.local
 You need:
 - `NEXT_PUBLIC_SUPABASE_URL` — your project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon/public key
-- `SUPABASE_SERVICE_ROLE_KEY` — service role key (for seed scripts)
+- `SUPABASE_SERVICE_ROLE_KEY` — service role key
 - `ANTHROPIC_API_KEY` — for AI question generation (optional for demo)
+- `DEMO_MODE` — set to `true` to bypass authentication (defaults to `false`)
 
 ### 3. Run database migrations
 
@@ -57,15 +58,7 @@ Or use the Supabase CLI:
 supabase db push
 ```
 
-### 4. Seed demo user data
-
-```bash
-npx tsx scripts/seed-demo-user.ts
-```
-
-This creates a demo user (Alex Chen) with realistic data: 18-day study sprint, 5-day streak, domain scores, question history, achievements, and career path enrollment.
-
-### 5. Run the dev server
+### 4. Run the dev server
 
 ```bash
 npm run dev
@@ -75,11 +68,11 @@ Visit [http://localhost:3000](http://localhost:3000).
 
 ## Demo Mode
 
-The app ships with `DEMO_MODE = true` in `lib/demo.ts`. In this mode:
+Set `DEMO_MODE=true` in your `.env.local` to enable demo mode. In this mode:
 - Authentication is bypassed — all requests use the demo user
 - No real Supabase Auth flow is required
 
-To use real authentication, set `DEMO_MODE = false` in `lib/demo.ts`.
+To use real authentication, set `DEMO_MODE=false` (the default).
 
 ## Project Structure
 
@@ -90,13 +83,10 @@ app/
   api/             API routes (auth, sessions, dashboard, career, achievements)
 components/        Shared UI components (AppShell, TopBar, BottomNav, etc.)
 lib/
-  engine/          SM-2 algorithm, session generator, readiness calculator
+  engine/          FSRS algorithm, session generator, readiness calculator
   store/           Zustand store for practice sessions
   demo.ts          Demo mode flag and user ID
   supabase/        Supabase client helpers
 supabase/
   migrations/      SQL migration files (schema, RLS, indexes, seed data)
-scripts/
-  seed-data.ts     Run migrations via API (or see manual instructions)
-  seed-demo-user.ts  Seed demo user with realistic data
 ```

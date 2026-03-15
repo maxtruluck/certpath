@@ -2,17 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CertPath - Your Fast Track to IT Certifications",
-  description: "Master professional certifications with spaced repetition, gamification, and career-focused learning paths.",
+  title: "openED — The Learning Engine That Makes Education Stick",
+  description: "Adaptive learning with spaced repetition, gamification, and a creator marketplace. Free to learn. Fair to create. Built to last.",
   openGraph: {
-    title: "CertPath - Your Fast Track to IT Certifications",
-    description: "Master professional certifications with spaced repetition and gamification.",
+    title: "openED — The Learning Engine That Makes Education Stick",
+    description: "Adaptive learning with spaced repetition and a creator marketplace.",
     type: "website",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "CertPath",
+    title: "openED",
   },
   formatDetection: {
     telephone: false,
@@ -35,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="touch-manipulation">
-      <body className="min-h-screen bg-cp-bg text-cp-text antialiased">
+      <body className="min-h-screen bg-white text-gray-900 antialiased">
         {children}
       </body>
     </html>

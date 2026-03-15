@@ -1,0 +1,45 @@
+-- Cleanup: Drop all old CertPath tables and types
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users CASCADE;
+DROP TRIGGER IF EXISTS users_updated_at ON users CASCADE;
+DROP TRIGGER IF EXISTS questions_updated_at ON questions CASCADE;
+DROP TRIGGER IF EXISTS user_domain_scores_updated_at ON user_domain_scores CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS handle_new_user() CASCADE;
+
+DROP TABLE IF EXISTS user_question_bookmarks CASCADE;
+DROP TABLE IF EXISTS user_career_paths CASCADE;
+DROP TABLE IF EXISTS career_path_milestones CASCADE;
+DROP TABLE IF EXISTS career_paths CASCADE;
+DROP TABLE IF EXISTS user_achievements CASCADE;
+DROP TABLE IF EXISTS achievements CASCADE;
+DROP TABLE IF EXISTS user_xp_log CASCADE;
+DROP TABLE IF EXISTS user_streaks CASCADE;
+DROP TABLE IF EXISTS user_domain_scores CASCADE;
+DROP TABLE IF EXISTS user_question_history CASCADE;
+DROP TABLE IF EXISTS user_certifications CASCADE;
+DROP TABLE IF EXISTS questions CASCADE;
+DROP TABLE IF EXISTS domains CASCADE;
+DROP TABLE IF EXISTS certifications CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS review_log CASCADE;
+DROP TABLE IF EXISTS user_card_states CASCADE;
+DROP TABLE IF EXISTS user_courses CASCADE;
+DROP TABLE IF EXISTS topics CASCADE;
+DROP TABLE IF EXISTS modules CASCADE;
+DROP TABLE IF EXISTS courses CASCADE;
+DROP TABLE IF EXISTS creators CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+
+DROP TYPE IF EXISTS question_type CASCADE;
+DROP TYPE IF EXISTS question_source CASCADE;
+DROP TYPE IF EXISTS cert_status CASCADE;
+DROP TYPE IF EXISTS sprint_type CASCADE;
+DROP TYPE IF EXISTS xp_source CASCADE;
+DROP TYPE IF EXISTS achievement_criteria_type CASCADE;
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS creator_status CASCADE;
+DROP TYPE IF EXISTS course_category CASCADE;
+DROP TYPE IF EXISTS course_difficulty CASCADE;
+DROP TYPE IF EXISTS course_status CASCADE;
+DROP TYPE IF EXISTS enrollment_status CASCADE;
+DROP TYPE IF EXISTS card_state CASCADE;
