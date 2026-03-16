@@ -24,6 +24,9 @@ interface CompleteData {
     icon: string;
     xp_reward: number;
   }>;
+  concept_count?: number;
+  review_count?: number;
+  session_type?: string;
 }
 
 function AccuracyCircle({ correct, total }: { correct: number; total: number }) {
@@ -99,6 +102,8 @@ export default function SessionCompletePage() {
   const mistakeCount = totalCount - correctCount;
   const xpEarned = data?.xp_earned ?? 0;
   const streakDays = data?.streak?.current ?? 0;
+  const conceptsLearned = data?.concept_count ?? 0;
+  const cardsReviewed = data?.review_count ?? 0;
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center px-4 bg-[#FAFAF8]">
@@ -169,6 +174,28 @@ export default function SessionCompletePage() {
           </div>
         </div>
 
+        {/* Concept & Review stats */}
+        {(conceptsLearned > 0 || cardsReviewed > 0) && (
+          <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '250ms' }}>
+            {conceptsLearned > 0 && (
+              <div className="flex-1 rounded-xl bg-green-50 border border-green-200 p-3 text-center">
+                <p className="text-xl font-bold text-green-700">
+                  <AnimatedNumber value={conceptsLearned} />
+                </p>
+                <p className="text-[10px] text-green-600 mt-0.5">new concepts</p>
+              </div>
+            )}
+            {cardsReviewed > 0 && (
+              <div className="flex-1 rounded-xl bg-amber-50 border border-amber-200 p-3 text-center">
+                <p className="text-xl font-bold text-amber-700">
+                  <AnimatedNumber value={cardsReviewed} />
+                </p>
+                <p className="text-[10px] text-amber-600 mt-0.5">cards reviewed</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Achievements */}
         {data?.achievements && data.achievements.length > 0 && (
           <div className="space-y-2 animate-fade-up" style={{ animationDelay: '300ms' }}>
@@ -207,20 +234,20 @@ export default function SessionCompletePage() {
           </div>
         )}
 
-        {/* Smart review suggestion */}
-        {data?.topic_breakdown?.some(t => t.total > 0 && (t.correct / t.total) < 0.7) && (
+        {/* Smart review suggestion — below 60% accuracy */}
+        {data?.topic_breakdown?.some(t => t.total > 0 && (t.correct / t.total) < 0.6) && (
           <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 animate-fade-up" style={{ animationDelay: '500ms' }}>
-            <p className="text-sm font-medium text-[#2C2825] mb-2">Suggested review:</p>
+            <p className="text-sm font-medium text-[#2C2825] mb-2">Review the guidebook for these topics:</p>
             {data!.topic_breakdown
-              .filter(t => t.total > 0 && (t.correct / t.total) < 0.7)
+              .filter(t => t.total > 0 && (t.correct / t.total) < 0.6)
               .map(t => (
                 <Link
                   key={t.topic_id}
                   href={`/course/${courseSlug}/guidebook?topic=${t.topic_id}`}
                   className="flex items-center gap-2 text-sm text-[#2C2825] hover:text-[#1A1816] font-medium mt-1"
                 >
-                  {t.topic_title} — you scored below 70%
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  Review the guidebook for {t.topic_title}
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                   </svg>
                 </Link>

@@ -38,6 +38,9 @@ interface Question {
   tags: string[];
   topic_title?: string;
   matching_items?: { lefts: string[]; rights: string[] };
+  is_review?: boolean;
+  difficulty_label?: 'easy' | 'medium' | 'challenging';
+  lesson_id?: string | null;
 }
 
 interface AnswerResult {
@@ -60,9 +63,53 @@ interface IntroTopic {
   body_preview: string;
 }
 
+interface ConceptData {
+  id: string;
+  title: string;
+  content: string;
+  lesson_id: string;
+  lesson_title: string;
+  topic_id: string;
+  topic_title: string;
+}
+
 type QueueItem =
   | { type: 'intro'; data: IntroTopic }
-  | { type: 'question'; data: Question };
+  | { type: 'question'; data: Question }
+  | { type: 'concept'; data: ConceptData };
+
+// ─── Concept Card ────────────────────────────────────────────────
+function ConceptCard({ concept, onNext }: { concept: ConceptData; onNext: () => void }) {
+  return (
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="py-4 flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+            Concept
+          </span>
+          {concept.topic_title && (
+            <span className="text-xs text-[#6B635A]">{concept.topic_title}</span>
+          )}
+        </div>
+        <div className="border-l-4 border-green-500 pl-4 mb-6">
+          <h2 className="text-base font-semibold text-[#2C2825] mb-3">{concept.title}</h2>
+          <div className="prose prose-sm max-w-none [&_p]:text-sm [&_p]:text-[#6B635A] [&_strong]:text-[#2C2825] [&_code]:text-[#2C2825] [&_code]:bg-[#F5F3EF] [&_code]:px-1 [&_code]:rounded">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{concept.content}</ReactMarkdown>
+          </div>
+        </div>
+        <button
+          onClick={onNext}
+          className="w-full py-3.5 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          Got it
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Sortable Item for Ordering ──────────────────────────────────
 function SortableOrderItem({ id, text, index }: { id: string; text: string; index: number }) {
@@ -94,6 +141,7 @@ function PracticeContent() {
   const router = useRouter();
   const courseSlug = params.courseSlug as string;
   const topicId = searchParams.get('topic');
+  const sessionTypeParam = searchParams.get('session_type');
 
   const { sessionId, questions: storeQuestions, currentIndex, questionStartTime, startSession, answerQuestion, nextQuestion, resetSession, saveSessionForReview } = useAppStore();
 
@@ -118,9 +166,13 @@ function PracticeContent() {
   const [matchSelections, setMatchSelections] = useState<Record<string, string>>({});
   const [showLinkedBlock, setShowLinkedBlock] = useState(false);
 
-  // Session queue with intros
+  // Session queue with intros and concept cards
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
+
+  // Session stats tracking
+  const [conceptCount, setConceptCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -129,13 +181,15 @@ function PracticeContent() {
 
   const currentItem = queue[queueIndex];
   const isIntro = currentItem?.type === 'intro';
-  const currentQuestion = !isIntro ? (currentItem?.data as Question) : null;
+  const isConcept = currentItem?.type === 'concept';
+  const currentQuestion = (!isIntro && !isConcept) ? (currentItem?.data as Question) : null;
 
-  // Count only question items for progress
-  const totalQuestionCount = queue.filter(i => i.type === 'question').length + (inRequeue ? wrongQueue.length : 0);
-  const questionIndex = queue.slice(0, queueIndex + 1).filter(i => i.type === 'question').length - (isIntro ? 0 : 0);
-  const displayIndex = isIntro ? questionIndex : (inRequeue ? queue.filter(i => i.type === 'question').length + requeueIndex : questionIndex);
-  const displayTotal = queue.filter(i => i.type === 'question').length + (inRequeue ? wrongQueue.length : 0);
+  // Progress counts ALL items (concept + question + intro)
+  const totalItems = queue.length + (inRequeue ? wrongQueue.length : 0);
+  const currentItemIdx = inRequeue
+    ? queue.length + requeueIndex
+    : queueIndex;
+  const progressPct = ((currentItemIdx + 1) / Math.max(totalItems, 1)) * 100;
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -147,21 +201,63 @@ function PracticeContent() {
 
       let url = `/api/session/generate?course_id=${courseData.id}&question_count=${questionCount}`;
       if (topicId) url += `&topic_id=${topicId}`;
+      if (sessionTypeParam) url += `&session_type=${sessionTypeParam}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to generate session');
       const data = await res.json();
 
-      if (data.questions && data.questions.length > 0) {
+      // Use cards array if available (new format), fall back to questions (old format)
+      const hasCards = data.cards && data.cards.length > 0;
+      const hasQuestions = data.questions && data.questions.length > 0;
+
+      if (!hasCards && !hasQuestions) {
+        setError('No questions available for this course yet');
+        setLoading(false);
+        return;
+      }
+
+      if (hasCards) {
+        // New format: build queue from cards array
+        const questionsOnly = data.cards
+          .filter((c: any) => c.card_type === 'question')
+          .map((c: any) => c.question);
+
+        startSession(data.session_id || crypto.randomUUID(), courseData.id, questionsOnly);
+
+        const builtQueue: QueueItem[] = [];
+        let cCount = 0;
+        let rCount = 0;
+
+        for (const card of data.cards) {
+          if (card.card_type === 'concept') {
+            builtQueue.push({ type: 'concept', data: card.concept });
+            cCount++;
+          } else if (card.card_type === 'question') {
+            builtQueue.push({ type: 'question', data: card.question });
+            if (card.question.is_review) rCount++;
+          }
+        }
+
+        setConceptCount(cCount);
+        setReviewCount(rCount);
+        setQueue(builtQueue);
+        setQueueIndex(0);
+
+        // Init first question state if needed
+        const firstQ = builtQueue.find(i => i.type === 'question')?.data as Question | undefined;
+        if (firstQ?.question_type === 'ordering') initOrderItems(firstQ);
+        if (firstQ?.question_type === 'matching' && firstQ.matching_items) initMatchSelections(firstQ);
+      } else {
+        // Old format: fall back to questions array with intro interleaving
         startSession(data.session_id || crypto.randomUUID(), courseData.id, data.questions);
 
-        // Build queue with intros interleaved
         const introTopics: IntroTopic[] = data.intro_topics || [];
         const builtQueue: QueueItem[] = [];
         const shownIntros = new Set<string>();
 
         for (const question of data.questions) {
-          const intro = introTopics.find(t => t.topic_id === question.topic_id);
+          const intro = introTopics.find((t: IntroTopic) => t.topic_id === question.topic_id);
           if (intro && !shownIntros.has(intro.topic_id)) {
             builtQueue.push({ type: 'intro', data: intro });
             shownIntros.add(intro.topic_id);
@@ -172,30 +268,22 @@ function PracticeContent() {
         setQueue(builtQueue);
         setQueueIndex(0);
 
-        // If first item is an ordering question, init order items
         const firstQ = builtQueue.find(i => i.type === 'question')?.data as Question | undefined;
-        if (firstQ?.question_type === 'ordering') {
-          initOrderItems(firstQ);
-        }
-        if (firstQ?.question_type === 'matching' && firstQ.matching_items) {
-          initMatchSelections(firstQ);
-        }
-      } else {
-        setError('No questions available for this course yet');
+        if (firstQ?.question_type === 'ordering') initOrderItems(firstQ);
+        if (firstQ?.question_type === 'matching' && firstQ.matching_items) initMatchSelections(firstQ);
       }
     } catch (err) {
       setError('Something went wrong loading your session');
       console.error('Session load error:', err);
     }
     setLoading(false);
-  }, [courseSlug, topicId, questionCount, startSession]);
+  }, [courseSlug, topicId, sessionTypeParam, questionCount, startSession]);
 
   useEffect(() => {
     if (sessionStarted) loadSession();
   }, [sessionStarted, loadSession]);
 
   function initOrderItems(q: Question) {
-    // Shuffle options for display
     const shuffled = [...q.options];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -300,13 +388,18 @@ function PracticeContent() {
         if (q.question_type === 'matching') initMatchSelections(q);
         nextQuestion();
       }
+      // concept and intro cards don't call nextQuestion()
     }
+  }
+
+  function handleConceptNext() {
+    // Concept cards just advance, no API call, no accuracy tracking
+    handleNext();
   }
 
   async function handleIntroSeen() {
     if (!isIntro || !currentItem) return;
     const intro = currentItem.data as IntroTopic;
-    // Fire-and-forget
     fetch(`/api/user/topic-intro/${intro.topic_id}/seen`, { method: 'POST' }).catch(() => {});
     handleNext();
   }
@@ -319,7 +412,13 @@ function PracticeContent() {
         body: JSON.stringify({ session_id: sessionId }),
       });
       const data = await res.json();
-      sessionStorage.setItem('sessionComplete', JSON.stringify(data));
+      // Store extra session stats for the complete screen
+      sessionStorage.setItem('sessionComplete', JSON.stringify({
+        ...data,
+        concept_count: conceptCount,
+        review_count: reviewCount,
+        session_type: sessionTypeParam || 'mixed',
+      }));
       sessionStorage.setItem('sessionId', sessionId || '');
       saveSessionForReview({
         ...data,
@@ -374,43 +473,46 @@ function PracticeContent() {
 
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
 
-  // Can submit?
   const canSubmit = (() => {
     if (!currentQuestion || answerResult) return false;
     if (currentQuestion.question_type === 'fill_blank') return fillBlankAnswer.trim().length > 0;
     if (currentQuestion.question_type === 'ordering') return orderItems.length > 0;
     if (currentQuestion.question_type === 'matching') return Object.values(matchSelections).every(v => v !== '');
-    if (currentQuestion.question_type === 'ordering' && selectedIds.length !== currentQuestion.options.length) return false;
     return selectedIds.length > 0;
   })();
 
   // ─── Render States ─────────────────────────────────────────
   if (!sessionStarted) {
     const SESSION_OPTIONS = [5, 10, 15, 20];
+    const sessionLabel = sessionTypeParam === 'learn' ? 'Learn Session'
+      : sessionTypeParam === 'review' ? 'Review Session'
+      : topicId ? 'Focused Practice' : 'Practice Session';
     return (
       <div className="min-h-[100dvh] bg-[#FAFAF8] flex items-center justify-center px-4">
         <div className="w-full max-w-sm space-y-6 animate-fade-up">
           <div className="text-center">
-            <h1 className="text-lg font-bold text-[#2C2825]">
-              {topicId ? 'Focused Practice' : 'Practice Session'}
-            </h1>
-            <p className="text-sm text-[#6B635A] mt-1">How many questions?</p>
+            <h1 className="text-lg font-bold text-[#2C2825]">{sessionLabel}</h1>
+            <p className="text-sm text-[#6B635A] mt-1">
+              {sessionTypeParam === 'learn' ? 'New concepts + questions' : sessionTypeParam === 'review' ? 'Cards due for review' : 'How many questions?'}
+            </p>
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            {SESSION_OPTIONS.map(n => (
-              <button
-                key={n}
-                onClick={() => setQuestionCount(n)}
-                className={`py-3 rounded-xl text-sm font-bold transition-all ${
-                  questionCount === n
-                    ? 'bg-[#2C2825] text-[#F5F3EF] shadow-sm scale-105'
-                    : 'bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD] hover:border-[#D4CFC7]'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
+          {sessionTypeParam !== 'learn' && (
+            <div className="grid grid-cols-4 gap-3">
+              {SESSION_OPTIONS.map(n => (
+                <button
+                  key={n}
+                  onClick={() => setQuestionCount(n)}
+                  className={`py-3 rounded-xl text-sm font-bold transition-all ${
+                    questionCount === n
+                      ? 'bg-[#2C2825] text-[#F5F3EF] shadow-sm scale-105'
+                      : 'bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD] hover:border-[#D4CFC7]'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => setSessionStarted(true)}
             className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-bold text-sm transition-colors"
@@ -458,13 +560,67 @@ function PracticeContent() {
     );
   }
 
+  // ─── Concept Card Screen ──────────────────────────────────
+  if (isConcept && currentItem) {
+    const concept = currentItem.data as ConceptData;
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFAF8]">
+        <div className="max-w-lg mx-auto px-4">
+          {/* Progress bar for concept cards too */}
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
+              <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+        </div>
+        <ConceptCard concept={concept} onNext={handleConceptNext} />
+
+        {/* Exit confirmation overlay */}
+        {exitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
+            <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave session?</h3>
+              <p className="text-sm text-[#6B635A] text-center">Your progress in this session won&apos;t be saved.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
+                <button onClick={() => { resetSession(); router.push(`/course/${courseSlug}/path`); }} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ─── Topic Intro Screen ────────────────────────────────────
   if (isIntro && currentItem) {
     const intro = currentItem.data as IntroTopic;
     return (
       <div className="min-h-[100dvh] bg-[#FAFAF8]">
         <div className="max-w-lg mx-auto px-4 pb-8">
-          <div className="py-4">
+          {/* Progress bar */}
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+          <div className="py-2">
             <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">New Topic</span>
           </div>
           <h2 className="text-xl font-bold text-[#2C2825] mb-2">{intro.title}</h2>
@@ -553,12 +709,6 @@ function PracticeContent() {
     );
   }
 
-  const progressQuestionIdx = inRequeue
-    ? queue.filter(i => i.type === 'question').length + requeueIndex
-    : queue.slice(0, queueIndex + 1).filter(i => i.type === 'question').length - 1;
-  const progressTotal = queue.filter(i => i.type === 'question').length + (inRequeue ? wrongQueue.length : 0);
-  const progressPct = ((progressQuestionIdx + 1) / Math.max(progressTotal, 1)) * 100;
-
   return (
     <div className="min-h-[100dvh] bg-[#FAFAF8]">
       <div className="max-w-lg mx-auto px-4 pb-8">
@@ -573,7 +723,7 @@ function PracticeContent() {
             <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
           </div>
           <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
-            {progressQuestionIdx + 1}/{progressTotal}
+            {currentItemIdx + 1}/{totalItems}
           </span>
         </div>
 
@@ -591,18 +741,27 @@ function PracticeContent() {
           </div>
         )}
 
-        {/* Topic badge */}
-        {activeQuestion.topic_title && (
-          <div className="mb-4">
-            <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">{activeQuestion.topic_title}</span>
-          </div>
-        )}
-
-        {inRequeue && (
-          <div className="mb-4">
+        {/* Topic badge + review indicator + difficulty pill */}
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          {activeQuestion.topic_title && (
+            <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">
+              {activeQuestion.topic_title}
+            </span>
+          )}
+          {activeQuestion.is_review && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              Review
+            </span>
+          )}
+          {(activeQuestion.difficulty_label === 'challenging' || (activeQuestion.difficulty ?? 0) >= 4) && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+              Challenging
+            </span>
+          )}
+          {inRequeue && (
             <span className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">Review: missed</span>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Question text */}
         <div className="mb-6">
@@ -650,8 +809,8 @@ function PracticeContent() {
                         <SortableOrderItem id={item.id} text={item.text} index={idx} />
                       </div>
                       <div className="flex flex-col">
-                        <button onClick={() => moveOrderItem(idx, -1)} disabled={idx === 0} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">▲</button>
-                        <button onClick={() => moveOrderItem(idx, 1)} disabled={idx === orderItems.length - 1} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">▼</button>
+                        <button onClick={() => moveOrderItem(idx, -1)} disabled={idx === 0} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">&#9650;</button>
+                        <button onClick={() => moveOrderItem(idx, 1)} disabled={idx === orderItems.length - 1} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">&#9660;</button>
                       </div>
                     </div>
                   ))}
@@ -702,7 +861,7 @@ function PracticeContent() {
               return (
                 <div key={left} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${isCorrectPair ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`}>
                   <span className="text-sm font-medium text-[#2C2825] w-1/3">{left}</span>
-                  <span className="text-xs text-[#A39B90]">→</span>
+                  <span className="text-xs text-[#A39B90]">&rarr;</span>
                   <span className="text-sm text-[#6B635A] flex-1">{right}</span>
                   {!isCorrectPair && <span className="text-xs text-green-600">(correct: {correctRight})</span>}
                 </div>
@@ -711,7 +870,7 @@ function PracticeContent() {
           </div>
         )}
 
-        {/* ── MC / MS / TF / legacy ordering options ── */}
+        {/* ── MC / MS / TF options ── */}
         {['multiple_choice', 'multiple_select', 'true_false'].includes(activeQuestion.question_type) && (
           <div className="space-y-2.5 mb-6">
             {activeQuestion.options.map((option, idx) => {
@@ -768,7 +927,6 @@ function PracticeContent() {
               )}
             </div>
 
-            {/* Per-option explanation (MC/MS/TF wrong answers) */}
             {!answerResult.is_correct && answerResult.option_explanation && (
               <div className="bg-red-100/50 rounded-lg p-3 text-sm text-red-800">
                 <p className="font-medium mb-1">Why your answer is wrong:</p>
@@ -780,7 +938,6 @@ function PracticeContent() {
               <p>{answerResult.explanation}</p>
             </div>
 
-            {/* Linked lesson content (context-on-failure) */}
             {!answerResult.is_correct && answerResult.linked_lesson && (
               <div>
                 <button

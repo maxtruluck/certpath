@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Look up the question — include new fields
     const { data: question, error: qError } = await supabase
       .from('questions')
-      .select('id, topic_id, module_id, course_id, correct_option_ids, explanation, question_type, acceptable_answers, match_mode, correct_order, matching_pairs, option_explanations, lesson_id')
+      .select('id, topic_id, module_id, course_id, correct_option_ids, explanation, question_type, acceptable_answers, match_mode, correct_order, matching_pairs, option_explanations, lesson_id, attempt_count, pass_rate')
       .eq('id', question_id)
       .single()
 
@@ -232,6 +232,16 @@ export async function POST(request: NextRequest) {
       scheduled_days: fsrs.interval,
       session_id: session_id,
     })
+
+    // Update question pass_rate (running average)
+    const oldCount = question.attempt_count ?? 0
+    const oldRate = question.pass_rate ?? 0
+    const newCount = oldCount + 1
+    const newRate = (oldRate * oldCount + (isCorrect ? 1 : 0)) / newCount
+    await supabase
+      .from('questions')
+      .update({ attempt_count: newCount, pass_rate: newRate })
+      .eq('id', question_id)
 
     // Update user_courses stats
     const { data: userCourse } = await supabase
