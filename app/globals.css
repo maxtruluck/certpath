@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme inline {
@@ -65,9 +66,21 @@
   --color-cp-text-secondary: #475569;
   --color-cp-text-muted: #94a3b8;
 
+  /* Mastery level colors */
+  --color-cp-mastery-mastered: #1e40af;
+  --color-cp-mastery-proficient: #7c3aed;
+  --color-cp-mastery-familiar: #f59e0b;
+  --color-cp-mastery-attempted: #fb923c;
+  --color-cp-mastery-locked: #d1d5db;
+
+  /* Surface aliases */
+  --color-cp-surface-primary: #ffffff;
+  --color-cp-surface-secondary: #f8fafc;
+  --color-cp-surface-tertiary: #f1f5f9;
+
   /* Fonts */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
 }
 
 * {
@@ -83,6 +96,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-cp-border); border-radius: 3px; }
@@ -92,45 +115,45 @@ body {
    =================================== */
 
 .btn-primary {
-  background: var(--color-cp-primary);
-  color: white;
+  background: #2C2825;
+  color: #F5F3EF;
   font-weight: 600;
   letter-spacing: 0.01em;
-  border-radius: 0.75rem;
+  border-radius: 0.625rem;
   border: none;
   padding: 0.625rem 1.25rem;
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-primary:hover { background: var(--color-cp-primary-dark); }
+.btn-primary:hover { background: #1A1816; }
 .btn-primary:active { transform: scale(0.98); }
 
 .btn-secondary {
-  background: var(--color-cp-surface-light);
-  color: var(--color-cp-text);
+  background: #F5F3EF;
+  color: #2C2825;
   font-weight: 600;
   letter-spacing: 0.01em;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-cp-border);
+  border-radius: 0.625rem;
+  border: 1px solid #E8E4DD;
   padding: 0.625rem 1.25rem;
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-secondary:hover { background: var(--color-cp-surface-hover); }
+.btn-secondary:hover { background: #EBE8E2; }
 .btn-secondary:active { transform: scale(0.98); }
 
 .btn-ghost {
   background: transparent;
-  color: var(--color-cp-primary);
+  color: #6B635A;
   font-weight: 600;
   letter-spacing: 0.01em;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-cp-border);
+  border-radius: 0.625rem;
+  border: 1px solid #E8E4DD;
   padding: 0.625rem 1.25rem;
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-ghost:hover { background: var(--color-cp-surface-light); border-color: var(--color-cp-primary); }
+.btn-ghost:hover { background: #F5F3EF; border-color: #A39B90; }
 .btn-ghost:active { transform: scale(0.98); }
 
 /* ===================================
@@ -206,6 +229,37 @@ body {
 .animate-slide-up { animation: slideUp 0.35s ease-out both; }
 .animate-fade-in { animation: fadeIn 0.25s ease-out both; }
 
+@keyframes countUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+}
+
+@keyframes circleProgress {
+  from { stroke-dashoffset: var(--circumference); }
+  to { stroke-dashoffset: var(--dash-offset); }
+}
+
+@keyframes slideOutLeft {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-20px); opacity: 0; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-count-up { animation: countUp 0.4s ease-out forwards; }
+.animate-pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+.animate-circle-progress { animation: circleProgress 1s ease-out forwards; }
+.animate-slide-out-left { animation: slideOutLeft 0.2s ease-in forwards; }
+.animate-slide-in-right { animation: slideInRight 0.2s ease-out forwards; }
+
 /* ===================================
    STAGGER SYSTEM
    =================================== */
@@ -260,3 +314,13 @@ html {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Horizontal scroll snap for course cards */
+.scroll-snap-x {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-snap-x::-webkit-scrollbar { display: none; }
+.scroll-snap-x > * { scroll-snap-align: start; }

@@ -41,14 +41,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-[#FAFAF8]">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center">
-            <span className="text-3xl font-bold text-gray-900">open</span>
-            <span className="text-3xl font-bold text-blue-500">ED</span>
+          <Link href="/" className="inline-flex items-baseline gap-0.5">
+            <span className="text-3xl font-semibold text-[#2C2825] tracking-tight">open</span>
+            <span className="text-3xl font-extrabold text-[#2C2825] tracking-tight">ED</span>
           </Link>
-          <p className="text-gray-500 mt-2 text-sm">Welcome back</p>
+          <p className="text-[#A39B90] mt-2 text-sm">Welcome back</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -56,61 +56,61 @@ export default function LoginPage() {
             <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl">{error}</div>
           )}
           <div>
-            <label htmlFor="email" className="block text-sm text-gray-500 mb-1">Email</label>
+            <label htmlFor="email" className="block text-sm text-[#6B635A] mb-1">Email</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+              className="w-full px-4 py-3 bg-white border border-[#E8E4DD] rounded-xl text-[#2C2825] focus:outline-none focus:border-[#2C2825] transition-colors"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm text-gray-500 mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm text-[#6B635A] mb-1">Password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+              className="w-full px-4 py-3 bg-white border border-[#E8E4DD] rounded-xl text-[#2C2825] focus:outline-none focus:border-[#2C2825] transition-colors"
               placeholder="Enter your password"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+            className="w-full bg-[#2C2825] hover:bg-[#1A1816] disabled:opacity-50 text-[#F5F3EF] font-semibold py-3 rounded-xl transition-colors"
           >
             {loading ? 'Logging in...' : 'Log in'}
           </button>
         </form>
 
         <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-          <div className="relative flex justify-center text-sm"><span className="bg-white px-2 text-gray-400">or continue with</span></div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#E8E4DD]" /></div>
+          <div className="relative flex justify-center text-sm"><span className="bg-[#FAFAF8] px-2 text-[#A39B90]">or continue with</span></div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => handleOAuth('google')}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="w-full py-2.5 rounded-xl border border-[#E8E4DD] text-sm font-medium text-[#2C2825] hover:bg-[#F5F3EF] transition-colors"
           >
             Google
           </button>
           <button
             onClick={() => handleOAuth('github')}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="w-full py-2.5 rounded-xl border border-[#E8E4DD] text-sm font-medium text-[#2C2825] hover:bg-[#F5F3EF] transition-colors"
           >
             GitHub
           </button>
         </div>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-[#6B635A]">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-blue-500 hover:text-blue-600 font-medium">Sign up</Link>
+          <Link href="/signup" className="text-[#2C2825] hover:text-[#1A1816] font-semibold">Sign up</Link>
         </p>
       </div>
     </div>

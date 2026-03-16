@@ -7,7 +7,7 @@ export interface SessionQuestion {
   topic_id: string;
   topic_title: string;
   question_text: string;
-  question_type: 'multiple_choice' | 'multiple_select' | 'true_false';
+  question_type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'fill_blank' | 'ordering' | 'matching';
   options: { id: string; text: string }[];
   difficulty: number;
 }

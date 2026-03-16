@@ -46,11 +46,27 @@ export async function GET(
       .eq('course_id', id)
       .order('display_order')
 
-    const { data: questions } = await supabase
-      .from('questions')
-      .select('id, topic_id, module_id')
-      .eq('course_id', id)
-      .eq('is_active', true)
+    const [questionsRes, lessonsRes] = await Promise.all([
+      supabase
+        .from('questions')
+        .select('id, topic_id, module_id')
+        .eq('course_id', id)
+        .eq('is_active', true),
+      supabase
+        .from('lessons')
+        .select('id, topic_id')
+        .eq('course_id', id)
+        .eq('is_active', true),
+    ])
+
+    const questions = questionsRes.data || []
+    const lessons = lessonsRes.data || []
+
+    // Count lessons per topic
+    const lessonCountByTopic = new Map<string, number>()
+    for (const l of lessons) {
+      lessonCountByTopic.set(l.topic_id, (lessonCountByTopic.get(l.topic_id) || 0) + 1)
+    }
 
     const modulesWithTopics = (modules || []).map((mod: any) => ({
       ...mod,
@@ -58,9 +74,10 @@ export async function GET(
         .filter((t: any) => t.module_id === mod.id)
         .map((t: any) => ({
           ...t,
-          question_count: (questions || []).filter((q: any) => q.topic_id === t.id).length,
+          question_count: questions.filter((q: any) => q.topic_id === t.id).length,
+          lesson_count: lessonCountByTopic.get(t.id) || 0,
         })),
-      question_count: (questions || []).filter((q: any) => q.module_id === mod.id).length,
+      question_count: questions.filter((q: any) => q.module_id === mod.id).length,
     }))
 
     return NextResponse.json({

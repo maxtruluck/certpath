@@ -42,15 +42,23 @@ export async function POST(
     }
 
     // Validate minimums
-    const [topicsRes, questionsRes, modulesRes] = await Promise.all([
+    const [topicsRes, questionsRes, modulesRes, lessonsRes] = await Promise.all([
       supabase.from('topics').select('id, module_id').eq('course_id', id),
       supabase.from('questions').select('id, topic_id').eq('course_id', id).eq('is_active', true),
       supabase.from('modules').select('id').eq('course_id', id),
+      supabase.from('lessons').select('id, topic_id').eq('course_id', id).eq('is_active', true),
     ])
 
     const topics = topicsRes.data || []
     const questions = questionsRes.data || []
     const modules = modulesRes.data || []
+    const lessons = lessonsRes.data || []
+
+    // Count lessons per topic
+    const lessonCountByTopic = new Map<string, number>()
+    for (const l of lessons) {
+      lessonCountByTopic.set(l.topic_id, (lessonCountByTopic.get(l.topic_id) || 0) + 1)
+    }
 
     const validationWarnings: string[] = []
 
@@ -70,6 +78,12 @@ export async function POST(
       if (topicQs.length < 10) {
         validationWarnings.push(`A topic has only ${topicQs.length} questions (minimum: 10)`)
       }
+    }
+
+    // Content coverage validation
+    const topicsWithoutContent = topics.filter((t: any) => !lessonCountByTopic.has(t.id))
+    if (topicsWithoutContent.length > 0) {
+      validationWarnings.push(`${topicsWithoutContent.length} topic(s) have no lessons`)
     }
 
     // In demo mode, allow submission despite warnings

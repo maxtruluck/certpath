@@ -6,8 +6,6 @@ import { BottomNav } from './BottomNav';
 
 interface AppShellProps {
   children: React.ReactNode;
-  streak?: number;
-  totalXp?: number;
   hideBottomNav?: boolean;
   userInitial?: string;
 }
@@ -15,17 +13,17 @@ interface AppShellProps {
 export function AppShell({ children, hideBottomNav = false, userInitial = 'O' }: AppShellProps) {
   const pathname = usePathname();
 
-  // Hide bottom nav on practice/session routes
+  // Hide all navigation on practice/session routes (immersive mode)
   const isPracticeRoute = pathname?.startsWith('/practice') || pathname?.startsWith('/session');
-  const showBottomNav = !hideBottomNav && !isPracticeRoute;
+  const showNav = !hideBottomNav && !isPracticeRoute;
 
   return (
-    <div className="min-h-[100dvh] bg-white">
-      <TopBar userInitial={userInitial} />
-      <main className="max-w-lg mx-auto px-4 pb-24 pt-4">
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      {showNav && <TopBar userInitial={userInitial} />}
+      <main className={`max-w-lg mx-auto px-4 ${showNav ? 'pb-24 pt-4' : 'pb-8'}`}>
         {children}
       </main>
-      {showBottomNav && <BottomNav />}
+      {showNav && <BottomNav />}
     </div>
   );
 }

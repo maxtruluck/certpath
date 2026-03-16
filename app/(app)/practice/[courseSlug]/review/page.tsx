@@ -24,14 +24,15 @@ export default function ReviewMistakesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try to get mistakes from the session review API
     async function loadMistakes() {
-      if (sessionId) {
+      // Try store sessionId first, then sessionStorage fallback
+      const sid = sessionId || sessionStorage.getItem('sessionId');
+      if (sid) {
         try {
-          const res = await fetch(`/api/session/${sessionId}/review`);
+          const res = await fetch(`/api/session/${sid}/review`);
           if (res.ok) {
             const data = await res.json();
-            if (data.mistakes) {
+            if (data.mistakes && data.mistakes.length > 0) {
               setMistakes(data.mistakes);
               setLoading(false);
               return;

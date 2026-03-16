@@ -1,0 +1,110 @@
+topic_title,block_type,title,content
+"Overview","concept","What is Algebra?","Algebra is a branch of mathematics that uses symbols (typically letters) to represent unknown values and express relationships between quantities. It builds on arithmetic by introducing variables, allowing us to write general rules and solve problems systematically."
+"Overview","definition","Variable","A **variable** is a symbol (usually a letter like *x*, *y*, or *n*) that represents an unknown or changeable value in a mathematical expression or equation."
+"Overview","definition","Expression vs Equation","An **expression** is a combination of numbers, variables, and operations (e.g., `3x + 5`). An **equation** sets two expressions equal to each other (e.g., `3x + 5 = 14`)."
+"Overview","example","Real-World Algebra","If a pizza costs $12 and you want to split it equally among *n* friends, each person pays `12/n` dollars. If each person paid $4, we solve: `12/n = 4` → `n = 3` friends."
+"Overview","summary","Chapter Overview Summary","- Algebra uses variables to represent unknowns
+- Expressions combine numbers, variables, and operations
+- Equations set two expressions equal
+- Algebra lets us model and solve real-world problems"
+"Learning Objectives","concept","What You Will Learn","By the end of this chapter, you will be able to:
+1. Identify and classify algebraic expressions
+2. Solve linear equations in one variable
+3. Translate word problems into algebraic equations
+4. Graph linear equations on a coordinate plane"
+"Learning Objectives","key_takeaway","Prerequisites","You should be comfortable with:
+- Order of operations (PEMDAS)
+- Working with negative numbers
+- Basic fraction and decimal arithmetic"
+"Learning Objectives","note","Study Tips","Practice is essential in algebra. Work through every example before checking the solution. If you get stuck, try substituting simple numbers to test your understanding."
+"Background","concept","Historical Context","Algebra has roots dating back to ancient Babylon (~2000 BCE). The word 'algebra' comes from the Arabic *al-jabr*, meaning 'restoration of broken parts,' from the title of a 9th-century book by mathematician al-Khwarizmi."
+"Background","definition","Coefficient","A **coefficient** is the numerical factor multiplied by a variable. In `7x`, the coefficient is **7**. In `-3y²`, the coefficient is **-3**."
+"Background","definition","Constant","A **constant** is a fixed value that does not change. In the expression `4x + 9`, the constant is **9**."
+"Background","example","Identifying Parts","In the expression `5x² - 3x + 7`:
+- **Terms**: `5x²`, `-3x`, `7`
+- **Coefficients**: 5, -3
+- **Constant**: 7
+- **Variable**: x
+- **Degree**: 2 (highest exponent)"
+"Theory","concept","Solving Linear Equations","A **linear equation** has variables raised only to the first power. To solve, isolate the variable using inverse operations:
+1. Simplify each side (distribute, combine like terms)
+2. Move variable terms to one side
+3. Move constants to the other side
+4. Divide by the coefficient"
+"Theory","example","Step-by-Step Solution","Solve: `3(x + 2) - 4 = 11`
+
+Step 1: Distribute → `3x + 6 - 4 = 11`
+Step 2: Combine like terms → `3x + 2 = 11`
+Step 3: Subtract 2 → `3x = 9`
+Step 4: Divide by 3 → `x = 3`
+
+Check: `3(3 + 2) - 4 = 15 - 4 = 11` ✓"
+"Theory","concept","Properties of Equality","These rules let you transform equations while keeping them balanced:
+- **Addition Property**: If `a = b`, then `a + c = b + c`
+- **Subtraction Property**: If `a = b`, then `a - c = b - c`
+- **Multiplication Property**: If `a = b`, then `ac = bc`
+- **Division Property**: If `a = b` and `c ≠ 0`, then `a/c = b/c`"
+"Theory","key_takeaway","Golden Rule","Whatever you do to one side of an equation, you **must** do the same to the other side."
+"Key Concepts","concept","Combining Like Terms","**Like terms** have the same variable raised to the same power. You can add or subtract their coefficients:
+- `3x + 5x = 8x` ✓
+- `2x² + 4x²= 6x²` ✓
+- `3x + 2x² =` cannot combine (different powers) ✗"
+"Key Concepts","definition","Like Terms","Terms that have identical variable parts. `7xy` and `-2xy` are like terms. `3x` and `3x²` are **not** like terms."
+"Key Concepts","example","Simplifying Expressions","Simplify: `4x + 3y - 2x + 7y - 5`
+
+Group like terms: `(4x - 2x) + (3y + 7y) + (-5)`
+Combine: `2x + 10y - 5`"
+"Key Concepts","key_takeaway","Simplification Checklist","1. Remove parentheses (distribute if needed)
+2. Group like terms together
+3. Combine coefficients
+4. Write in standard form (highest degree first)"
+"Examples","concept","Word Problem Strategy","To translate a word problem into algebra:
+1. **Read** the problem completely
+2. **Identify** what you need to find (assign a variable)
+3. **Translate** key phrases into math operations
+4. **Solve** the equation
+5. **Check** your answer makes sense in context"
+"Examples","example","Age Problem","Maria is 5 years older than twice her brother's age. If Maria is 23, how old is her brother?
+
+Let `b` = brother's age
+Equation: `2b + 5 = 23`
+Solve: `2b = 18` → `b = 9`
+
+Maria's brother is **9 years old**.
+Check: 2(9) + 5 = 23 ✓"
+"Examples","example","Distance Problem","Two cars leave the same point. Car A goes east at 60 mph, Car B goes west at 45 mph. When are they 315 miles apart?
+
+Let `t` = hours
+Equation: `60t + 45t = 315`
+Solve: `105t = 315` → `t = 3`
+
+They are 315 miles apart after **3 hours**."
+"Case Studies","concept","Algebra in Daily Life","Algebra appears everywhere:
+- **Shopping**: Calculating discounts (`price × 0.8` for 20% off)
+- **Cooking**: Scaling recipes (doubling means `2 × each ingredient`)
+- **Finance**: Compound interest (`A = P(1 + r)^t`)
+- **Construction**: Area calculations (`length × width`)"
+"Case Studies","example","Budget Planning","You earn $2,400/month. Rent is $900, utilities are $150, and you want to save 15% of income. How much is left for other expenses?
+
+Savings: `0.15 × 2400 = $360`
+Fixed costs: `900 + 150 = $1,050`
+Remaining: `2400 - 360 - 1050 = $990`
+
+As an equation: `2400 - 0.15(2400) - 900 - 150 = x`"
+"Practice Problems","concept","How to Practice","Work through each problem on paper before checking answers. Focus on writing clear steps — partial credit in math comes from showing your work."
+"Practice Problems","note","Difficulty Levels","Problems are marked: ⭐ (basic), ⭐⭐ (intermediate), ⭐⭐⭐ (challenging). Start with basics and work up."
+"Review","summary","Chapter 1 Review","**Key formulas and concepts:**
+- Linear equation: `ax + b = c` → `x = (c - b) / a`
+- Distribute: `a(b + c) = ab + ac`
+- Combine like terms: same variable and exponent
+- Check solutions by substituting back
+
+**Common mistakes to avoid:**
+- Forgetting to distribute the negative sign
+- Combining unlike terms
+- Not performing the same operation on both sides"
+"Review","key_takeaway","What to Review Before Moving On","Make sure you can:
+✓ Solve any one-variable linear equation
+✓ Simplify expressions with multiple terms
+✓ Translate word problems to equations
+✓ Check your solutions by substitution"

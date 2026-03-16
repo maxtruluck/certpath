@@ -82,11 +82,11 @@ export default function CourseOverviewPage() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-6 bg-gray-100 rounded w-16" />
-        <div className="h-32 bg-gray-100 rounded-2xl" />
-        <div className="h-8 bg-gray-100 rounded w-2/3" />
-        <div className="h-4 bg-gray-100 rounded w-1/2" />
-        <div className="h-20 bg-gray-100 rounded-2xl" />
+        <div className="h-6 bg-[#EBE8E2] rounded w-16" />
+        <div className="h-32 bg-[#EBE8E2] rounded-2xl" />
+        <div className="h-8 bg-[#EBE8E2] rounded w-2/3" />
+        <div className="h-4 bg-[#EBE8E2] rounded w-1/2" />
+        <div className="h-20 bg-[#EBE8E2] rounded-2xl" />
       </div>
     );
   }
@@ -94,10 +94,10 @@ export default function CourseOverviewPage() {
   if (error || !course) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">{error || 'Course not found'}</p>
+        <p className="text-[#6B635A] mb-4">{error || 'Course not found'}</p>
         <button
           onClick={() => router.push('/browse')}
-          className="text-blue-500 font-medium text-sm"
+          className="text-[#2C2825] font-medium text-sm"
         >
           Back to browse
         </button>
@@ -129,23 +129,23 @@ export default function CourseOverviewPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-1 text-sm text-[#6B635A] hover:text-[#2C2825] transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
           Back
         </button>
-        <h1 className="text-sm font-semibold text-gray-900 flex-1 text-center">Course overview</h1>
+        <h1 className="text-sm font-semibold text-[#2C2825] flex-1 text-center">Course overview</h1>
         <div className="w-12" />
       </div>
 
       {/* Thumbnail/icon */}
-      <div className="w-full h-36 rounded-2xl bg-gray-50 flex items-center justify-center animate-fade-up">
+      <div className="w-full h-36 rounded-2xl bg-[#F5F3EF] flex items-center justify-center animate-fade-up">
         {course.thumbnail_url ? (
           <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover rounded-2xl" />
         ) : (
-          <span className="text-4xl font-bold text-gray-300">
+          <span className="text-4xl font-bold text-[#D4CFC7]">
             {getAbbreviation(course.title)}
           </span>
         )}
@@ -153,8 +153,8 @@ export default function CourseOverviewPage() {
 
       {/* Title and creator */}
       <div className="animate-fade-up">
-        <h2 className="text-xl font-bold text-gray-900">{course.title}</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-bold text-[#2C2825]">{course.title}</h2>
+        <p className="text-sm text-[#6B635A] mt-1">
           By {course.creator?.creator_name || course.provider_name || 'openED'}
         </p>
       </div>
@@ -165,7 +165,7 @@ export default function CourseOverviewPage() {
           {course.category.replace('_', ' ')}
         </span>
         {course.difficulty && (
-          <span className={`text-xs font-medium px-3 py-1 rounded-full border capitalize ${difficultyColors[course.difficulty] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+          <span className={`text-xs font-medium px-3 py-1 rounded-full border capitalize ${difficultyColors[course.difficulty] || 'bg-[#F5F3EF] text-[#6B635A] border-[#E8E4DD]'}`}>
             {course.difficulty}
           </span>
         )}
@@ -173,61 +173,69 @@ export default function CourseOverviewPage() {
 
       {/* Description */}
       {course.description && (
-        <p className="text-sm text-gray-600 leading-relaxed animate-fade-up">{course.description}</p>
+        <p className="text-sm text-[#6B635A] leading-relaxed animate-fade-up">{course.description}</p>
       )}
 
       {/* Stats row 1: Questions, Modules, Exam fee */}
       <div className="grid grid-cols-3 gap-3 animate-fade-up">
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">{course.stats.question_count}</p>
-          <p className="text-[10px] text-gray-500 font-medium">Questions</p>
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.question_count}</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Questions</p>
         </div>
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">{course.stats.module_count}</p>
-          <p className="text-[10px] text-gray-500 font-medium">Modules</p>
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.module_count}</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Modules</p>
         </div>
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">{examFee || `$${0}`}</p>
-          <p className="text-[10px] text-gray-500 font-medium">Exam fee</p>
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">{examFee || `$${0}`}</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Exam fee</p>
         </div>
       </div>
 
       {/* Stats row 2: Pass score, Exam time, Topics */}
       <div className="grid grid-cols-3 gap-3 animate-fade-up">
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">
             {course.cert_info.passing_score || '—'}
           </p>
-          <p className="text-[10px] text-gray-500 font-medium">Pass score</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Pass score</p>
         </div>
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">
             {course.cert_info.exam_duration_minutes ? `${course.cert_info.exam_duration_minutes}m` : '—'}
           </p>
-          <p className="text-[10px] text-gray-500 font-medium">Exam time</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Exam time</p>
         </div>
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 font-mono">{course.stats.topic_count}</p>
-          <p className="text-[10px] text-gray-500 font-medium">Topics</p>
+        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.topic_count}</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Topics</p>
         </div>
+      </div>
+
+      {/* What you'll learn - placeholder from stats */}
+      <div className="animate-fade-up">
+        <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
+        <p className="text-sm text-[#6B635A]">
+          {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.topic_count} topic{course.stats.topic_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
+        </p>
       </div>
 
       {/* Enrolled: show progress */}
       {isEnrolled && course.user_progress && (
-        <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4 space-y-3 animate-fade-up">
+        <div className="rounded-2xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 space-y-3 animate-fade-up">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-700">Your progress</span>
-            <span className="text-sm font-bold text-blue-600 font-mono">
+            <span className="text-sm font-medium text-[#2C2825]">Your progress</span>
+            <span className="text-sm font-bold text-[#6B635A] font-mono">
               {Math.round((course.user_progress.readiness_score || 0) * 100)}% readiness
             </span>
           </div>
-          <div className="w-full h-1.5 bg-blue-100 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[#EBE8E2] rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full"
               style={{ width: `${Math.round((course.user_progress.readiness_score || 0) * 100)}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-blue-600">
+          <div className="flex justify-between text-xs text-[#6B635A]">
             <span>{course.user_progress.questions_seen} questions seen</span>
             <span>{course.user_progress.sessions_completed} sessions</span>
           </div>
@@ -238,7 +246,7 @@ export default function CourseOverviewPage() {
       {isEnrolled ? (
         <Link
           href={`/course/${course.slug}/path`}
-          className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-xl text-center transition-colors"
+          className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
         >
           Continue studying
         </Link>
@@ -246,11 +254,11 @@ export default function CourseOverviewPage() {
         <div className="space-y-2">
           <Link
             href={`/course/${course.slug}/enroll`}
-            className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-xl text-center transition-colors"
+            className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
           >
             Enroll in this course
           </Link>
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-[#A39B90] text-center">
             {priceFormatted === 'Free' ? 'Free' : `${priceFormatted} one-time or included with Pro`}
           </p>
         </div>

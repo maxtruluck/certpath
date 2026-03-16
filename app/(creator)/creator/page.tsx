@@ -35,12 +35,12 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    in_review: 'bg-amber-50 text-amber-700',
-    published: 'bg-green-50 text-green-700',
-    archived: 'bg-red-50 text-red-600',
+function StatusDot({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    draft: 'bg-slate-300',
+    in_review: 'bg-amber-400',
+    published: 'bg-emerald-400',
+    archived: 'bg-red-400',
   }
   const labels: Record<string, string> = {
     draft: 'Draft',
@@ -49,10 +49,37 @@ function StatusBadge({ status }: { status: string }) {
     archived: 'Archived',
   }
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-600'}`}>
+    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+      <span className={`w-1.5 h-1.5 rounded-full ${colors[status] || 'bg-slate-300'}`} />
       {labels[status] || status}
     </span>
   )
+}
+
+function StatCard({ label, value }: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-[#E8E4DD] hover:border-[#D4CFC7] transition-colors duration-200">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#A39B90] mb-3">{label}</p>
+      <p className="text-3xl font-extrabold text-[#2C2825] tracking-tight tabular-nums">{value}</p>
+    </div>
+  )
+}
+
+function getTimeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  const diffHrs = Math.floor(diffMins / 60)
+  if (diffHrs < 24) return `${diffHrs}h ago`
+  const diffDays = Math.floor(diffHrs / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export default function CreatorDashboard() {
@@ -76,23 +103,29 @@ export default function CreatorDashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 bg-gray-200 rounded" />
-        <div className="grid grid-cols-4 gap-4">
+      <div className="space-y-8 animate-pulse">
+        <div className="h-10 w-56 bg-slate-200 rounded-lg" />
+        <div className="grid grid-cols-4 gap-5">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-28 bg-gray-200 rounded-xl" />
+            <div key={i} className="h-36 bg-slate-200 rounded-2xl" />
           ))}
         </div>
-        <div className="h-64 bg-gray-200 rounded-xl" />
+        <div className="h-72 bg-slate-200 rounded-2xl" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-center py-16">
-        <p className="text-gray-500 mb-4">{error}</p>
-        <Link href="/creator/courses/new" className="btn-primary px-6 py-2.5 inline-block">
+      <div className="text-center py-20">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-400">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
+          </svg>
+        </div>
+        <p className="text-slate-500 mb-6 text-sm">{error}</p>
+        <Link href="/creator/courses/new" className="btn-primary px-6 py-2.5 inline-block text-sm">
           Apply as Creator
         </Link>
       </div>
@@ -103,82 +136,81 @@ export default function CreatorDashboard() {
 
   const { stats, courses } = data
 
-  const statCards = [
-    { label: 'Published Courses', value: stats.published_courses.toString(), icon: '📚' },
-    { label: 'Total Students', value: stats.total_students.toLocaleString(), icon: '👥' },
-    { label: 'Total Earnings', value: formatCents(stats.total_earnings_cents), icon: '💰' },
-    { label: 'Avg. Rating', value: stats.avg_rating != null ? stats.avg_rating.toFixed(1) : '—', icon: '⭐' },
-  ]
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Creator Dashboard</h1>
-          <p className="text-gray-500 mt-1">Manage your courses and track performance</p>
+          <h1 className="text-3xl font-extrabold text-[#2C2825] tracking-tight">Dashboard</h1>
+          <p className="text-[#A39B90] mt-1 text-[15px]">Your courses at a glance</p>
         </div>
         <Link
           href="/creator/courses/new"
-          className="btn-primary px-5 py-2.5 text-sm inline-flex items-center gap-2"
+          className="inline-flex items-center gap-2 bg-[#2C2825] text-[#F5F3EF] px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#1A1816] active:scale-[0.98] transition-all shadow-sm"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <line x1="8" y1="2" x2="8" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <line x1="7" y1="1" x2="7" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Create New Course
+          New Course
         </Link>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        {statCards.map(card => (
-          <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-2xl">{card.icon}</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-            <p className="text-sm text-gray-500 mt-1">{card.label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-4 gap-5">
+        <StatCard label="Courses" value={stats.published_courses.toString()} />
+        <StatCard label="Students" value={stats.total_students.toLocaleString()} />
+        <StatCard label="Earnings" value={formatCents(stats.total_earnings_cents)} />
+        <StatCard label="Avg. Rating" value={stats.avg_rating != null ? stats.avg_rating.toFixed(1) : '—'} />
       </div>
 
       {/* Courses */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Your Courses</h2>
+      <div>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-[#2C2825]">Your Courses</h2>
+          <span className="text-xs font-medium text-[#A39B90]">{courses.length} total</span>
         </div>
 
         {courses.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-gray-400 mb-4">No courses yet. Create your first course to get started.</p>
-            <Link href="/creator/courses/new" className="btn-ghost px-5 py-2 text-sm inline-block">
-              Create Course
+          <div className="bg-white rounded-2xl border border-dashed border-[#E8E4DD] px-6 py-16 text-center">
+            <p className="text-[#A39B90] text-sm mb-4">No courses yet</p>
+            <Link href="/creator/courses/new" className="text-sm font-semibold text-[#2C2825] hover:text-[#6B635A]">
+              Create your first course &rarr;
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="grid gap-3">
             {courses.map(course => (
-              <div key={course.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex-1 min-w-0 mr-4">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-sm font-semibold text-gray-900 truncate">{course.title}</h3>
-                    <StatusBadge status={course.status} />
+              <Link
+                key={course.id}
+                href={`/creator/courses/new?edit=${course.id}`}
+                className="group bg-white rounded-2xl border border-[#E8E4DD] px-6 py-5 flex items-center justify-between hover:border-[#D4CFC7] hover:shadow-sm transition-all duration-200"
+              >
+                <div className="flex-1 min-w-0 mr-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-[15px] font-semibold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                      {course.title}
+                    </h3>
+                    <StatusDot status={course.status} />
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
-                    <span>{course.question_count} questions</span>
-                    <span>{course.module_count} modules</span>
-                    <span>{course.topic_count} topics</span>
-                    {course.student_count > 0 && <span>{course.student_count} students</span>}
+                  <div className="flex items-center gap-5 text-xs text-slate-400 font-medium">
+                    <span className="tabular-nums">{course.question_count} questions</span>
+                    <span className="tabular-nums">{course.module_count} modules</span>
+                    <span className="tabular-nums">{course.topic_count} topics</span>
+                    {course.student_count > 0 && (
+                      <span className="tabular-nums">{course.student_count} students</span>
+                    )}
                   </div>
                 </div>
-                <Link
-                  href={`/creator/courses/new?edit=${course.id}`}
-                  className="text-sm text-blue-500 hover:text-blue-700 font-medium"
-                >
-                  Edit
-                </Link>
-              </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-[11px] text-slate-300 font-medium">{getTimeAgo(course.updated_at)}</span>
+                  <span className="text-slate-300 group-hover:text-slate-500 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
         )}

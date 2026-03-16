@@ -22,6 +22,21 @@ export async function GET(
       return NextResponse.json({ error: 'Topic not found' }, { status: 404 })
     }
 
+    // Fetch lessons for this topic
+    const { data: lessons } = await supabase
+      .from('lessons')
+      .select('id, title, body, display_order')
+      .eq('topic_id', topicId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+
+    // Fetch assessments for this topic (topic quizzes)
+    const { data: assessments } = await supabase
+      .from('assessments')
+      .select('id, title, assessment_type, question_count, passing_score_percent')
+      .eq('topic_id', topicId)
+      .eq('is_active', true)
+
     // Fetch all topics in the same course for prev/next navigation
     const { data: allTopics } = await supabase
       .from('topics')
@@ -42,6 +57,8 @@ export async function GET(
       title: topic.title,
       description: topic.description,
       guidebook_content: topic.guidebook_content,
+      lessons: lessons || [],
+      assessments: assessments || [],
       display_order: topic.display_order,
       prev: prevTopic ? { id: prevTopic.id, title: prevTopic.title } : null,
       next: nextTopic ? { id: nextTopic.id, title: nextTopic.title } : null,

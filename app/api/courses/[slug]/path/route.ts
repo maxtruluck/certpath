@@ -48,6 +48,40 @@ export async function GET(
       .eq('course_id', course.id)
       .order('display_order', { ascending: true })
 
+    // Fetch lesson counts per topic
+    const { data: allLessons } = await supabase
+      .from('lessons')
+      .select('id, topic_id')
+      .eq('course_id', course.id)
+      .eq('is_active', true)
+
+    const lessonsByTopic: Record<string, number> = {}
+    for (const l of allLessons || []) {
+      lessonsByTopic[l.topic_id] = (lessonsByTopic[l.topic_id] || 0) + 1
+    }
+
+    // Fetch assessments for this course
+    const { data: allAssessments } = await supabase
+      .from('assessments')
+      .select('id, title, assessment_type, module_id, topic_id')
+      .eq('course_id', course.id)
+      .eq('is_active', true)
+
+    // Fetch best scores for user's assessment attempts
+    const { data: userAttempts } = await supabase
+      .from('assessment_attempts')
+      .select('assessment_id, score_percent, passed')
+      .eq('user_id', userId)
+      .not('completed_at', 'is', null)
+
+    const bestScores: Record<string, number | null> = {}
+    for (const att of userAttempts || []) {
+      const current = bestScores[att.assessment_id]
+      if (current === undefined || current === null || (att.score_percent ?? 0) > current) {
+        bestScores[att.assessment_id] = att.score_percent
+      }
+    }
+
     // Fetch question counts per topic
     const { data: allQuestions } = await supabase
       .from('questions')
@@ -112,10 +146,20 @@ export async function GET(
         readiness: Math.round(topicReadiness * 100) / 100,
         questions_seen: questionsSeen,
         questions_total: totalQuestions,
+        lesson_count: lessonsByTopic[t.id] || 0,
       }
     })
 
-    // Group topics into modules
+    // Group topics into modules with assessments
+    const assessmentList = (allAssessments || []).map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      type: a.assessment_type,
+      module_id: a.module_id,
+      topic_id: a.topic_id,
+      best_score: bestScores[a.id] ?? null,
+    }))
+
     const modulesWithTopics = (modules || []).map((m: any) => ({
       id: m.id,
       title: m.title,
@@ -123,6 +167,7 @@ export async function GET(
       weight_percent: m.weight_percent,
       display_order: m.display_order,
       topics: topicList.filter((t: any) => t.module_id === m.id),
+      assessments: assessmentList.filter((a: any) => a.module_id === m.id),
     }))
 
     return NextResponse.json({
