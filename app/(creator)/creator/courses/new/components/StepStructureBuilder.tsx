@@ -436,6 +436,237 @@ function SortableModuleAccordion({
   )
 }
 
+// ─── AI Import Modal ────────────────────────────────────────
+interface UploadedFile {
+  id: string
+  name: string
+  type: string
+  size_bytes: number
+  status: string
+}
+
+function AIImportModal({
+  courseId,
+  hasModules,
+  onClose,
+  onImported,
+}: {
+  courseId: string
+  hasModules: boolean
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [existingFiles, setExistingFiles] = useState<UploadedFile[]>([])
+  const [loadingFiles, setLoadingFiles] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{ modules_created: number; topics_created: number; lessons_created: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load existing files on mount
+  useEffect(() => {
+    fetch(`/api/creator/courses/${courseId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.files && Array.isArray(d.files)) {
+          setExistingFiles(d.files)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFiles(false))
+  }, [courseId])
+
+  const handleUpload = async (selectedFiles: FileList | null) => {
+    if (!selectedFiles || selectedFiles.length === 0) return
+    setUploading(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      for (let i = 0; i < selectedFiles.length; i++) {
+        formData.append('files', selectedFiles[i])
+      }
+      const res = await fetch(`/api/creator/courses/${courseId}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Upload failed')
+      } else if (data.uploaded_files) {
+        setExistingFiles(prev => [...prev, ...data.uploaded_files])
+      }
+    } catch {
+      setError('Upload failed. Please try again.')
+    }
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/generate-structure`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Structure generation failed')
+        setGenerating(false)
+        return
+      }
+      setResult(data)
+
+      // Store source_map in sessionStorage for Step 3 to use
+      if (data.source_map) {
+        try {
+          sessionStorage.setItem(`source_map_${courseId}`, JSON.stringify(data.source_map))
+        } catch { /* ignore storage errors */ }
+      }
+
+      onImported()
+    } catch {
+      setError('Generation failed. Please try again.')
+    }
+    setGenerating(false)
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Import with AI</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4L12 12M4 12L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {result ? (
+          <div className="text-center py-6">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12L10 17L20 7" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h4 className="text-base font-semibold text-gray-900 mb-1">Structure Created</h4>
+            <p className="text-sm text-gray-500 mb-4">
+              AI organized your content into {result.modules_created} modules, {result.topics_created} topics, and {result.lessons_created} lessons.
+            </p>
+            <p className="text-xs text-gray-400 mb-4">Review and edit the structure below. Drag to reorder.</p>
+            <button onClick={onClose} className="btn-primary px-6 py-2.5 text-sm">Done</button>
+          </div>
+        ) : generating ? (
+          <div className="text-center py-8">
+            <div className="w-10 h-10 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-sm font-medium text-gray-700 mb-1">AI is analyzing your content...</p>
+            <p className="text-xs text-gray-400">Creating course structure from your materials. This usually takes 15-30 seconds.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 mb-4">
+              Upload your course materials and AI will organize them into modules, topics, and lessons.
+            </p>
+
+            {hasModules && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                <p className="text-xs text-amber-700">This will add to your existing structure. Existing modules won't be deleted.</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Existing files */}
+            {loadingFiles ? (
+              <div className="h-16 bg-gray-100 rounded-lg animate-pulse mb-4" />
+            ) : existingFiles.length > 0 ? (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Uploaded Files</h4>
+                <div className="space-y-1.5">
+                  {existingFiles.map(file => (
+                    <div key={file.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                      <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-blue-600">
+                          {file.name.split('.').pop()?.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-900 truncate">{file.name}</p>
+                        <p className="text-[10px] text-gray-400">{formatBytes(file.size_bytes)}</p>
+                      </div>
+                      <span className="text-[10px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">Ready</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Upload zone */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".docx,.csv,.txt"
+              className="hidden"
+              onChange={e => handleUpload(e.target.files)}
+            />
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files) }}
+              onDragOver={e => e.preventDefault()}
+              className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-violet-300 hover:bg-violet-50/30 transition-colors mb-4"
+            >
+              {uploading ? (
+                <p className="text-sm text-gray-500">Uploading...</p>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-700">
+                    {existingFiles.length > 0 ? 'Add more files' : 'Upload your course materials'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">DOCX, CSV, TXT</p>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+              <button
+                onClick={handleGenerate}
+                disabled={existingFiles.length === 0}
+                className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Analyze &amp; Create Structure
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── CSV Import Modal ────────────────────────────────────────────
 function CSVImportModal({
   courseId,
@@ -618,6 +849,7 @@ export default function StepStructureBuilder({
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
   const [showCSVImport, setShowCSVImport] = useState(false)
+  const [showAIImport, setShowAIImport] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [newTopicId, setNewTopicId] = useState<string | null>(null)
   const [newLessonId, setNewLessonId] = useState<string | null>(null)
@@ -970,6 +1202,19 @@ export default function StepStructureBuilder({
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowAIImport(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Import with AI
+            </span>
+          </button>
+          <button
             onClick={() => setShowCSVImport(true)}
             className="btn-ghost px-4 py-2 text-sm"
           >
@@ -994,6 +1239,19 @@ export default function StepStructureBuilder({
           <h3 className="text-base font-semibold text-gray-900 mb-1">Start building your course outline</h3>
           <p className="text-sm text-gray-500 mb-6">Add modules, then topics within each module, then lessons within each topic.</p>
           <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setShowAIImport(true)}
+              className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Import with AI
+              </span>
+            </button>
             <button onClick={addModule} className="btn-primary px-5 py-2.5 text-sm">
               + Add First Module
             </button>
@@ -1080,6 +1338,15 @@ export default function StepStructureBuilder({
         <CSVImportModal
           courseId={courseId}
           onClose={() => setShowCSVImport(false)}
+          onImported={fetchData}
+        />
+      )}
+
+      {showAIImport && (
+        <AIImportModal
+          courseId={courseId}
+          hasModules={modules.length > 0}
+          onClose={() => setShowAIImport(false)}
           onImported={fetchData}
         />
       )}

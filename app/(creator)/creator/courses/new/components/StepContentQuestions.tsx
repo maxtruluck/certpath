@@ -772,6 +772,20 @@ export default function StepContentQuestions({
   const [assessmentQuestions, setAssessmentQuestions] = useState<Question[]>([])
   const [allTopicQuestions, setAllTopicQuestions] = useState<Question[]>([])
 
+  // AI generation state
+  const [sourceMap, setSourceMap] = useState<Record<string, string>>({})
+  const [generatingLesson, setGeneratingLesson] = useState(false)
+  const [generatingAll, setGeneratingAll] = useState(false)
+  const [generateAllConfirm, setGenerateAllConfirm] = useState(false)
+
+  // Load source_map from sessionStorage (set by Step 2 AI Import)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(`source_map_${courseId}`)
+      if (saved) setSourceMap(JSON.parse(saved))
+    } catch { /* ignore */ }
+  }, [courseId])
+
   const formatGuidance = courseFormat ? COURSE_FORMATS[courseFormat]?.guidance : null
 
   const handleDismissTip = (key: string) => {
@@ -985,6 +999,74 @@ export default function StepContentQuestions({
     setQuestions(prev => prev.filter(q => q.id !== questionId))
   }
 
+  // AI content generation — single lesson
+  const generateLessonContent = async (lessonId: string) => {
+    setGeneratingLesson(true)
+    try {
+      const excerpt = sourceMap[lessonId]
+      const res = await fetch(`/api/creator/courses/${courseId}/generate-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: lessonId, source_excerpt: excerpt }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('Generate failed:', data.error)
+        setGeneratingLesson(false)
+        return
+      }
+      // Reload lesson data
+      if (selectedTopicId) {
+        await loadLessons(selectedTopicId)
+        await loadTopicContent(selectedTopicId)
+      }
+      // Update the lesson body in local state
+      const lessonRes = await fetch(`/api/creator/courses/${courseId}/topics/${selectedTopicId}/lessons`)
+      const lessonsData = await lessonRes.json()
+      if (Array.isArray(lessonsData)) {
+        setLessons(lessonsData)
+        const updated = lessonsData.find((l: Lesson) => l.id === lessonId)
+        if (updated) {
+          setSelectedLesson(updated)
+          setLessonBody(updated.body)
+          setLessonTitle(updated.title)
+        }
+      }
+    } catch (err) {
+      console.error('Generate failed:', err)
+    }
+    setGeneratingLesson(false)
+  }
+
+  // AI content generation — all empty lessons
+  const generateAllContent = async () => {
+    setGeneratingAll(true)
+    setGenerateAllConfirm(false)
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/generate-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true, source_map: sourceMap }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('Bulk generate failed:', data.error)
+      }
+      // Reload all data
+      if (selectedTopicId) {
+        await loadLessons(selectedTopicId)
+        await loadTopicContent(selectedTopicId)
+      }
+      // Reload modules to refresh lesson counts
+      const courseRes = await fetch(`/api/creator/courses/${courseId}`)
+      const courseData = await courseRes.json()
+      if (courseData.modules) setModules(courseData.modules)
+    } catch (err) {
+      console.error('Bulk generate failed:', err)
+    }
+    setGeneratingAll(false)
+  }
+
   const selectedTopic = modules.flatMap(m => m.topics).find(t => t.id === selectedTopicId)
 
   // Teach-before-test: show warning when adding question to topic with 0 lessons
@@ -1011,8 +1093,54 @@ export default function StepContentQuestions({
           <p className="text-sm text-gray-500">Add lessons and practice questions to each topic.</p>
         </div>
         <div className="flex items-center gap-2">
+          {generatingAll ? (
+            <div className="flex items-center gap-2 px-4 py-2 text-sm text-violet-600">
+              <div className="w-4 h-4 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+              Generating... this may take 1-3 minutes
+            </div>
+          ) : (
+            <button
+              onClick={() => setGenerateAllConfirm(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Generate All Empty Lessons
+              </span>
+            </button>
+          )}
           <button onClick={() => setShowQImport(true)} className="btn-ghost px-4 py-2 text-sm">Import Questions CSV</button>
         </div>
+
+        {/* Generate All confirmation dialog */}
+        {generateAllConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setGenerateAllConfirm(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-bold text-gray-900 mb-2">Generate All Empty Lessons?</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                AI will generate content, concept cards, and questions for all lessons that don&apos;t have body content yet. This may take a few minutes.
+              </p>
+              {Object.keys(sourceMap).length > 0 && (
+                <p className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-4">
+                  Source material available from AI import -- content will be based on your uploaded materials.
+                </p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setGenerateAllConfirm(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+                <button
+                  onClick={generateAllContent}
+                  className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6 min-h-[600px]">
@@ -1336,6 +1464,36 @@ export default function StepContentQuestions({
                   </button>
                 </div>
               </div>
+
+              {/* AI Generate button */}
+              {generatingLesson ? (
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-violet-50 border border-violet-200 rounded-lg">
+                  <div className="w-4 h-4 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                  <span className="text-sm text-violet-600">Generating lesson content, concept cards, and questions...</span>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <button
+                    onClick={() => generateLessonContent(selectedLesson.id)}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-white">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {lessonBody ? 'Regenerate with AI' : sourceMap[selectedLesson.id] ? 'Generate from source' : 'Generate content'}
+                    </span>
+                  </button>
+                  {lessonBody && (
+                    <span className="text-[11px] text-gray-400 ml-2">This will replace existing content</span>
+                  )}
+                  {!lessonBody && sourceMap[selectedLesson.id] && (
+                    <span className="text-[11px] text-green-600 ml-2">Source material available</span>
+                  )}
+                </div>
+              )}
 
               {/* Markdown body editor */}
               {lessonPreview ? (
