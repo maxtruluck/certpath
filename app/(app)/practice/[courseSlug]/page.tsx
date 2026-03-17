@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { richMarkdownComponents, VideoEmbed } from '@/lib/markdown-components';
 
 // ─── Types ───────────────────────────────────────────────────────
 interface Question {
@@ -59,6 +60,9 @@ interface LessonSectionData {
   content: string;
   lesson_id: string;
   lesson_title: string;
+  video_url?: string | null;
+  video_start_seconds?: number | null;
+  video_end_seconds?: number | null;
 }
 
 interface ConceptData {
@@ -91,8 +95,12 @@ function LessonSectionCard({ section, onNext }: { section: LessonSectionData; on
           {section.title && (
             <h2 className="text-lg font-bold text-[#2C2825] mb-4">{section.title}</h2>
           )}
+          {/* Per-lesson video embed */}
+          {section.video_url && (
+            <VideoEmbed url={section.video_url} />
+          )}
           <div className="prose prose-sm max-w-prose text-[#2C2825] leading-relaxed [&_p]:text-[15px] [&_p]:leading-[1.75] [&_p]:text-[#2C2825] [&_p]:mb-4 [&_strong]:text-[#2C2825] [&_strong]:font-semibold [&_ul]:text-[15px] [&_ul]:text-[#2C2825] [&_ul]:leading-[1.75] [&_ol]:text-[15px] [&_ol]:text-[#2C2825] [&_ol]:leading-[1.75] [&_li]:mb-1 [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:bg-amber-50/50 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:pr-3 [&_blockquote]:rounded-r-lg [&_blockquote]:italic [&_blockquote]:text-[#6B635A] [&_blockquote]:text-sm [&_code]:text-xs [&_code]:bg-[#F5F3EF] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[#2C2825] [&_pre]:bg-[#F5F3EF] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-sm [&_a]:text-blue-600 [&_a]:underline">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content || '*No content*'}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={richMarkdownComponents}>{section.content || '*No content*'}</ReactMarkdown>
           </div>
         </div>
         <button
@@ -125,7 +133,7 @@ function ConceptCard({ concept, onNext }: { concept: ConceptData; onNext: () => 
         <div className="border-l-4 border-green-500 pl-4 mb-6">
           <h2 className="text-base font-semibold text-[#2C2825] mb-3">{concept.title}</h2>
           <div className="prose prose-sm max-w-none [&_p]:text-sm [&_p]:text-[#6B635A] [&_strong]:text-[#2C2825] [&_code]:text-[#2C2825] [&_code]:bg-[#F5F3EF] [&_code]:px-1 [&_code]:rounded">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{concept.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={richMarkdownComponents}>{concept.content}</ReactMarkdown>
           </div>
         </div>
         <button
@@ -1005,7 +1013,7 @@ function PracticeContent() {
                       <h4 className="text-sm font-semibold text-[#2C2825] mb-2">{answerResult.linked_lesson.title}</h4>
                     )}
                     <div className="prose prose-sm max-w-none [&_p]:text-sm [&_p]:text-[#6B635A]">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerResult.linked_lesson.body.slice(0, 500)}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={richMarkdownComponents}>{answerResult.linked_lesson.body.slice(0, 500)}</ReactMarkdown>
                     </div>
                   </div>
                 )}

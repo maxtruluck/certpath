@@ -14,6 +14,9 @@ interface LessonSectionEntry {
     content: string
     lesson_id: string
     lesson_title: string
+    video_url: string | null
+    video_start_seconds: number | null
+    video_end_seconds: number | null
   }
 }
 
@@ -223,7 +226,7 @@ export async function GET(request: NextRequest) {
       ] = await Promise.all([
         supabase
           .from('lessons')
-          .select('id, title, body, concept_cards, display_order')
+          .select('id, title, body, concept_cards, display_order, video_url, video_start_seconds, video_end_seconds')
           .eq('topic_id', topicIdParam)
           .eq('is_active', true)
           .order('display_order', { ascending: true }),
@@ -277,7 +280,7 @@ export async function GET(request: NextRequest) {
 
           for (let si = 0; si < sections.length; si++) {
             const sec = sections[si]
-            // Add lesson_section card
+            // Add lesson_section card (first section carries the lesson video)
             cards.push({
               card_type: 'lesson_section',
               section: {
@@ -285,6 +288,9 @@ export async function GET(request: NextRequest) {
                 content: sec.content,
                 lesson_id: lesson.id,
                 lesson_title: lesson.title,
+                video_url: si === 0 ? (lesson.video_url || null) : null,
+                video_start_seconds: si === 0 ? (lesson.video_start_seconds ?? null) : null,
+                video_end_seconds: si === 0 ? (lesson.video_end_seconds ?? null) : null,
               },
             })
 
