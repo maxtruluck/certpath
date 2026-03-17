@@ -2,19 +2,22 @@ import { getApiUser } from '@/lib/supabase/get-user-api'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const SYSTEM_PROMPT = `You are an expert educational content formatter. Your job is to take source material provided by a course creator and transform it into structured lesson content for a learning platform.
+const SYSTEM_PROMPT = `You are reformatting and organizing the creator's existing content into a structured lesson format for a learning platform.
 
-You are NOT inventing content. You are TRANSFORMING the creator's material into our lesson format. The source material is the source of truth. You may:
-- Reorganize for clarity and flow
+You are strictly an import and formatting tool. Do not add information. Do not create new examples. Do not write new questions that test concepts not explicitly covered in the source material. Every word of the lesson body, every concept card, and every question must trace back to something in the source material.
+
+You may:
+- Reorganize the source material for clarity and flow
 - Add formatting (headings, bold terms, blockquotes)
 - Break into logical sections
 - Extract key concepts into concept cards
-- Create questions that test understanding of the source material
+- Create questions that test understanding of concepts explicitly present in the source material
 
 You may NOT:
 - Add facts, claims, or information not in the source material
+- Invent examples, analogies, or explanations not present in the source
 - Change the meaning or accuracy of the source content
-- Make up examples unless the source material is too abstract to test without one (note these as "[AI example]")
+- Write questions about topics not covered in the source material
 
 Output a JSON object:
 {
@@ -45,9 +48,9 @@ Output a JSON object:
 Rules for lesson body:
 - Use ## headings to break content into 3-5 sections based on the source material
 - Use **bold** for key terms on first mention
-- Include examples and explanations from the source
-- End with a > blockquote "Key Takeaway:" summarizing the most important point
-- 500-1500 words depending on source material length
+- Include only examples and explanations that appear in the source
+- End with a > blockquote "Key Takeaway:" summarizing the most important point from the source
+- Length should reflect the source material — do not pad or expand beyond what was provided
 - Do not include the lesson title as the first heading (the UI handles that)
 
 Rules for concept_cards:
@@ -57,7 +60,7 @@ Rules for concept_cards:
 - IDs must follow format: "{lesson_id}-concept-{index}"
 
 Rules for questions:
-- 3-5 per lesson, testing comprehension of the source material
+- 3-5 per lesson, testing comprehension of concepts explicitly present in the source material
 - Mix difficulty levels (1-5) and Bloom's taxonomy levels
 - Question types to use:
   - multiple_choice: 4 options, 1 correct
@@ -98,20 +101,17 @@ interface QuestionFromAI {
   matching_pairs?: Array<{ left: string; right: string }>
 }
 
-async function generateForLesson(
+async function formatLessonFromSource(
   anthropic: Anthropic,
   supabase: ReturnType<typeof getApiUser> extends Promise<infer U> ? U extends { supabase: infer S } ? S : never : never,
   lesson: LessonRow,
-  sourceExcerpt: string | undefined,
+  sourceExcerpt: string,
   courseTitle: string,
   courseDescription: string,
   creatorId: string,
   context: { moduleTitle: string; topicTitle: string; prevLessonTitle: string | null; nextLessonTitle: string | null }
-): Promise<{ success: boolean; lesson_id: string; body_length: number; concept_cards_count: number; questions_count: number; generated_without_source?: boolean }> {
-  const hasSource = sourceExcerpt && sourceExcerpt.trim().length > 0
-
-  const userContent = hasSource
-    ? `Course: ${courseTitle}
+): Promise<{ success: boolean; lesson_id: string; body_length: number; concept_cards_count: number; questions_count: number }> {
+  const userContent = `Course: ${courseTitle}
 Course description: ${courseDescription}
 Module: ${context.moduleTitle}
 Topic: ${context.topicTitle}
@@ -122,16 +122,7 @@ Next lesson: ${context.nextLessonTitle || 'None (last lesson)'}
 SOURCE MATERIAL FOR THIS LESSON:
 ${sourceExcerpt}
 
-Transform this source material into the lesson format. Stay faithful to the source content.`
-    : `Course: ${courseTitle}
-Course description: ${courseDescription}
-Module: ${context.moduleTitle}
-Topic: ${context.topicTitle}
-Lesson: ${lesson.title}
-Previous lesson: ${context.prevLessonTitle || 'None (first lesson)'}
-Next lesson: ${context.nextLessonTitle || 'None (last lesson)'}
-
-No source material was provided for this lesson. Generate introductory content for a lesson titled "${lesson.title}" in the context of the topic "${context.topicTitle}" within module "${context.moduleTitle}". Keep the content general and accurate. Mark any specific examples as "[AI example]".`
+Reformat and organize this source material into the lesson format. Stay faithful to the source content. Do not add information that is not present in the source.`
 
   const stream = anthropic.messages.stream({
     model: 'claude-sonnet-4-20250514',
@@ -228,7 +219,6 @@ No source material was provided for this lesson. Generate introductory content f
     body_length: (result.body || '').length,
     concept_cards_count: conceptCards.length,
     questions_count: questionsCreated,
-    generated_without_source: !hasSource,
   }
 }
 
@@ -291,6 +281,10 @@ export async function POST(
 
   // Single lesson mode
   if (lesson_id && !all) {
+    if (!source_excerpt || !source_excerpt.trim()) {
+      return NextResponse.json({ error: 'Source material is required. Upload content in the previous step first.' }, { status: 400 })
+    }
+
     const { data: lesson } = await supabase
       .from('lessons')
       .select('id, title, body, topic_id, module_id, course_id, display_order')
@@ -304,7 +298,7 @@ export async function POST(
 
     try {
       const context = await getLessonContext(lesson as LessonRow)
-      const result = await generateForLesson(
+      const result = await formatLessonFromSource(
         anthropic, supabase, lesson as LessonRow,
         source_excerpt, course.title, course.description || '',
         creator.id, context
@@ -316,37 +310,43 @@ export async function POST(
     }
   }
 
-  // Bulk mode
+  // Bulk mode — only process lessons that have source material
   if (all) {
-    const { data: emptyLessons } = await supabase
+    if (!source_map || Object.keys(source_map).length === 0) {
+      return NextResponse.json({ error: 'Source material is required. Upload content in the previous step first.' }, { status: 400 })
+    }
+
+    const lessonIds = Object.keys(source_map)
+    const { data: lessonsWithSource } = await supabase
       .from('lessons')
       .select('id, title, body, topic_id, module_id, course_id, display_order')
       .eq('course_id', courseId)
+      .in('id', lessonIds)
       .or('body.is.null,body.eq.')
       .order('display_order', { ascending: true })
 
-    if (!emptyLessons || emptyLessons.length === 0) {
-      return NextResponse.json({ success: true, lessons_processed: 0, total_questions: 0, without_source: 0 })
+    if (!lessonsWithSource || lessonsWithSource.length === 0) {
+      return NextResponse.json({ success: true, lessons_processed: 0, total_questions: 0, skipped: 0 })
     }
 
     let lessonsProcessed = 0
     let totalQuestions = 0
-    let withoutSource = 0
     const errors: string[] = []
 
     // Process sequentially to respect rate limits
-    for (const lesson of emptyLessons) {
+    for (const lesson of lessonsWithSource) {
+      const excerpt = source_map[lesson.id]
+      if (!excerpt || !excerpt.trim()) continue
+
       try {
-        const excerpt = source_map?.[lesson.id]
         const context = await getLessonContext(lesson as LessonRow)
-        const result = await generateForLesson(
+        const result = await formatLessonFromSource(
           anthropic, supabase, lesson as LessonRow,
           excerpt, course.title, course.description || '',
           creator.id, context
         )
         lessonsProcessed++
         totalQuestions += result.questions_count
-        if (result.generated_without_source) withoutSource++
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         errors.push(`${lesson.title}: ${msg}`)
@@ -357,7 +357,7 @@ export async function POST(
       success: true,
       lessons_processed: lessonsProcessed,
       total_questions: totalQuestions,
-      without_source: withoutSource,
+      skipped: lessonIds.length - lessonsProcessed - errors.length,
       errors: errors.length > 0 ? errors : undefined,
     })
   }

@@ -512,7 +512,7 @@ function AIImportModal({
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'Structure generation failed')
+        setError(data.error || 'Failed to organize content')
         setGenerating(false)
         return
       }
@@ -527,7 +527,7 @@ function AIImportModal({
 
       onImported()
     } catch {
-      setError('Generation failed. Please try again.')
+      setError('Import failed. Please try again.')
     }
     setGenerating(false)
   }
@@ -543,14 +543,13 @@ function AIImportModal({
       <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Import with AI</h3>
+            <h3 className="text-lg font-bold text-gray-900">Import Course Content</h3>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -566,23 +565,23 @@ function AIImportModal({
                 <path d="M5 12L10 17L20 7" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h4 className="text-base font-semibold text-gray-900 mb-1">Structure Created</h4>
+            <h4 className="text-base font-semibold text-gray-900 mb-1">Content Imported</h4>
             <p className="text-sm text-gray-500 mb-4">
-              AI organized your content into {result.modules_created} modules, {result.topics_created} topics, and {result.lessons_created} lessons.
+              Your content has been organized into {result.modules_created} modules, {result.topics_created} topics, and {result.lessons_created} lessons.
             </p>
             <p className="text-xs text-gray-400 mb-4">Review and edit the structure below. Drag to reorder.</p>
             <button onClick={onClose} className="btn-primary px-6 py-2.5 text-sm">Done</button>
           </div>
         ) : generating ? (
           <div className="text-center py-8">
-            <div className="w-10 h-10 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-sm font-medium text-gray-700 mb-1">AI is analyzing your content...</p>
-            <p className="text-xs text-gray-400">Creating course structure from your materials. This usually takes 15-30 seconds.</p>
+            <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-sm font-medium text-gray-700 mb-1">Organizing your content...</p>
+            <p className="text-xs text-gray-400">Organizing your content into modules, topics, and lessons. This usually takes 15-30 seconds.</p>
           </div>
         ) : (
           <>
             <p className="text-sm text-gray-500 mb-4">
-              Upload your course materials and AI will organize them into modules, topics, and lessons.
+              Upload your course materials and they will be organized into modules, topics, and lessons.
             </p>
 
             {hasModules && (
@@ -636,7 +635,7 @@ function AIImportModal({
               onClick={() => fileInputRef.current?.click()}
               onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files) }}
               onDragOver={e => e.preventDefault()}
-              className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-violet-300 hover:bg-violet-50/30 transition-colors mb-4"
+              className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors mb-4"
             >
               {uploading ? (
                 <p className="text-sm text-gray-500">Uploading...</p>
@@ -655,9 +654,9 @@ function AIImportModal({
               <button
                 onClick={handleGenerate}
                 disabled={existingFiles.length === 0}
-                className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Analyze &amp; Create Structure
+                Organize into Course Structure
               </button>
             </div>
           </>
@@ -1203,15 +1202,14 @@ export default function StepStructureBuilder({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowAIImport(true)}
-            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <span className="flex items-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Import with AI
+              Upload &amp; Organize
             </span>
           </button>
           <button
@@ -1241,15 +1239,14 @@ export default function StepStructureBuilder({
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => setShowAIImport(true)}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-blue-500 rounded-lg hover:from-violet-600 hover:to-blue-600 transition-colors"
+              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
               <span className="flex items-center gap-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Import with AI
+                Upload &amp; Organize
               </span>
             </button>
             <button onClick={addModule} className="btn-primary px-5 py-2.5 text-sm">
