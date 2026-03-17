@@ -18,6 +18,7 @@ interface TopicData {
   cards_due: number
   lesson_count: number
   best_quiz_score: number | null
+  has_read: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,7 @@ export async function GET(
       { data: allLessons },
       { data: allAssessments },
       { data: userAttempts },
+      { data: topicReads },
     ] = await Promise.all([
       supabase
         .from('modules')
@@ -103,6 +105,11 @@ export async function GET(
         .select('assessment_id, score_percent')
         .eq('user_id', userId)
         .not('completed_at', 'is', null),
+      supabase
+        .from('user_topic_reads')
+        .select('topic_id')
+        .eq('user_id', userId)
+        .eq('course_id', course.id),
     ])
 
     const now = new Date().toISOString()
@@ -127,6 +134,9 @@ export async function GET(
     for (const l of allLessons || []) {
       lessonCountByTopic[l.topic_id] = (lessonCountByTopic[l.topic_id] || 0) + 1
     }
+
+    // Topic reads
+    const readTopicIds = new Set((topicReads || []).map((r: any) => r.topic_id))
 
     // Best scores per assessment
     const bestScores: Record<string, number> = {}
@@ -206,6 +216,7 @@ export async function GET(
           cards_due: cardsDue,
           lesson_count: lessonCountByTopic[t.id] || 0,
           best_quiz_score: bestQuizScore,
+          has_read: readTopicIds.has(t.id),
         }
       }
     }
@@ -333,13 +344,13 @@ export async function GET(
         due_count: null,
       }
     }
-    // Priority c: first unlocked new topic
+    // Priority c: first unlocked new topic (check has_read for label)
     else if (allTopicData.some((t: TopicData) => t.state === 'new')) {
       const t = allTopicData.find((t: TopicData) => t.state === 'new')!
       primaryCta = {
         type: 'start_new',
         topic_id: t.id,
-        label: `Start ${t.title}`,
+        label: t.has_read ? `Start ${t.title}` : `Read ${t.title}`,
         due_count: null,
       }
     }

@@ -39,9 +39,13 @@ function GuidebookContent() {
   const slug = params.slug as string;
   const topicId = searchParams.get('topic');
 
+  const fromPath = searchParams.get('from') === 'path';
+
   const [data, setData] = useState<GuidebookData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedLesson, setExpandedLesson] = useState<string | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
 
   useEffect(() => {
     if (!topicId) {
@@ -71,6 +75,19 @@ function GuidebookContent() {
     setData(null);
     setError(null);
     router.replace(`/course/${slug}/guidebook?topic=${newTopicId}`);
+  }
+
+  async function markReadAndPractice() {
+    if (!topicId || !data) return;
+    setMarkingRead(true);
+    try {
+      await fetch(`/api/user/topic-read/${topicId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_id: data.course_id }),
+      });
+    } catch { /* non-blocking */ }
+    router.push(`/practice/${slug}?topic=${topicId}&session_type=learn`);
   }
 
   if (loading) {
@@ -122,8 +139,6 @@ function GuidebookContent() {
 
   const hasLessons = data.lessons && data.lessons.length > 0;
   const hasAssessments = data.assessments && data.assessments.length > 0;
-
-  const [expandedLesson, setExpandedLesson] = useState<string | null>(null);
 
   return (
     <div className="min-h-[100dvh] bg-[#FAFAF8]">
@@ -210,7 +225,7 @@ function GuidebookContent() {
         </div>
 
         {/* Prev/Next navigation */}
-        <div className="mt-8 flex items-center gap-3">
+        <div className={`mt-8 flex items-center gap-3 ${fromPath ? 'mb-6' : ''}`}>
           {data.prev ? (
             <button
               onClick={() => navigateToTopic(data.prev!.id)}
@@ -245,6 +260,32 @@ function GuidebookContent() {
             <div className="flex-1" />
           )}
         </div>
+
+        {/* "Start Practicing" CTA — shown when navigated from path screen */}
+        {fromPath && topicId && (
+          <div className="pb-8 space-y-3">
+            <button
+              onClick={markReadAndPractice}
+              disabled={markingRead}
+              className="w-full py-3.5 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {markingRead ? 'Loading...' : (
+                <>
+                  I&apos;ve read this — Start Practicing
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </>
+              )}
+            </button>
+            <button
+              onClick={markReadAndPractice}
+              className="w-full text-sm text-[#A39B90] hover:text-[#6B635A] py-1 transition-colors"
+            >
+              Skip to practice
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ interface TopicData {
   cards_due: number;
   lesson_count: number;
   best_quiz_score: number | null;
+  has_read: boolean;
 }
 
 interface ModuleData {
@@ -109,21 +110,31 @@ const ctaColors: Record<PrimaryCta['type'], string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function sessionTypeForState(state: TopicState): string {
-  switch (state) {
-    case 'new':
-    case 'learning':
-      return 'learn';
-    case 'review':
-    case 'mastered':
-      return 'review';
-    default:
-      return 'mixed';
-  }
-}
-
 function practiceUrl(slug: string, topicId: string, sessionType: string): string {
   return `/practice/${slug}?topic=${topicId}&session_type=${sessionType}`;
+}
+
+function guidebookUrl(slug: string, topicId: string): string {
+  return `/course/${slug}/guidebook?topic=${topicId}&from=path`;
+}
+
+/** Determine where tapping a topic row should navigate */
+function topicHref(slug: string, topic: TopicData): string {
+  switch (topic.state) {
+    case 'new':
+      // Read-first: if not read yet, go to guidebook; if already read, go to practice
+      return topic.has_read
+        ? practiceUrl(slug, topic.id, 'learn')
+        : guidebookUrl(slug, topic.id);
+    case 'learning':
+      return practiceUrl(slug, topic.id, 'learn');
+    case 'review':
+      return practiceUrl(slug, topic.id, 'review');
+    case 'mastered':
+      return practiceUrl(slug, topic.id, 'mixed');
+    default:
+      return '#';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +204,7 @@ function TopicRow({
         </p>
         <p className={`text-xs mt-0.5 ${style.text}`}>
           {topic.state === 'locked' && 'Locked'}
-          {topic.state === 'new' && `${topic.total_questions} questions`}
+          {topic.state === 'new' && `${topic.total_questions} question${topic.total_questions === 1 ? '' : 's'}`}
           {topic.state === 'learning' && `${topic.cards_seen}/${topic.total_questions} cards seen`}
           {topic.state === 'review' && `${topic.cards_due} due`}
           {topic.state === 'mastered' && (
@@ -250,7 +261,7 @@ function TopicRow({
 
   return (
     <div className="relative">
-      <Link href={practiceUrl(slug, topic.id, sessionTypeForState(topic.state))}>
+      <Link href={topicHref(slug, topic)}>
         {content}
       </Link>
       {/* Connecting line */}
@@ -379,7 +390,7 @@ function CoursePathContent() {
             Quick Practice
           </Link>
           <Link
-            href={`/course/${slug}/guidebook`}
+            href={`/course/${slug}/guidebook${data.modules[0]?.topics[0]?.id ? `?topic=${data.modules[0].topics[0].id}` : ''}`}
             className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
           >
             Guidebook
@@ -444,13 +455,14 @@ function CoursePathContent() {
             <Link
               href={
                 data.primary_cta.topic_id
-                  ? practiceUrl(
-                      slug,
-                      data.primary_cta.topic_id,
-                      data.primary_cta.type === 'review' ? 'review'
-                        : data.primary_cta.type === 'continue' ? 'learn'
-                        : 'learn'
-                    )
+                  ? (() => {
+                      if (data.primary_cta.type === 'review') return practiceUrl(slug, data.primary_cta.topic_id!, 'review')
+                      if (data.primary_cta.type === 'continue') return practiceUrl(slug, data.primary_cta.topic_id!, 'learn')
+                      // start_new: check has_read on the topic
+                      const topic = data.modules.flatMap(m => m.topics).find(t => t.id === data.primary_cta.topic_id)
+                      if (topic && !topic.has_read) return guidebookUrl(slug, data.primary_cta.topic_id!)
+                      return practiceUrl(slug, data.primary_cta.topic_id!, 'learn')
+                    })()
                   : `/practice/${slug}`
               }
               className={`block w-full py-3.5 rounded-xl text-center text-sm font-semibold shadow-lg transition-colors ${ctaColors[data.primary_cta.type]}`}
