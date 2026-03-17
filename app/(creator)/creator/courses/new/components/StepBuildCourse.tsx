@@ -17,424 +17,10 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-
-// ─── Types ───────────────────────────────────────────────────────
-interface Lesson {
-  id: string
-  title: string
-  display_order: number
-}
-
-interface Topic {
-  id: string
-  title: string
-  module_id: string
-  display_order: number
-  question_count: number
-  lesson_count: number
-  lessons: Lesson[]
-}
-
-interface Module {
-  id: string
-  title: string
-  display_order: number
-  topics: Topic[]
-  question_count: number
-}
-
-// ─── Drag Handle Icon ────────────────────────────────────────────
-function DragHandleIcon({ className }: { className?: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className={className}>
-      <circle cx="6" cy="3.5" r="1.2" /><circle cx="10" cy="3.5" r="1.2" />
-      <circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" />
-      <circle cx="6" cy="12.5" r="1.2" /><circle cx="10" cy="12.5" r="1.2" />
-    </svg>
-  )
-}
-
-// ─── Inline Editable Title ───────────────────────────────────────
-function InlineTitle({
-  value,
-  onSave,
-  className,
-  placeholder,
-  autoEdit,
-}: {
-  value: string
-  onSave: (newTitle: string) => void
-  className?: string
-  placeholder?: string
-  autoEdit?: boolean
-}) {
-  const [editing, setEditing] = useState(autoEdit || false)
-  const [text, setText] = useState(value)
-  const [saving, setSaving] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { setText(value) }, [value])
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
-
-  const handleSave = async () => {
-    setEditing(false)
-    if (text.trim() && text.trim() !== value) {
-      setSaving(true)
-      await onSave(text.trim())
-      setSaving(false)
-    } else {
-      setText(value)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSave()
-    if (e.key === 'Escape') { setText(value); setEditing(false) }
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className={`bg-white border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${className || ''}`}
-      />
-    )
-  }
-
-  return (
-    <span
-      onClick={() => setEditing(true)}
-      className={`cursor-pointer hover:text-blue-600 transition-colors ${className || ''} ${saving ? 'opacity-50' : ''}`}
-    >
-      {value || placeholder}
-      {saving && <span className="ml-1.5 inline-block w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin" />}
-    </span>
-  )
-}
-
-// ─── Delete Button ───────────────────────────────────────────────
-function DeleteButton({ onClick, className }: { onClick: () => void; className?: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 p-1 -m-1 ${className || ''}`}
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M3 3L11 11M3 11L11 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    </button>
-  )
-}
-
-// ─── Lesson Row ──────────────────────────────────────────────────
-function LessonRow({
-  lesson,
-  courseId,
-  onEditTitle,
-  onDelete,
-  autoEdit,
-}: {
-  lesson: Lesson
-  courseId: string
-  onEditTitle: (lessonId: string, title: string) => void
-  onDelete: (lessonId: string) => void
-  autoEdit?: boolean
-}) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg hover:border-gray-200 transition-colors group ml-6">
-      <div className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <InlineTitle
-          value={lesson.title}
-          onSave={(title) => onEditTitle(lesson.id, title)}
-          className="text-xs text-gray-700 font-medium"
-          placeholder="Lesson title..."
-          autoEdit={autoEdit}
-        />
-      </div>
-      <DeleteButton
-        onClick={() => { if (confirm('Delete this lesson?')) onDelete(lesson.id) }}
-        className="opacity-0 group-hover:opacity-100"
-      />
-    </div>
-  )
-}
-
-// ─── Sortable Topic Row (with lessons) ───────────────────────────
-function SortableTopicRow({
-  topic,
-  courseId,
-  onEditTitle,
-  onDelete,
-  onAddLesson,
-  onEditLessonTitle,
-  onDeleteLesson,
-  autoEdit,
-  newLessonId,
-  expanded,
-  onToggle,
-}: {
-  topic: Topic
-  courseId: string
-  onEditTitle: (topicId: string, title: string) => void
-  onDelete: (topicId: string) => void
-  onAddLesson: (topicId: string) => void
-  onEditLessonTitle: (lessonId: string, title: string) => void
-  onDeleteLesson: (lessonId: string) => void
-  autoEdit?: boolean
-  newLessonId: string | null
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: topic.id, data: { type: 'topic', topic } })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-  }
-
-  const hasLessons = topic.lessons.length > 0
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <div
-        className={`flex items-center gap-2 px-3 py-2.5 bg-white border border-gray-100 rounded-lg hover:border-gray-200 transition-colors group ${isDragging ? 'shadow-lg ring-2 ring-blue-200' : ''}`}
-      >
-        <button
-          {...attributes}
-          {...listeners}
-          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-manipulation p-1 -m-1"
-        >
-          <DragHandleIcon />
-        </button>
-
-        {/* Expand/collapse for lessons */}
-        <button
-          onClick={onToggle}
-          className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1 -m-1"
-        >
-          <svg
-            width="14" height="14" viewBox="0 0 14 14" fill="none"
-            className={`transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
-          >
-            <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <InlineTitle
-            value={topic.title}
-            onSave={(title) => onEditTitle(topic.id, title)}
-            className="text-sm text-gray-900 font-medium truncate"
-            placeholder="Topic title..."
-            autoEdit={autoEdit}
-          />
-          {hasLessons && (
-            <span className="text-[11px] text-gray-400">
-              {topic.lessons.length} lesson{topic.lessons.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
-        <DeleteButton
-          onClick={() => { if (confirm('Delete this topic and all its lessons?')) onDelete(topic.id) }}
-          className="opacity-0 group-hover:opacity-100"
-        />
-      </div>
-
-      {/* Lessons */}
-      {expanded && (
-        <div className="space-y-1 mt-1">
-          {topic.lessons.map(lesson => (
-            <LessonRow
-              key={lesson.id}
-              lesson={lesson}
-              courseId={courseId}
-              onEditTitle={onEditLessonTitle}
-              onDelete={onDeleteLesson}
-              autoEdit={lesson.id === newLessonId}
-            />
-          ))}
-          <button
-            onClick={() => onAddLesson(topic.id)}
-            className="ml-6 w-[calc(100%-1.5rem)] py-2 border border-dashed border-gray-200 rounded-lg text-xs font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
-          >
-            {topic.lessons.length === 0 ? '+ Add first lesson' : '+ Add lesson'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Sortable Module Accordion ───────────────────────────────────
-function SortableModuleAccordion({
-  mod,
-  courseId,
-  expanded,
-  onToggle,
-  onEditTitle,
-  onDeleteModule,
-  onAddTopic,
-  onEditTopicTitle,
-  onDeleteTopic,
-  onAddLesson,
-  onEditLessonTitle,
-  onDeleteLesson,
-  newTopicId,
-  newLessonId,
-  expandedTopics,
-  onToggleTopic,
-}: {
-  mod: Module
-  courseId: string
-  expanded: boolean
-  onToggle: () => void
-  onEditTitle: (moduleId: string, title: string) => void
-  onDeleteModule: (moduleId: string) => void
-  onAddTopic: (moduleId: string) => void
-  onEditTopicTitle: (topicId: string, title: string) => void
-  onDeleteTopic: (topicId: string) => void
-  onAddLesson: (topicId: string) => void
-  onEditLessonTitle: (lessonId: string, title: string) => void
-  onDeleteLesson: (lessonId: string) => void
-  newTopicId: string | null
-  newLessonId: string | null
-  expandedTopics: Set<string>
-  onToggleTopic: (topicId: string) => void
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `module-${mod.id}`, data: { type: 'module', module: mod } })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-  }
-
-  const topicIds = mod.topics.map(t => t.id)
-  const totalLessons = mod.topics.reduce((sum, t) => sum + t.lessons.length, 0)
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${isDragging ? 'shadow-xl ring-2 ring-blue-200' : ''}`}
-    >
-      {/* Module Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
-        <button
-          {...attributes}
-          {...listeners}
-          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-manipulation p-1 -m-1"
-        >
-          <DragHandleIcon />
-        </button>
-
-        <button
-          onClick={onToggle}
-          className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-transform p-1 -m-1"
-        >
-          <svg
-            width="16" height="16" viewBox="0 0 16 16" fill="none"
-            className={`transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
-          >
-            <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-
-        <div className="flex-1 min-w-0">
-          <InlineTitle
-            value={mod.title}
-            onSave={(title) => onEditTitle(mod.id, title)}
-            className="text-sm font-semibold text-gray-900"
-            placeholder="Module title..."
-          />
-          <p className="text-xs text-gray-400 mt-0.5">
-            {mod.topics.length} topic{mod.topics.length !== 1 ? 's' : ''} &middot; {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}
-          </p>
-        </div>
-
-        <DeleteButton
-          onClick={() => {
-            if (confirm('Delete this module and all its topics/lessons?')) onDeleteModule(mod.id)
-          }}
-        />
-      </div>
-
-      {/* Topic List (expanded) */}
-      {expanded && (
-        <div className="p-3 space-y-1.5">
-          <SortableContext items={topicIds} strategy={verticalListSortingStrategy}>
-            {mod.topics.map(topic => (
-              <SortableTopicRow
-                key={topic.id}
-                topic={topic}
-                courseId={courseId}
-                onEditTitle={onEditTopicTitle}
-                onDelete={onDeleteTopic}
-                onAddLesson={onAddLesson}
-                onEditLessonTitle={onEditLessonTitle}
-                onDeleteLesson={onDeleteLesson}
-                autoEdit={topic.id === newTopicId}
-                newLessonId={newLessonId}
-                expanded={expandedTopics.has(topic.id)}
-                onToggle={() => onToggleTopic(topic.id)}
-              />
-            ))}
-          </SortableContext>
-
-          {mod.topics.length === 0 ? (
-            <div className="text-center py-6 text-gray-400">
-              <p className="text-sm">No topics yet</p>
-              <button
-                onClick={() => onAddTopic(mod.id)}
-                className="text-sm text-blue-500 hover:text-blue-700 font-medium mt-1"
-              >
-                + Add first topic
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => onAddTopic(mod.id)}
-              className="w-full py-2.5 border border-dashed border-gray-200 rounded-lg text-xs font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors mt-1"
-            >
-              + Add another topic
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+import { SortableModuleAccordion, type Module, type Topic, type Lesson, type Assessment } from './build-course/StructureTree'
+import LessonEditor from './build-course/LessonEditor'
 
 // ─── AI Import Modal ────────────────────────────────────────
 interface UploadedFile {
@@ -450,11 +36,13 @@ function AIImportModal({
   hasModules,
   onClose,
   onImported,
+  onSourceMap,
 }: {
   courseId: string
   hasModules: boolean
   onClose: () => void
   onImported: () => void
+  onSourceMap: (map: Record<string, string>) => void
 }) {
   const [existingFiles, setExistingFiles] = useState<UploadedFile[]>([])
   const [loadingFiles, setLoadingFiles] = useState(true)
@@ -464,14 +52,11 @@ function AIImportModal({
   const [result, setResult] = useState<{ modules_created: number; topics_created: number; lessons_created: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load existing files on mount
   useEffect(() => {
     fetch(`/api/creator/courses/${courseId}`)
       .then(r => r.json())
       .then(d => {
-        if (d.files && Array.isArray(d.files)) {
-          setExistingFiles(d.files)
-        }
+        if (d.files && Array.isArray(d.files)) setExistingFiles(d.files)
       })
       .catch(() => {})
       .finally(() => setLoadingFiles(false))
@@ -517,14 +102,9 @@ function AIImportModal({
         return
       }
       setResult(data)
-
-      // Store source_map in sessionStorage for Step 3 to use
       if (data.source_map) {
-        try {
-          sessionStorage.setItem(`source_map_${courseId}`, JSON.stringify(data.source_map))
-        } catch { /* ignore storage errors */ }
+        onSourceMap(data.source_map)
       }
-
       onImported()
     } catch {
       setError('Import failed. Please try again.')
@@ -586,7 +166,7 @@ function AIImportModal({
 
             {hasModules && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-                <p className="text-xs text-amber-700">This will add to your existing structure. Existing modules won't be deleted.</p>
+                <p className="text-xs text-amber-700">This will add to your existing structure. Existing modules won&apos;t be deleted.</p>
               </div>
             )}
 
@@ -596,7 +176,6 @@ function AIImportModal({
               </div>
             )}
 
-            {/* Existing files */}
             {loadingFiles ? (
               <div className="h-16 bg-gray-100 rounded-lg animate-pulse mb-4" />
             ) : existingFiles.length > 0 ? (
@@ -621,7 +200,6 @@ function AIImportModal({
               </div>
             ) : null}
 
-            {/* Upload zone */}
             <input
               ref={fileInputRef}
               type="file"
@@ -666,8 +244,209 @@ function AIImportModal({
   )
 }
 
-// ─── CSV Import Modal ────────────────────────────────────────────
+// ─── CSV Import Modal (Unified) ──────────────────────────────────
+interface UnifiedImportResult {
+  imported: number
+  stats?: { modules: number; topics: number; lessons: number; content: number; questions: number }
+  errors: { row: number; message: string }[]
+}
+
 function CSVImportModal({
+  courseId,
+  onClose,
+  onImported,
+}: {
+  courseId: string
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [result, setResult] = useState<UnifiedImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = (f: File) => {
+    if (f.name.endsWith('.csv') || f.type === 'text/csv') setFile(f)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0])
+  }
+
+  const handleImport = async () => {
+    if (!file) return
+    setImporting(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/creator/courses/${courseId}/import/unified`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      setResult(data)
+      if (data.imported > 0) onImported()
+    } catch {
+      setResult({ imported: 0, errors: [{ row: 0, message: 'Import failed' }] })
+    }
+    setImporting(false)
+  }
+
+  const downloadOutlineTemplate = () => {
+    const a = document.createElement('a')
+    a.href = '/templates/openED-outline-template.csv'
+    a.download = 'openED-outline-template.csv'
+    a.click()
+  }
+
+  const downloadFullTemplate = () => {
+    const a = document.createElement('a')
+    a.href = '/templates/openED-full-course-template.csv'
+    a.download = 'openED-full-course-template.csv'
+    a.click()
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900">Import from CSV</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4L12 12M4 12L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-500 mb-4">
+          Import your full course in one CSV: structure, lesson content, and questions. Use the <code className="bg-gray-100 px-1 rounded text-xs">row_type</code> column to indicate what each row is.
+        </p>
+
+        <div className="bg-gray-50 rounded-lg px-3 py-2.5 mb-4 space-y-1.5">
+          <p className="text-xs font-semibold text-gray-600">Row types:</p>
+          <div className="flex items-start gap-2 text-xs text-gray-500">
+            <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">structure</code>
+            <span>Creates modules, topics, and lessons (deduped by title)</span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-gray-500">
+            <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">content</code>
+            <span>Sets the markdown body for a lesson via <code className="bg-gray-100 px-1 rounded">lesson_body</code></span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-gray-500">
+            <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">question</code>
+            <span>Adds a question linked to a lesson (MC, MS, T/F, Fill Blank, Ordering, Matching)</span>
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
+        />
+
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDrop={handleDrop}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors mb-4 ${
+            dragOver ? 'border-blue-400 bg-blue-50' : file ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
+          }`}
+        >
+          {file ? (
+            <div>
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 10L8.5 13.5L15 6.5" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-900">{file.name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{formatBytes(file.size)}</p>
+              <button
+                onClick={e => { e.stopPropagation(); setFile(null) }}
+                className="text-xs text-red-500 hover:text-red-700 mt-2"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-gray-400">
+                  <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-700">Drop your CSV file here</p>
+              <p className="text-xs text-gray-400 mt-0.5">or click to browse</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={downloadFullTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
+            Full Course Template
+          </button>
+          <button onClick={downloadOutlineTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
+            Outline Only Template
+          </button>
+        </div>
+
+        {result && (
+          <div className={`mb-4 p-3 rounded-lg text-sm ${result.errors.length > 0 && result.imported === 0 ? 'bg-red-50 text-red-700' : result.errors.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+            {result.stats ? (
+              <div>
+                <p className="font-medium mb-1">Imported {result.imported} item{result.imported !== 1 ? 's' : ''}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                  {result.stats.modules > 0 && <span>{result.stats.modules} module{result.stats.modules !== 1 ? 's' : ''}</span>}
+                  {result.stats.topics > 0 && <span>{result.stats.topics} topic{result.stats.topics !== 1 ? 's' : ''}</span>}
+                  {result.stats.lessons > 0 && <span>{result.stats.lessons} lesson{result.stats.lessons !== 1 ? 's' : ''}</span>}
+                  {result.stats.content > 0 && <span>{result.stats.content} lesson bod{result.stats.content !== 1 ? 'ies' : 'y'}</span>}
+                  {result.stats.questions > 0 && <span>{result.stats.questions} question{result.stats.questions !== 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+            ) : (
+              <p className="font-medium">Imported {result.imported} item{result.imported !== 1 ? 's' : ''}</p>
+            )}
+            {result.errors.slice(0, 5).map((e, i) => (
+              <p key={i} className="text-xs mt-1">Row {e.row}: {e.message}</p>
+            ))}
+            {result.errors.length > 5 && <p className="text-xs mt-1">... and {result.errors.length - 5} more errors</p>}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
+            {result ? 'Done' : 'Cancel'}
+          </button>
+          {!result && (
+            <button
+              onClick={handleImport}
+              disabled={!file || importing}
+              className="btn-primary px-5 py-2 text-sm disabled:opacity-50"
+            >
+              {importing ? 'Importing...' : 'Import'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── CSV Import Questions Modal ──────────────────────────────────
+function CSVImportQuestionsModal({
   courseId,
   onClose,
   onImported,
@@ -683,9 +462,7 @@ function CSVImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = (f: File) => {
-    if (f.name.endsWith('.csv') || f.type === 'text/csv') {
-      setFile(f)
-    }
+    if (f.name.endsWith('.csv') || f.type === 'text/csv') setFile(f)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -700,10 +477,7 @@ function CSVImportModal({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`/api/creator/courses/${courseId}/import/structure`, {
-        method: 'POST',
-        body: formData,
-      })
+      const res = await fetch(`/api/creator/courses/${courseId}/import/questions`, { method: 'POST', body: formData })
       const data = await res.json()
       setResult(data)
       if (data.imported > 0) onImported()
@@ -714,11 +488,11 @@ function CSVImportModal({
   }
 
   const downloadTemplate = () => {
-    const csv = `module_title,topic_title,lesson_title,module_description,topic_description\n"Module 1","Topic 1","Lesson 1","Description of module 1","Description of topic 1"\n"Module 1","Topic 1","Lesson 2","",""\n"Module 1","Topic 2","Lesson 1","",""\n"Module 2","Topic 3","Lesson 1","Description of module 2",""`
+    const csv = `topic_title,question_text,question_type,option_a,option_b,option_c,option_d,correct_answers,explanation,difficulty,tags,blooms_level\n"Security Concepts","What does CIA stand for in information security?","multiple_choice","Confidentiality, Integrity, Availability","Central Intelligence Agency","Certified Information Auditor","None of the above","a","CIA stands for Confidentiality, Integrity, and Availability - the three pillars of information security.",2,"cia;fundamentals","remember"`
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = 'openED-outline-template.csv'; a.click()
+    a.href = url; a.download = 'openED-questions-template.csv'; a.click()
     URL.revokeObjectURL(url)
   }
 
@@ -732,7 +506,7 @@ function CSVImportModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-gray-900">Import Outline from CSV</h3>
+          <h3 className="text-lg font-bold text-gray-900">Import Questions from CSV</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M4 4L12 12M4 12L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -787,11 +561,9 @@ function CSVImportModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-xs text-gray-400">
-            Required: <code className="bg-gray-100 px-1 rounded">module_title</code>, <code className="bg-gray-100 px-1 rounded">topic_title</code>. Optional: <code className="bg-gray-100 px-1 rounded">lesson_title</code>
-          </div>
-        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Supports all 6 question types: MC, MS, T/F, Fill Blank, Ordering, Matching. Optional: <code className="bg-gray-100 px-1 rounded">blooms_level</code> column.
+        </p>
 
         <div className="flex items-center gap-3 mb-4">
           <button onClick={downloadTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
@@ -801,24 +573,18 @@ function CSVImportModal({
 
         {result && (
           <div className={`mb-4 p-3 rounded-lg text-sm ${result.errors.length > 0 && result.imported === 0 ? 'bg-red-50 text-red-700' : result.errors.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
-            <p className="font-medium">Imported {result.imported} item{result.imported !== 1 ? 's' : ''}</p>
-            {result.errors.slice(0, 5).map((e, i) => (
+            <p className="font-medium">Imported {result.imported} question{result.imported !== 1 ? 's' : ''}</p>
+            {result.errors.slice(0, 10).map((e, i) => (
               <p key={i} className="text-xs mt-1">Row {e.row}: {e.message}</p>
             ))}
-            {result.errors.length > 5 && <p className="text-xs mt-1">... and {result.errors.length - 5} more errors</p>}
+            {result.errors.length > 10 && <p className="text-xs mt-1">... and {result.errors.length - 10} more errors</p>}
           </div>
         )}
 
         <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
-            {result ? 'Done' : 'Cancel'}
-          </button>
+          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">{result ? 'Done' : 'Cancel'}</button>
           {!result && (
-            <button
-              onClick={handleImport}
-              disabled={!file || importing}
-              className="btn-primary px-5 py-2 text-sm disabled:opacity-50"
-            >
+            <button onClick={handleImport} disabled={!file || importing} className="btn-primary px-5 py-2 text-sm disabled:opacity-50">
               {importing ? 'Importing...' : 'Import'}
             </button>
           )}
@@ -829,15 +595,15 @@ function CSVImportModal({
 }
 
 // ─── Main Component ──────────────────────────────────────────────
-export default function StepStructureBuilder({
+export default function StepBuildCourse({
   courseId,
   onBack,
-  onContinue,
+  onNext,
   courseFormat,
 }: {
   courseId: string
   onBack: () => void
-  onContinue: () => void
+  onNext: () => void
   courseFormat?: CourseFormat
 }) {
   const [modules, setModules] = useState<Module[]>([])
@@ -846,15 +612,34 @@ export default function StepStructureBuilder({
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
   const [showCSVImport, setShowCSVImport] = useState(false)
   const [showAIImport, setShowAIImport] = useState(false)
+  const [showQImport, setShowQImport] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [newTopicId, setNewTopicId] = useState<string | null>(null)
   const [newLessonId, setNewLessonId] = useState<string | null>(null)
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
+  const [assessments, setAssessments] = useState<Assessment[]>([])
+  const [sourceMap, setSourceMap] = useState<Record<string, string>>({})
+  const [importingAll, setImportingAll] = useState(false)
+  const [importAllConfirm, setImportAllConfirm] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const hasSourceMap = Object.keys(sourceMap).length > 0
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
+
+  // Load source_map from sessionStorage (backward compat)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(`source_map_${courseId}`)
+      if (saved) {
+        setSourceMap(JSON.parse(saved))
+        sessionStorage.removeItem(`source_map_${courseId}`)
+      }
+    } catch { /* ignore */ }
+  }, [courseId])
 
   // ─── Fetch Data ──────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -863,19 +648,20 @@ export default function StepStructureBuilder({
       const data = await res.json()
       if (data.modules) {
         const enriched: Module[] = await Promise.all(
-          (data.modules as any[]).map(async (mod: any) => {
+          (data.modules as Module[]).map(async (mod) => {
             const topicsWithDetails: Topic[] = await Promise.all(
-              (mod.topics || []).map(async (t: any) => {
-                // Fetch lessons for each topic
+              (mod.topics || []).map(async (t) => {
                 let lessons: Lesson[] = []
                 try {
                   const lessonsRes = await fetch(`/api/creator/courses/${courseId}/topics/${t.id}/lessons`)
                   const lessonsData = await lessonsRes.json()
                   if (Array.isArray(lessonsData)) {
-                    lessons = lessonsData.map((l: any) => ({
+                    lessons = lessonsData.map((l: Lesson) => ({
                       id: l.id,
                       title: l.title,
+                      body: l.body || '',
                       display_order: l.display_order,
+                      question_count: l.question_count,
                     }))
                   }
                 } catch { /* ignore */ }
@@ -891,10 +677,8 @@ export default function StepStructureBuilder({
           })
         )
         setModules(enriched)
-        // Expand first module on initial load
         if (enriched.length > 0 && expandedModules.size === 0) {
           setExpandedModules(new Set([enriched[0].id]))
-          // Expand all topics in first module
           const firstModTopicIds = enriched[0].topics.map(t => t.id)
           setExpandedTopics(new Set(firstModTopicIds))
         }
@@ -907,6 +691,27 @@ export default function StepStructureBuilder({
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Load assessments
+  useEffect(() => {
+    fetch(`/api/creator/courses/${courseId}/assessments`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setAssessments(data) })
+      .catch(() => {})
+  }, [courseId])
+
+  // ─── Find selected lesson info ──────────────────────────────
+  const findLessonInfo = () => {
+    if (!selectedLessonId) return null
+    for (const mod of modules) {
+      for (const topic of mod.topics) {
+        const lesson = topic.lessons.find(l => l.id === selectedLessonId)
+        if (lesson) return { lesson, topicId: topic.id, moduleId: mod.id }
+      }
+    }
+    return null
+  }
+
+  const selectedInfo = findLessonInfo()
 
   // ─── Module CRUD ──────────────────────────────────────────────
   const addModule = async () => {
@@ -1007,7 +812,6 @@ export default function StepStructureBuilder({
 
   // ─── Lesson CRUD ──────────────────────────────────────────────
   const addLesson = async (topicId: string) => {
-    // Find the topic to get current lesson count
     const topic = modules.flatMap(m => m.topics).find(t => t.id === topicId)
     if (!topic) return
     try {
@@ -1022,12 +826,13 @@ export default function StepStructureBuilder({
           ...m,
           topics: m.topics.map(t =>
             t.id === topicId
-              ? { ...t, lessons: [...t.lessons, { id: lesson.id, title: lesson.title, display_order: lesson.display_order }] }
+              ? { ...t, lessons: [...t.lessons, { id: lesson.id, title: lesson.title, body: '', display_order: lesson.display_order }] }
               : t
           ),
         })))
         setNewLessonId(lesson.id)
         setExpandedTopics(prev => new Set([...prev, topicId]))
+        setSelectedLessonId(lesson.id)
         setTimeout(() => setNewLessonId(null), 2000)
       }
     } catch (err) {
@@ -1055,6 +860,7 @@ export default function StepStructureBuilder({
   }
 
   const deleteLesson = async (lessonId: string) => {
+    if (selectedLessonId === lessonId) setSelectedLessonId(null)
     setModules(prev => prev.map(m => ({
       ...m,
       topics: m.topics.map(t => ({
@@ -1067,6 +873,42 @@ export default function StepStructureBuilder({
     } catch (err) {
       console.error('Failed to delete lesson:', err)
     }
+  }
+
+  // ─── Lesson updated from editor ────────────────────────────
+  const handleLessonUpdated = (updatedLesson: Lesson) => {
+    setModules(prev => prev.map(m => ({
+      ...m,
+      topics: m.topics.map(t => ({
+        ...t,
+        lessons: t.lessons.map(l => l.id === updatedLesson.id ? { ...l, ...updatedLesson } : l),
+      })),
+    })))
+  }
+
+  const handleLessonDeleted = (lessonId: string) => {
+    deleteLesson(lessonId)
+  }
+
+  // ─── Import All from Source ────────────────────────────────
+  const importAllContent = async () => {
+    setImportingAll(true)
+    setImportAllConfirm(false)
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/generate-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true, source_map: sourceMap }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error('Bulk import failed:', data.error)
+      }
+      await fetchData()
+    } catch (err) {
+      console.error('Bulk import failed:', err)
+    }
+    setImportingAll(false)
   }
 
   // ─── Drag and Drop ────────────────────────────────────────────
@@ -1082,7 +924,6 @@ export default function StepStructureBuilder({
     const activeData = active.data.current
     const overData = over.data.current
 
-    // Module reorder
     if (activeData?.type === 'module' && overData?.type === 'module') {
       const activeModId = (activeData.module as Module).id
       const overModId = (overData.module as Module).id
@@ -1106,7 +947,6 @@ export default function StepStructureBuilder({
       return
     }
 
-    // Topic reorder (within or between modules)
     if (activeData?.type === 'topic') {
       const activeTopic = activeData.topic as Topic
       const overTopic = overData?.type === 'topic' ? overData.topic as Topic : null
@@ -1175,12 +1015,13 @@ export default function StepStructureBuilder({
 
   if (loading) {
     return (
-      <div className="space-y-3 animate-pulse max-w-3xl mx-auto">
+      <div className="space-y-3 animate-pulse">
         <div className="h-8 w-48 bg-gray-200 rounded" />
         <div className="h-4 w-64 bg-gray-100 rounded" />
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-16 bg-gray-100 rounded-xl" />
-        ))}
+        <div className="flex gap-4">
+          <div className="w-[380px] h-96 bg-gray-100 rounded-xl" />
+          <div className="flex-1 h-96 bg-gray-100 rounded-xl" />
+        </div>
       </div>
     )
   }
@@ -1189,14 +1030,14 @@ export default function StepStructureBuilder({
   const allTopicIds = modules.flatMap(m => m.topics.map(t => t.id))
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Course Outline</h2>
-          <p className="text-sm text-gray-500">Build your course structure: modules, topics, and lessons. Drag to reorder.</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">Build Course</h2>
+          <p className="text-sm text-gray-500">Organize structure, write lessons, and add questions.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowAIImport(true)}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
@@ -1209,29 +1050,62 @@ export default function StepStructureBuilder({
               Upload &amp; Organize
             </span>
           </button>
-          <button
-            onClick={() => setShowCSVImport(true)}
-            className="btn-ghost px-4 py-2 text-sm"
-          >
+          <button onClick={() => setShowCSVImport(true)} className="btn-ghost px-3 py-2 text-sm">
             CSV Import
           </button>
+          {hasSourceMap && (
+            importingAll ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600">
+                <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                Importing...
+              </div>
+            ) : (
+              <button
+                onClick={() => setImportAllConfirm(true)}
+                className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                Import All from Source
+              </button>
+            )
+          )}
           {modules.length > 0 && (
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-gray-400 ml-1">
               {modules.length}m &middot; {totalTopics}t &middot; {totalLessons}l
             </span>
           )}
         </div>
       </div>
 
+      {/* Import All confirmation */}
+      {importAllConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setImportAllConfirm(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900 mb-2">Import All from Source?</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Your uploaded content will be organized into lesson format for all empty lessons that have source material. This may take a few minutes.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setImportAllConfirm(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+              <button
+                onClick={importAllContent}
+                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
-      {modules.length === 0 && (
+      {modules.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center">
           <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gray-400">
               <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-gray-900 mb-1">Start building your course outline</h3>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Start building your course</h3>
           <p className="text-sm text-gray-500 mb-6">Add modules, then topics within each module, then lessons within each topic.</p>
           <div className="flex items-center justify-center gap-3">
             <button
@@ -1254,65 +1128,92 @@ export default function StepStructureBuilder({
             </button>
           </div>
         </div>
-      )}
+      ) : (
+        /* Split Panel Layout */
+        <div className="flex gap-0 min-h-[600px] border border-gray-200 rounded-xl overflow-hidden">
+          {/* Left Panel — Structure Tree */}
+          <div className="w-[380px] flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
+                  {modules.map(mod => (
+                    <SortableModuleAccordion
+                      key={mod.id}
+                      mod={mod}
+                      expanded={expandedModules.has(mod.id)}
+                      onToggle={() => toggleModule(mod.id)}
+                      onEditTitle={editModuleTitle}
+                      onDeleteModule={deleteModule}
+                      onAddTopic={addTopic}
+                      onEditTopicTitle={editTopicTitle}
+                      onDeleteTopic={deleteTopic}
+                      onAddLesson={addLesson}
+                      onEditLessonTitle={editLessonTitle}
+                      onDeleteLesson={deleteLesson}
+                      newTopicId={newTopicId}
+                      newLessonId={newLessonId}
+                      expandedTopics={expandedTopics}
+                      onToggleTopic={toggleTopic}
+                      selectedLessonId={selectedLessonId}
+                      onSelectLesson={setSelectedLessonId}
+                      assessments={assessments}
+                    />
+                  ))}
+                </SortableContext>
 
-      {/* Module List */}
-      {modules.length > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3">
-              {modules.map(mod => (
-                <SortableModuleAccordion
-                  key={mod.id}
-                  mod={mod}
-                  courseId={courseId}
-                  expanded={expandedModules.has(mod.id)}
-                  onToggle={() => toggleModule(mod.id)}
-                  onEditTitle={editModuleTitle}
-                  onDeleteModule={deleteModule}
-                  onAddTopic={addTopic}
-                  onEditTopicTitle={editTopicTitle}
-                  onDeleteTopic={deleteTopic}
-                  onAddLesson={addLesson}
-                  onEditLessonTitle={editLessonTitle}
-                  onDeleteLesson={deleteLesson}
-                  newTopicId={newTopicId}
-                  newLessonId={newLessonId}
-                  expandedTopics={expandedTopics}
-                  onToggleTopic={toggleTopic}
-                />
-              ))}
-            </div>
-          </SortableContext>
+                <SortableContext items={allTopicIds} strategy={verticalListSortingStrategy}>
+                  <span />
+                </SortableContext>
 
-          <SortableContext items={allTopicIds} strategy={verticalListSortingStrategy}>
-            <span />
-          </SortableContext>
+                <DragOverlay>
+                  {activeId ? (
+                    <div className="bg-white border-2 border-blue-300 rounded-lg px-4 py-3 shadow-xl">
+                      <span className="text-sm font-medium text-gray-900">Moving...</span>
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
 
-          <DragOverlay>
-            {activeId ? (
-              <div className="bg-white border-2 border-blue-300 rounded-lg px-4 py-3 shadow-xl">
-                <span className="text-sm font-medium text-gray-900">Moving...</span>
+              <div ref={bottomRef}>
+                <button
+                  onClick={addModule}
+                  className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                >
+                  + Add Module
+                </button>
               </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+            </div>
+          </div>
 
-      {/* Add Module Button */}
-      {modules.length > 0 && (
-        <div ref={bottomRef}>
-          <button
-            onClick={addModule}
-            className="w-full mt-3 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
-          >
-            + Add Module
-          </button>
+          {/* Right Panel — Lesson Editor */}
+          <div className="flex-1 bg-white overflow-y-auto p-6">
+            {selectedInfo ? (
+              <LessonEditor
+                key={selectedInfo.lesson.id}
+                courseId={courseId}
+                lesson={selectedInfo.lesson}
+                topicId={selectedInfo.topicId}
+                sourceMap={sourceMap}
+                courseFormat={courseFormat}
+                onLessonUpdated={handleLessonUpdated}
+                onLessonDeleted={handleLessonDeleted}
+                onQuestionCreated={fetchData}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="text-gray-300 mb-4">
+                  <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <p className="text-sm">Select a lesson from the sidebar to start editing</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1320,14 +1221,15 @@ export default function StepStructureBuilder({
       <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100">
         <button onClick={onBack} className="btn-ghost px-5 py-2.5 text-sm">Back</button>
         <button
-          onClick={onContinue}
+          onClick={onNext}
           disabled={modules.length === 0 || totalTopics === 0}
           className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
         >
-          Continue to Content
+          Continue to Review
         </button>
       </div>
 
+      {/* Modals */}
       {showCSVImport && (
         <CSVImportModal
           courseId={courseId}
@@ -1341,6 +1243,15 @@ export default function StepStructureBuilder({
           courseId={courseId}
           hasModules={modules.length > 0}
           onClose={() => setShowAIImport(false)}
+          onImported={fetchData}
+          onSourceMap={(map) => setSourceMap(prev => ({ ...prev, ...map }))}
+        />
+      )}
+
+      {showQImport && (
+        <CSVImportQuestionsModal
+          courseId={courseId}
+          onClose={() => setShowQImport(false)}
           onImported={fetchData}
         />
       )}

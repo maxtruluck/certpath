@@ -4,8 +4,23 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { COURSE_FORMATS, type CourseFormat } from '../lib/course-formats'
-import { BLOOMS_LEVELS, suggestBloomsLevel, type BloomsLevel } from '../lib/blooms'
 import CreatorTip from './CreatorTip'
+
+// Minimal Bloom's stubs (full implementation archived)
+type BloomsLevel = 'remember' | 'understand' | 'apply' | 'analyze'
+const BLOOMS_LEVELS = [
+  { value: 'remember' as const, label: 'Remember', color: 'text-blue-600', bgColor: 'bg-blue-50 border-blue-200', hint: 'Recall facts' },
+  { value: 'understand' as const, label: 'Understand', color: 'text-green-600', bgColor: 'bg-green-50 border-green-200', hint: 'Explain concepts' },
+  { value: 'apply' as const, label: 'Apply', color: 'text-amber-600', bgColor: 'bg-amber-50 border-amber-200', hint: 'Use in new situations' },
+  { value: 'analyze' as const, label: 'Analyze', color: 'text-red-600', bgColor: 'bg-red-50 border-red-200', hint: 'Break down & examine' },
+]
+function suggestBloomsLevel(text: string): BloomsLevel {
+  const t = text.toLowerCase()
+  if (/analyze|compare|differentiate|examine/.test(t)) return 'analyze'
+  if (/apply|implement|configure|use/.test(t)) return 'apply'
+  if (/explain|describe|summarize/.test(t)) return 'understand'
+  return 'remember'
+}
 
 // ─── Types ───────────────────────────────────────────────────────
 interface Lesson {
@@ -710,9 +725,6 @@ function CSVImportQuestionsModal({
           <button onClick={downloadTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
             Download Template
           </button>
-          <a href="/creator/import-guide" target="_blank" className="text-xs font-medium text-blue-500 hover:text-blue-700">
-            View Import Guide &rarr;
-          </a>
         </div>
 
         {result && (

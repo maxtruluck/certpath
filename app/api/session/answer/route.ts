@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
-import { XP } from '@/lib/utils/constants'
 
 // ─── Answer validation per question type ─────────────────────────
 function validateAnswer(
@@ -168,33 +167,11 @@ export async function POST(request: NextRequest) {
       await supabase.from('user_courses').update(updates).eq('id', userCourse.id)
     }
 
-    // Award XP
-    const xpAmount = isCorrect ? XP.CORRECT_ANSWER : XP.INCORRECT_ANSWER
-    await supabase.from('xp_events').insert({
-      user_id: userId,
-      course_id: question.course_id,
-      session_id: body.session_id,
-      event_type: isCorrect ? 'correct_answer' : 'incorrect_answer',
-      xp_amount: xpAmount,
-    })
-
-    // Increment total XP on profile
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('total_xp')
-      .eq('id', userId)
-      .single()
-    await supabase
-      .from('profiles')
-      .update({ total_xp: (profileData?.total_xp || 0) + xpAmount })
-      .eq('id', userId)
-
     // Build response
     const response: any = {
       is_correct: isCorrect,
       correct_option_ids: question.correct_option_ids,
       explanation: question.explanation,
-      xp_earned: xpAmount,
     }
 
     // For ordering/matching, include correct data for feedback

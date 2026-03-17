@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StepCourseInfo, { type CourseFormData, INITIAL_FORM } from './components/StepCourseInfo'
-import StepStructureBuilder from './components/StepStructureBuilder'
-import StepContentQuestions from './components/StepContentQuestions'
+import StepBuildCourse from './components/StepBuildCourse'
 import StepReviewDashboard from './components/StepReviewDashboard'
 import StepSubmitted from './components/StepSubmitted'
 import StepFormatSelect from './components/StepFormatSelect'
@@ -42,7 +41,7 @@ function CreateCourseContent() {
     editId ? 'blank' : null
   )
 
-  const stepLabels = ['Course Info', 'Outline', 'Content', 'Questions & Assessments', 'Review & Submit']
+  const stepLabels = ['Course Info', 'Build Course', 'Review & Submit', 'Submitted']
   const totalSteps = stepLabels.length
 
   // ─── Session persistence ─────────────────────────────────────
@@ -191,7 +190,7 @@ function CreateCourseContent() {
         return
       }
       setSubmitResult(data)
-      setStep(5)
+      setStep(4)
     } catch {
       // handle error
     }
@@ -219,31 +218,23 @@ function CreateCourseContent() {
         />
       )}
       {step === 2 && courseId && (
-        <StepStructureBuilder
+        <StepBuildCourse
           courseId={courseId}
           onBack={() => setStep(1)}
-          onContinue={() => setStep(3)}
+          onNext={() => setStep(3)}
           courseFormat={courseFormat}
         />
       )}
       {step === 3 && courseId && (
-        <StepContentQuestions
-          courseId={courseId}
-          onBack={() => setStep(2)}
-          onContinue={() => setStep(4)}
-          courseFormat={courseFormat}
-        />
-      )}
-      {step === 4 && courseId && (
         <StepReviewDashboard
           courseId={courseId}
-          onBack={() => setStep(3)}
+          onBack={() => setStep(2)}
           onSubmit={handleSubmitForReview}
           submitting={submitting}
           courseFormat={courseFormat}
         />
       )}
-      {step === 5 && submitResult && (
+      {step === 4 && submitResult && (
         <StepSubmitted result={submitResult} />
       )}
     </div>

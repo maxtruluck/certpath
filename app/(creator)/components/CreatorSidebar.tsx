@@ -8,7 +8,6 @@ const navItems = [
   { href: '/creator', label: 'Dashboard', icon: DashboardIcon },
   { href: '/creator/courses', label: 'My Courses', icon: CoursesIcon },
   { href: '/creator/courses/new', label: 'Create Course', icon: PlusIcon },
-  { href: '/creator/import-guide', label: 'Import Guide', icon: ImportGuideIcon },
   { href: '/creator/earnings', label: 'Earnings', icon: EarningsIcon },
   { href: '/creator/settings', label: 'Settings', icon: SettingsIcon },
 ]
@@ -38,15 +37,6 @@ function PlusIcon({ className }: { className?: string }) {
       <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5" />
       <line x1="10" y1="6" x2="10" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <line x1="6" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function ImportGuideIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="18" height="18" viewBox="0 0 20 20" fill="none">
-      <path d="M4 3h8l4 4v10a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 3v4h4M7 13h6M7 10h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

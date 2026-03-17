@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { COURSE_FORMATS, type CourseFormat } from '../lib/course-formats'
 
 export interface CourseFormData {
@@ -63,6 +63,41 @@ const numericOnly = (e: React.KeyboardEvent<HTMLInputElement>) => {
   ) {
     e.preventDefault()
   }
+}
+
+// Price input that preserves decimal typing (e.g. "29." won't snap to "29")
+function PriceInput({ value, onChange }: { value: number; onChange: (cents: number) => void }) {
+  const [display, setDisplay] = useState(value ? (value / 100).toString() : '')
+
+  // Sync display when external value changes (e.g. loading saved draft)
+  useEffect(() => {
+    const current = Math.round(parseFloat(display || '0') * 100)
+    if (current !== value) {
+      setDisplay(value ? (value / 100).toString() : '')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={display}
+      onChange={e => {
+        const raw = e.target.value
+        // Allow empty, digits, and one decimal point
+        if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+          setDisplay(raw)
+          const cents = Math.round(parseFloat(raw || '0') * 100)
+          onChange(cents)
+        }
+      }}
+      onKeyDown={numericOnly}
+      placeholder="29.99"
+      className={inputClass}
+      autoFocus
+    />
+  )
 }
 
 export default function StepCourseInfo({
@@ -358,16 +393,9 @@ export default function StepCourseInfo({
           {!form.is_free && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Price ($)</label>
-              <input
-                type="text" inputMode="numeric"
-                value={form.price_cents / 100 || ''}
-                onChange={e => onChange({ price_cents: Math.round(parseFloat(e.target.value || '0') * 100) })}
-                onKeyDown={numericOnly}
-                placeholder="29.99"
-                min="0"
-                step="0.01"
-                className={inputClass}
-                autoFocus
+              <PriceInput
+                value={form.price_cents}
+                onChange={cents => onChange({ price_cents: cents })}
               />
             </div>
           )}

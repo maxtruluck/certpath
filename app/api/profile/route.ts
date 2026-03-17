@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
-import { getLevelInfo } from '@/lib/engine/levels'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +9,7 @@ export async function GET(request: NextRequest) {
     // Fetch user profile
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_url, role, timezone, onboarding_complete, total_xp')
+      .select('id, display_name, avatar_url, role, timezone, onboarding_complete')
       .eq('id', userId)
       .single()
 
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Fetch all user courses for stats
     const { data: allUserCourses } = await supabase
       .from('user_courses')
-      .select('id, course_id, status, readiness_score, questions_seen, questions_correct, sessions_completed, completed_at')
+      .select('id, course_id, status, questions_seen, questions_correct, sessions_completed, completed_at')
       .eq('user_id', userId)
 
     const courses = allUserCourses || []
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest) {
     const totalQuestionsCorrect = courses.reduce((sum: number, c: any) => sum + (c.questions_correct || 0), 0)
     const totalSessions = courses.reduce((sum: number, c: any) => sum + (c.sessions_completed || 0), 0)
 
-    // Get total review log entries for streak/time data
+    // Get total review log entries
     const { count: totalReviews } = await supabase
       .from('review_log')
       .select('id', { count: 'exact', head: true })
@@ -57,24 +56,6 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Get XP and level
-    const totalXp = profile?.total_xp || 0
-    const levelInfo = getLevelInfo(totalXp)
-
-    // Get streak
-    const { data: streakData } = await supabase
-      .from('user_streaks')
-      .select('current_streak, longest_streak, last_activity_date')
-      .eq('user_id', userId)
-      .single()
-
-    // Get achievements
-    const { data: userAchievements } = await supabase
-      .from('user_achievements')
-      .select('earned_at, achievements(id, slug, title, description, icon, xp_reward)')
-      .eq('user_id', userId)
-      .order('earned_at', { ascending: false })
-
     return NextResponse.json({
       user: profile,
       stats: {
@@ -89,15 +70,6 @@ export async function GET(request: NextRequest) {
         total_reviews: totalReviews || 0,
       },
       completed_courses: completedCourseDetails,
-      xp: {
-        total: totalXp,
-        ...levelInfo,
-      },
-      streak: streakData || { current_streak: 0, longest_streak: 0, last_activity_date: null },
-      achievements: (userAchievements || []).map((ua: any) => ({
-        ...ua.achievements,
-        earned_at: ua.earned_at,
-      })),
     })
   } catch (err) {
     console.error('GET /api/profile error:', err)

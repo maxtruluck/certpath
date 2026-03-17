@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { COURSE_FORMATS, type CourseFormat } from '../lib/course-formats'
-import { BLOOMS_LEVELS, BLOOMS_COLORS, type BloomsLevel } from '../lib/blooms'
 
 // ─── Types ───────────────────────────────────────────────────────
 interface TopicReview {
@@ -26,7 +25,6 @@ interface ReviewStats {
   content_coverage: number
   difficulty_distribution: Record<number, number>
   type_distribution: Record<string, number>
-  blooms_distribution: Record<string, number>
   topics_needing_content: number
 }
 
@@ -64,59 +62,6 @@ function BarChart({ data, labels, colors }: { data: number[]; labels: string[]; 
           <span className="text-[10px] text-gray-400">{labels[i]}</span>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ─── Bloom's Horizontal Bar Chart ────────────────────────────────
-function BloomsChart({
-  distribution,
-  totalQuestions,
-  targetDistribution,
-}: {
-  distribution: Record<string, number>
-  totalQuestions: number
-  targetDistribution?: Record<BloomsLevel, number>
-}) {
-  return (
-    <div className="space-y-2.5">
-      {BLOOMS_LEVELS.map(level => {
-        const count = distribution[level.value] || 0
-        const pct = totalQuestions > 0 ? Math.round((count / totalQuestions) * 100) : 0
-        const targetPct = targetDistribution?.[level.value]
-        const deviation = targetPct !== undefined ? pct - targetPct : 0
-
-        return (
-          <div key={level.value}>
-            <div className="flex items-center justify-between mb-1">
-              <span className={`text-xs font-medium ${level.color}`}>{level.label}</span>
-              <span className="text-xs text-gray-500">
-                {count} ({pct}%)
-                {targetPct !== undefined && (
-                  <span className="text-gray-300 ml-1">/ target {targetPct}%</span>
-                )}
-              </span>
-            </div>
-            <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
-              <div
-                className={`h-full rounded-full ${BLOOMS_COLORS[level.value]}`}
-                style={{ width: `${Math.max(pct, 2)}%` }}
-              />
-              {targetPct !== undefined && (
-                <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-gray-400"
-                  style={{ left: `${targetPct}%` }}
-                />
-              )}
-            </div>
-            {Math.abs(deviation) > 15 && targetPct !== undefined && (
-              <p className="text-[10px] text-amber-600 mt-0.5">
-                {deviation > 0 ? 'Over' : 'Under'}-represented by {Math.abs(deviation)}%
-              </p>
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -183,7 +128,6 @@ export default function StepReviewDashboard({
     content_coverage: 0,
     difficulty_distribution: {},
     type_distribution: {},
-    blooms_distribution: { remember: 0, understand: 0, apply: 0, analyze: 0 },
     topics_needing_content: 0,
   })
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
@@ -211,7 +155,6 @@ export default function StepReviewDashboard({
         const totalQ = data.stats?.question_count || 0
         const totalM = data.stats?.module_count || 0
         const totalT = data.stats?.topic_count || 0
-        const bloomsDist = data.stats?.blooms_distribution || { remember: 0, understand: 0, apply: 0, analyze: 0 }
         const topicsNeedingContent = data.stats?.topics_needing_content || 0
 
         // Compute distributions from questions
@@ -254,7 +197,6 @@ export default function StepReviewDashboard({
           content_coverage: updatedCoverage,
           difficulty_distribution: diffDist,
           type_distribution: typeDist,
-          blooms_distribution: bloomsDist,
           topics_needing_content: topicsNeedingContent,
         })
       } catch (err) {
@@ -317,21 +259,6 @@ export default function StepReviewDashboard({
     })
   }
 
-  // Check if Bloom's distribution is heavily weighted toward recall
-  const totalQ = stats.total_questions
-  if (totalQ > 0 && formatGuidance) {
-    const rememberPct = Math.round(((stats.blooms_distribution.remember || 0) / totalQ) * 100)
-    const targetRemember = formatGuidance.bloomsDistribution.remember
-    if (rememberPct > targetRemember + 15) {
-      warnings.push({
-        label: `Bloom's distribution heavily weighted toward recall (${rememberPct}% vs ${targetRemember}% target)`,
-        passed: false,
-        isWarning: true,
-        details: 'Consider adding more application and analysis questions',
-      })
-    }
-  }
-
   const allPassed = validations.every(v => v.passed)
 
   const toggleModule = (id: string) => {
@@ -387,23 +314,13 @@ export default function StepReviewDashboard({
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Difficulty Distribution</h3>
-          <BarChart
-            data={[1, 2, 3, 4, 5].map(d => stats.difficulty_distribution[d] || 0)}
-            labels={['1', '2', '3', '4', '5']}
-            colors={['bg-green-300', 'bg-green-400', 'bg-amber-400', 'bg-orange-400', 'bg-red-400']}
-          />
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Bloom&apos;s Level Distribution</h3>
-          <BloomsChart
-            distribution={stats.blooms_distribution}
-            totalQuestions={stats.total_questions}
-            targetDistribution={formatGuidance?.bloomsDistribution}
-          />
-        </div>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Difficulty Distribution</h3>
+        <BarChart
+          data={[1, 2, 3, 4, 5].map(d => stats.difficulty_distribution[d] || 0)}
+          labels={['1', '2', '3', '4', '5']}
+          colors={['bg-green-300', 'bg-green-400', 'bg-amber-400', 'bg-orange-400', 'bg-red-400']}
+        />
       </div>
 
       {/* Question Type Distribution */}
