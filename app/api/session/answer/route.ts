@@ -2,49 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
 import { XP } from '@/lib/utils/constants'
 
-function calculateFSRS(isCorrect: boolean, cardState: any, rating?: number) {
-  const finalRating = rating ?? (isCorrect ? 3 : 1)
-  const prevDifficulty = cardState?.difficulty ?? 5.0
-  const prevStability = cardState?.stability ?? 0
-  const prevState = cardState?.state ?? 'new'
-
-  // New difficulty
-  let newDifficulty = prevDifficulty - 0.5 * (finalRating - 3)
-  newDifficulty = Math.max(1, Math.min(10, newDifficulty))
-
-  // New stability
-  let newStability: number
-  if (prevState === 'new' || prevStability === 0) {
-    newStability = finalRating >= 3 ? 2.0 : 0.4
-  } else if (finalRating >= 3) {
-    newStability =
-      prevStability *
-      (1 +
-        Math.exp(0.05) *
-          (11 - newDifficulty) *
-          Math.pow(prevStability, -0.2) *
-          (Math.exp(0.1 * (1 - 0.9)) - 1))
-    newStability = Math.max(newStability, prevStability + 0.5)
-  } else {
-    newStability = Math.max(0.4, prevStability * 0.5)
-  }
-
-  // New interval
-  const interval = Math.max(1, Math.round(newStability))
-  const dueDate = new Date()
-  dueDate.setDate(dueDate.getDate() + Math.min(interval, 365))
-
-  // New state
-  let newState: string
-  if (finalRating >= 3) {
-    newState = prevState === 'new' ? 'learning' : 'review'
-  } else {
-    newState = prevState === 'new' ? 'learning' : 'relearning'
-  }
-
-  return { rating: finalRating, newDifficulty, newStability, newState, dueDate, interval }
-}
-
 // ─── Answer validation per question type ─────────────────────────
 function validateAnswer(
   question: any,
@@ -99,7 +56,7 @@ function validateAnswer(
       return { isCorrect: false, rating: 1, selectedOptionIds: [] }
     }
 
-    // Build a map of correct left→right
+    // Build a map of correct left->right
     const correctMap = new Map<string, string>()
     for (const pair of correctPairs) {
       correctMap.set(pair.left.toLowerCase(), pair.right.toLowerCase())
@@ -120,7 +77,7 @@ function validateAnswer(
     return { isCorrect, rating, selectedOptionIds: [] }
   }
 
-  // Default: MC, MS, TF — existing array comparison
+  // Default: MC, MS, TF -- existing array comparison
   const correctIds = (question.correct_option_ids || []).sort()
   const selectedIds = [...(body.selected_option_ids || [])].sort()
   const isCorrect =
@@ -145,7 +102,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Look up the question — include new fields
+    // Look up the question
     const { data: question, error: qError } = await supabase
       .from('questions')
       .select('id, topic_id, module_id, course_id, correct_option_ids, explanation, question_type, acceptable_answers, match_mode, correct_order, matching_pairs, option_explanations, lesson_id, attempt_count, pass_rate')
@@ -159,77 +116,27 @@ export async function POST(request: NextRequest) {
     // Validate answer based on question type
     const { isCorrect, rating, selectedOptionIds } = validateAnswer(question, body)
 
-    // Get existing card state
-    const { data: existingCard } = await supabase
-      .from('user_card_states')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('question_id', question_id)
-      .maybeSingle()
-
-    // Calculate FSRS update (pass rating for partial credit types)
-    const fsrs = calculateFSRS(isCorrect, existingCard, rating)
-
-    // Calculate elapsed_days
-    const elapsedDays = existingCard?.last_review_date
-      ? Math.max(
-          0,
-          Math.round(
-            (Date.now() - new Date(existingCard.last_review_date).getTime()) /
-              (1000 * 60 * 60 * 24)
-          )
-        )
-      : 0
-
-    // Upsert user_card_states
-    const cardStateData = {
-      user_id: userId,
-      question_id: question_id,
-      course_id: question.course_id,
-      topic_id: question.topic_id,
-      module_id: question.module_id,
-      state: fsrs.newState,
-      difficulty: fsrs.newDifficulty,
-      stability: fsrs.newStability,
-      due_date: fsrs.dueDate.toISOString(),
-      last_review_date: new Date().toISOString(),
-      reps: (existingCard?.reps || 0) + 1,
-      lapses: isCorrect ? (existingCard?.lapses || 0) : (existingCard?.lapses || 0) + 1,
-      last_rating: fsrs.rating,
-      elapsed_days: elapsedDays,
-      scheduled_days: fsrs.interval,
-    }
-
-    if (existingCard) {
-      await supabase
-        .from('user_card_states')
-        .update(cardStateData)
-        .eq('id', existingCard.id)
-    } else {
-      await supabase.from('user_card_states').insert(cardStateData)
-    }
-
-    // Insert review_log
+    // Insert review_log (keep for analytics / session complete)
     await supabase.from('review_log').insert({
       user_id: userId,
       question_id: question_id,
       course_id: question.course_id,
       topic_id: question.topic_id,
       module_id: question.module_id,
-      rating: fsrs.rating,
+      rating: rating,
       is_correct: isCorrect,
       selected_option_ids: selectedOptionIds,
       time_spent_ms: time_spent_ms || 0,
-      state_before: existingCard?.state || 'new',
-      state_after: fsrs.newState,
-      difficulty_before: existingCard?.difficulty ?? 5.0,
-      difficulty_after: fsrs.newDifficulty,
-      stability_before: existingCard?.stability ?? 0,
-      stability_after: fsrs.newStability,
-      due_date_before: existingCard?.due_date || null,
-      due_date_after: fsrs.dueDate.toISOString(),
-      elapsed_days: elapsedDays,
-      scheduled_days: fsrs.interval,
+      state_before: 'new',
+      state_after: isCorrect ? 'learning' : 'new',
+      difficulty_before: 5.0,
+      difficulty_after: 5.0,
+      stability_before: 0,
+      stability_after: 0,
+      due_date_before: null,
+      due_date_after: null,
+      elapsed_days: 0,
+      scheduled_days: 0,
       session_id: session_id,
     })
 
@@ -282,17 +189,12 @@ export async function POST(request: NextRequest) {
       .update({ total_xp: (profileData?.total_xp || 0) + xpAmount })
       .eq('id', userId)
 
-    // Build response — include per-option explanation and linked content block on wrong answers
+    // Build response
     const response: any = {
       is_correct: isCorrect,
       correct_option_ids: question.correct_option_ids,
       explanation: question.explanation,
       xp_earned: xpAmount,
-      fsrs: {
-        rating: fsrs.rating,
-        next_review_date: fsrs.dueDate.toISOString(),
-        state: fsrs.newState,
-      },
     }
 
     // For ordering/matching, include correct data for feedback

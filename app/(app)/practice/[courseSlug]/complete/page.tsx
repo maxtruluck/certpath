@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAppStore } from '@/lib/store';
@@ -12,8 +12,7 @@ interface CompleteData {
   readiness_before: number;
   readiness_after: number;
   readiness_delta: number;
-  topic_breakdown: { topic_id: string; topic_title: string; correct: number; total: number; is_review: boolean }[];
-  unlocked_topic: { id: string; title: string } | null;
+  topic_breakdown: { topic_id: string; topic_title: string; correct: number; total: number }[];
   xp_earned?: number;
   streak?: { current: number; longest: number };
   achievements?: Array<{
@@ -24,9 +23,11 @@ interface CompleteData {
     icon: string;
     xp_reward: number;
   }>;
-  concept_count?: number;
-  review_count?: number;
-  session_type?: string;
+  sections_read?: number;
+  concepts_learned?: number;
+  questions_answered?: number;
+  topic_title?: string;
+  is_lesson?: boolean;
 }
 
 function AccuracyCircle({ correct, total }: { correct: number; total: number }) {
@@ -89,21 +90,17 @@ export default function SessionCompletePage() {
   function handleDone() {
     resetSession();
     clearSessionReview();
-    const pathUrl = data?.unlocked_topic
-      ? `/course/${courseSlug}/path?unlocked=${data.unlocked_topic.id}`
-      : `/course/${courseSlug}/path`;
-    router.push(pathUrl);
+    router.push(`/course/${courseSlug}/path`);
   }
 
   const correctCount = data?.correct_count ?? 0;
   const totalCount = data?.total_count ?? 0;
-  const readinessAfter = Math.round((data?.readiness_after ?? 0) * 100);
-  const readinessDeltaPct = Math.round((data?.readiness_delta ?? 0) * 100);
-  const mistakeCount = totalCount - correctCount;
   const xpEarned = data?.xp_earned ?? 0;
   const streakDays = data?.streak?.current ?? 0;
-  const conceptsLearned = data?.concept_count ?? 0;
-  const cardsReviewed = data?.review_count ?? 0;
+  const sectionsRead = data?.sections_read ?? 0;
+  const conceptsLearned = data?.concepts_learned ?? 0;
+  const isLesson = data?.is_lesson ?? false;
+  const mistakeCount = totalCount - correctCount;
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center px-4 bg-[#FAFAF8]">
@@ -115,38 +112,18 @@ export default function SessionCompletePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-[#2C2825]">Session Complete!</h1>
+          <h1 className="text-xl font-bold text-[#2C2825]">
+            {isLesson ? 'Topic Complete!' : 'Session Complete!'}
+          </h1>
+          {data?.topic_title && (
+            <p className="text-sm text-[#6B635A] mt-1">{data.topic_title}</p>
+          )}
         </div>
 
         {/* Accuracy circle */}
-        <div className="animate-fade-up">
-          <AccuracyCircle correct={correctCount} total={totalCount} />
-        </div>
-
-        {/* Topic unlock celebration */}
-        {data?.unlocked_topic && (
-          <div className="animate-fade-up rounded-xl border-2 border-blue-400 bg-blue-50 p-4 relative overflow-hidden" style={{ animationDelay: '150ms' }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-400/10 via-blue-300/20 to-blue-400/10 animate-shimmer" />
-            <div className="relative flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">New Topic Unlocked</p>
-                <p className="text-sm font-bold text-[#2C2825] truncate">{data.unlocked_topic.title}</p>
-              </div>
-              <Link
-                href={`/course/${courseSlug}/guidebook?topic=${data.unlocked_topic.id}`}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 flex-shrink-0"
-              >
-                Study
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
-            </div>
+        {totalCount > 0 && (
+          <div className="animate-fade-up">
+            <AccuracyCircle correct={correctCount} total={totalCount} />
           </div>
         )}
 
@@ -164,33 +141,33 @@ export default function SessionCompletePage() {
             </p>
             <p className="text-[10px] text-[#6B635A] mt-0.5">streak days</p>
           </div>
-          <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-            <p className="text-xl font-bold text-[#2C2825]">
-              <AnimatedNumber value={`${readinessAfter}%`} />
-            </p>
-            <p className="text-[10px] text-[#6B635A] mt-0.5">
-              {readinessDeltaPct > 0 ? `(+${readinessDeltaPct}%)` : readinessDeltaPct < 0 ? `(${readinessDeltaPct}%)` : 'ready'}
-            </p>
-          </div>
+          {totalCount > 0 && (
+            <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+              <p className="text-xl font-bold text-[#2C2825]">
+                <AnimatedNumber value={`${Math.round((correctCount / totalCount) * 100)}%`} />
+              </p>
+              <p className="text-[10px] text-[#6B635A] mt-0.5">accuracy</p>
+            </div>
+          )}
         </div>
 
-        {/* Concept & Review stats */}
-        {(conceptsLearned > 0 || cardsReviewed > 0) && (
+        {/* Lesson stats (sections read, concepts learned) */}
+        {(sectionsRead > 0 || conceptsLearned > 0) && (
           <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '250ms' }}>
+            {sectionsRead > 0 && (
+              <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+                <p className="text-xl font-bold text-[#2C2825]">
+                  <AnimatedNumber value={sectionsRead} />
+                </p>
+                <p className="text-[10px] text-[#6B635A] mt-0.5">sections read</p>
+              </div>
+            )}
             {conceptsLearned > 0 && (
               <div className="flex-1 rounded-xl bg-green-50 border border-green-200 p-3 text-center">
                 <p className="text-xl font-bold text-green-700">
                   <AnimatedNumber value={conceptsLearned} />
                 </p>
-                <p className="text-[10px] text-green-600 mt-0.5">new concepts</p>
-              </div>
-            )}
-            {cardsReviewed > 0 && (
-              <div className="flex-1 rounded-xl bg-amber-50 border border-amber-200 p-3 text-center">
-                <p className="text-xl font-bold text-amber-700">
-                  <AnimatedNumber value={cardsReviewed} />
-                </p>
-                <p className="text-[10px] text-amber-600 mt-0.5">cards reviewed</p>
+                <p className="text-[10px] text-green-600 mt-0.5">concepts learned</p>
               </div>
             )}
           </div>
@@ -234,35 +211,14 @@ export default function SessionCompletePage() {
           </div>
         )}
 
-        {/* Smart review suggestion — below 60% accuracy */}
-        {data?.topic_breakdown?.some(t => t.total > 0 && (t.correct / t.total) < 0.6) && (
-          <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 animate-fade-up" style={{ animationDelay: '500ms' }}>
-            <p className="text-sm font-medium text-[#2C2825] mb-2">Review the guidebook for these topics:</p>
-            {data!.topic_breakdown
-              .filter(t => t.total > 0 && (t.correct / t.total) < 0.6)
-              .map(t => (
-                <Link
-                  key={t.topic_id}
-                  href={`/course/${courseSlug}/guidebook?topic=${t.topic_id}`}
-                  className="flex items-center gap-2 text-sm text-[#2C2825] hover:text-[#1A1816] font-medium mt-1"
-                >
-                  Review the guidebook for {t.topic_title}
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                  </svg>
-                </Link>
-              ))}
-          </div>
-        )}
-
         {/* Action buttons */}
-        <div className="space-y-3 animate-fade-up" style={{ animationDelay: '600ms' }}>
-          <Link
-            href={`/practice/${courseSlug}`}
+        <div className="space-y-3 animate-fade-up" style={{ animationDelay: '500ms' }}>
+          <button
+            onClick={handleDone}
             className="block w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-bold text-sm text-center transition-colors"
           >
-            Continue Learning
-          </Link>
+            {isLesson ? 'Next Topic' : 'Back to Course'}
+          </button>
           {mistakeCount > 0 && (
             <Link
               href={`/practice/${courseSlug}/review`}
@@ -271,12 +227,6 @@ export default function SessionCompletePage() {
               Review Mistakes ({mistakeCount})
             </Link>
           )}
-          <button
-            onClick={handleDone}
-            className="w-full text-sm text-[#A39B90] hover:text-[#6B635A] py-2 transition-colors"
-          >
-            Back to Course Path
-          </button>
         </div>
       </div>
     </div>

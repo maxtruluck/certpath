@@ -38,7 +38,6 @@ interface Question {
   tags: string[];
   topic_title?: string;
   matching_items?: { lefts: string[]; rights: string[] };
-  is_review?: boolean;
   difficulty_label?: 'easy' | 'medium' | 'challenging';
   lesson_id?: string | null;
 }
@@ -48,7 +47,6 @@ interface AnswerResult {
   correct_option_ids: string[];
   explanation: string;
   xp_earned: number;
-  next_review_days: number;
   option_explanation?: string | null;
   linked_lesson?: { title: string; body: string } | null;
   correct_order?: string[];
@@ -56,11 +54,11 @@ interface AnswerResult {
   acceptable_answers?: string[];
 }
 
-interface IntroTopic {
-  topic_id: string;
+interface LessonSectionData {
   title: string;
+  content: string;
+  lesson_id: string;
   lesson_title: string;
-  body_preview: string;
 }
 
 interface ConceptData {
@@ -74,9 +72,42 @@ interface ConceptData {
 }
 
 type QueueItem =
-  | { type: 'intro'; data: IntroTopic }
+  | { type: 'lesson_section'; data: LessonSectionData }
   | { type: 'question'; data: Question }
   | { type: 'concept'; data: ConceptData };
+
+// ─── Lesson Section Card ────────────────────────────────────────
+function LessonSectionCard({ section, onNext }: { section: LessonSectionData; onNext: () => void }) {
+  return (
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="py-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#6B635A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+          <span className="text-xs font-medium text-[#6B635A]">{section.lesson_title}</span>
+        </div>
+        <div className="border-t-2 border-[#E8E4DD] pt-5 mb-6">
+          {section.title && (
+            <h2 className="text-lg font-bold text-[#2C2825] mb-4">{section.title}</h2>
+          )}
+          <div className="prose prose-sm max-w-prose text-[#2C2825] leading-relaxed [&_p]:text-[15px] [&_p]:leading-[1.75] [&_p]:text-[#2C2825] [&_p]:mb-4 [&_strong]:text-[#2C2825] [&_strong]:font-semibold [&_ul]:text-[15px] [&_ul]:text-[#2C2825] [&_ul]:leading-[1.75] [&_ol]:text-[15px] [&_ol]:text-[#2C2825] [&_ol]:leading-[1.75] [&_li]:mb-1 [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:bg-amber-50/50 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:pr-3 [&_blockquote]:rounded-r-lg [&_blockquote]:italic [&_blockquote]:text-[#6B635A] [&_blockquote]:text-sm [&_code]:text-xs [&_code]:bg-[#F5F3EF] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[#2C2825] [&_pre]:bg-[#F5F3EF] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-sm [&_a]:text-blue-600 [&_a]:underline">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content || '*No content*'}</ReactMarkdown>
+          </div>
+        </div>
+        <button
+          onClick={onNext}
+          className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          Continue
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Concept Card ────────────────────────────────────────────────
 function ConceptCard({ concept, onNext }: { concept: ConceptData; onNext: () => void }) {
@@ -141,7 +172,6 @@ function PracticeContent() {
   const router = useRouter();
   const courseSlug = params.courseSlug as string;
   const topicId = searchParams.get('topic');
-  const sessionTypeParam = searchParams.get('session_type');
 
   const { sessionId, questions: storeQuestions, currentIndex, questionStartTime, startSession, answerQuestion, nextQuestion, resetSession, saveSessionForReview } = useAppStore();
 
@@ -160,19 +190,26 @@ function PracticeContent() {
   const [requeueIndex, setRequeueIndex] = useState(0);
   const [showRequeueRecap, setShowRequeueRecap] = useState(false);
 
-  // New type state
+  // Input state
   const [fillBlankAnswer, setFillBlankAnswer] = useState('');
   const [orderItems, setOrderItems] = useState<{ id: string; text: string }[]>([]);
   const [matchSelections, setMatchSelections] = useState<Record<string, string>>({});
   const [showLinkedBlock, setShowLinkedBlock] = useState(false);
 
-  // Session queue with intros and concept cards
+  // Session queue
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
 
   // Session stats tracking
+  const [sectionsRead, setSectionsRead] = useState(0);
   const [conceptCount, setConceptCount] = useState(0);
-  const [reviewCount, setReviewCount] = useState(0);
+
+  // Session metadata from API
+  const [topicTitle, setTopicTitle] = useState('');
+  const [totalItemsFromApi, setTotalItemsFromApi] = useState(0);
+  const [itemsCompletedFromApi, setItemsCompletedFromApi] = useState(0);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(0);
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -180,11 +217,11 @@ function PracticeContent() {
   );
 
   const currentItem = queue[queueIndex];
-  const isIntro = currentItem?.type === 'intro';
+  const isLessonSection = currentItem?.type === 'lesson_section';
   const isConcept = currentItem?.type === 'concept';
-  const currentQuestion = (!isIntro && !isConcept) ? (currentItem?.data as Question) : null;
+  const currentQuestion = (!isLessonSection && !isConcept) ? (currentItem?.data as Question) : null;
 
-  // Progress counts ALL items (concept + question + intro)
+  // Progress counts ALL items
   const totalItems = queue.length + (inRequeue ? wrongQueue.length : 0);
   const currentItemIdx = inRequeue
     ? queue.length + requeueIndex
@@ -199,15 +236,21 @@ function PracticeContent() {
       const courseData = await courseRes.json();
       setCourseId(courseData.id);
 
-      let url = `/api/session/generate?course_id=${courseData.id}&question_count=${questionCount}`;
+      let url = `/api/session/generate?course_id=${courseData.id}`;
       if (topicId) url += `&topic_id=${topicId}`;
-      if (sessionTypeParam) url += `&session_type=${sessionTypeParam}`;
+      if (!topicId) url += `&question_count=${questionCount}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to generate session');
       const data = await res.json();
 
-      // Use cards array if available (new format), fall back to questions (old format)
+      // Store metadata
+      setTopicTitle(data.topic_title || '');
+      setTotalItemsFromApi(data.total_items || 0);
+      setItemsCompletedFromApi(data.items_completed || 0);
+      setEstimatedMinutes(data.estimated_minutes || 0);
+      setActiveTopicId(data.topic_id || null);
+
       const hasCards = data.cards && data.cards.length > 0;
       const hasQuestions = data.questions && data.questions.length > 0;
 
@@ -218,7 +261,7 @@ function PracticeContent() {
       }
 
       if (hasCards) {
-        // New format: build queue from cards array
+        // Build queue from cards array
         const questionsOnly = data.cards
           .filter((c: any) => c.card_type === 'question')
           .map((c: any) => c.question);
@@ -226,21 +269,17 @@ function PracticeContent() {
         startSession(data.session_id || crypto.randomUUID(), courseData.id, questionsOnly);
 
         const builtQueue: QueueItem[] = [];
-        let cCount = 0;
-        let rCount = 0;
 
         for (const card of data.cards) {
-          if (card.card_type === 'concept') {
+          if (card.card_type === 'lesson_section') {
+            builtQueue.push({ type: 'lesson_section', data: card.section });
+          } else if (card.card_type === 'concept') {
             builtQueue.push({ type: 'concept', data: card.concept });
-            cCount++;
           } else if (card.card_type === 'question') {
             builtQueue.push({ type: 'question', data: card.question });
-            if (card.question.is_review) rCount++;
           }
         }
 
-        setConceptCount(cCount);
-        setReviewCount(rCount);
         setQueue(builtQueue);
         setQueueIndex(0);
 
@@ -249,19 +288,11 @@ function PracticeContent() {
         if (firstQ?.question_type === 'ordering') initOrderItems(firstQ);
         if (firstQ?.question_type === 'matching' && firstQ.matching_items) initMatchSelections(firstQ);
       } else {
-        // Old format: fall back to questions array with intro interleaving
+        // Old format fallback: questions array
         startSession(data.session_id || crypto.randomUUID(), courseData.id, data.questions);
 
-        const introTopics: IntroTopic[] = data.intro_topics || [];
         const builtQueue: QueueItem[] = [];
-        const shownIntros = new Set<string>();
-
         for (const question of data.questions) {
-          const intro = introTopics.find((t: IntroTopic) => t.topic_id === question.topic_id);
-          if (intro && !shownIntros.has(intro.topic_id)) {
-            builtQueue.push({ type: 'intro', data: intro });
-            shownIntros.add(intro.topic_id);
-          }
           builtQueue.push({ type: 'question', data: question });
         }
 
@@ -277,7 +308,7 @@ function PracticeContent() {
       console.error('Session load error:', err);
     }
     setLoading(false);
-  }, [courseSlug, topicId, sessionTypeParam, questionCount, startSession]);
+  }, [courseSlug, topicId, questionCount, startSession]);
 
   useEffect(() => {
     if (sessionStarted) loadSession();
@@ -388,36 +419,38 @@ function PracticeContent() {
         if (q.question_type === 'matching') initMatchSelections(q);
         nextQuestion();
       }
-      // concept and intro cards don't call nextQuestion()
     }
   }
 
-  function handleConceptNext() {
-    // Concept cards just advance, no API call, no accuracy tracking
+  function handleSectionNext() {
+    setSectionsRead(prev => prev + 1);
     handleNext();
   }
 
-  async function handleIntroSeen() {
-    if (!isIntro || !currentItem) return;
-    const intro = currentItem.data as IntroTopic;
-    fetch(`/api/user/topic-intro/${intro.topic_id}/seen`, { method: 'POST' }).catch(() => {});
+  function handleConceptNext() {
+    setConceptCount(prev => prev + 1);
     handleNext();
   }
 
   async function handleCompleteSession() {
     try {
+      const questionsAnswered = queue.filter(i => i.type === 'question').length;
       const res = await fetch('/api/session/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          topic_id: activeTopicId,
+        }),
       });
       const data = await res.json();
-      // Store extra session stats for the complete screen
       sessionStorage.setItem('sessionComplete', JSON.stringify({
         ...data,
-        concept_count: conceptCount,
-        review_count: reviewCount,
-        session_type: sessionTypeParam || 'mixed',
+        sections_read: sectionsRead,
+        concepts_learned: conceptCount,
+        questions_answered: questionsAnswered,
+        topic_title: topicTitle,
+        is_lesson: !!activeTopicId,
       }));
       sessionStorage.setItem('sessionId', sessionId || '');
       saveSessionForReview({
@@ -481,38 +514,63 @@ function PracticeContent() {
     return selectedIds.length > 0;
   })();
 
-  // ─── Render States ─────────────────────────────────────────
+  // ─── Session Start Screen ──────────────────────────────────
   if (!sessionStarted) {
+    const isLesson = !!topicId;
     const SESSION_OPTIONS = [5, 10, 15, 20];
-    const sessionLabel = sessionTypeParam === 'learn' ? 'Learn Session'
-      : sessionTypeParam === 'review' ? 'Review Session'
-      : topicId ? 'Focused Practice' : 'Practice Session';
+
+    if (isLesson) {
+      // Lesson session start
+      return (
+        <div className="min-h-[100dvh] bg-[#FAFAF8] flex items-center justify-center px-4">
+          <div className="w-full max-w-sm space-y-6 animate-fade-up">
+            <div className="text-center">
+              <svg className="w-10 h-10 mx-auto mb-3 text-[#6B635A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+              <h1 className="text-lg font-bold text-[#2C2825]">Start Lesson</h1>
+              <p className="text-sm text-[#6B635A] mt-1">Read, learn, and practice</p>
+            </div>
+            <button
+              onClick={() => setSessionStarted(true)}
+              className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-bold text-sm transition-colors"
+            >
+              Start Lesson
+            </button>
+            <button
+              onClick={() => router.push(`/course/${courseSlug}/path`)}
+              className="w-full text-sm text-[#A39B90] hover:text-[#6B635A] py-2 transition-colors"
+            >
+              Back to Course
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Quick Practice start
     return (
       <div className="min-h-[100dvh] bg-[#FAFAF8] flex items-center justify-center px-4">
         <div className="w-full max-w-sm space-y-6 animate-fade-up">
           <div className="text-center">
-            <h1 className="text-lg font-bold text-[#2C2825]">{sessionLabel}</h1>
-            <p className="text-sm text-[#6B635A] mt-1">
-              {sessionTypeParam === 'learn' ? 'New concepts + questions' : sessionTypeParam === 'review' ? 'Cards due for review' : 'How many questions?'}
-            </p>
+            <h1 className="text-lg font-bold text-[#2C2825]">Quick Practice</h1>
+            <p className="text-sm text-[#6B635A] mt-1">How many questions?</p>
           </div>
-          {sessionTypeParam !== 'learn' && (
-            <div className="grid grid-cols-4 gap-3">
-              {SESSION_OPTIONS.map(n => (
-                <button
-                  key={n}
-                  onClick={() => setQuestionCount(n)}
-                  className={`py-3 rounded-xl text-sm font-bold transition-all ${
-                    questionCount === n
-                      ? 'bg-[#2C2825] text-[#F5F3EF] shadow-sm scale-105'
-                      : 'bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD] hover:border-[#D4CFC7]'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-4 gap-3">
+            {SESSION_OPTIONS.map(n => (
+              <button
+                key={n}
+                onClick={() => setQuestionCount(n)}
+                className={`py-3 rounded-xl text-sm font-bold transition-all ${
+                  questionCount === n
+                    ? 'bg-[#2C2825] text-[#F5F3EF] shadow-sm scale-105'
+                    : 'bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD] hover:border-[#D4CFC7]'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setSessionStarted(true)}
             className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-bold text-sm transition-colors"
@@ -560,13 +618,51 @@ function PracticeContent() {
     );
   }
 
+  // ─── Lesson Section Screen ─────────────────────────────────
+  if (isLessonSection && currentItem) {
+    const section = currentItem.data as LessonSectionData;
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFAF8]">
+        <div className="max-w-lg mx-auto px-4">
+          {/* Progress bar */}
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
+              <div className="h-full bg-[#2C2825] rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+        </div>
+        <LessonSectionCard section={section} onNext={handleSectionNext} />
+
+        {exitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
+            <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave session?</h3>
+              <p className="text-sm text-[#6B635A] text-center">Your progress will be saved. You can resume later.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
+                <button onClick={() => { resetSession(); router.push(`/course/${courseSlug}/path`); }} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ─── Concept Card Screen ──────────────────────────────────
   if (isConcept && currentItem) {
     const concept = currentItem.data as ConceptData;
     return (
       <div className="min-h-[100dvh] bg-[#FAFAF8]">
         <div className="max-w-lg mx-auto px-4">
-          {/* Progress bar for concept cards too */}
           <div className="flex items-center gap-3 py-4">
             <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -583,12 +679,11 @@ function PracticeContent() {
         </div>
         <ConceptCard concept={concept} onNext={handleConceptNext} />
 
-        {/* Exit confirmation overlay */}
         {exitConfirm && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
             <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
               <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave session?</h3>
-              <p className="text-sm text-[#6B635A] text-center">Your progress in this session won&apos;t be saved.</p>
+              <p className="text-sm text-[#6B635A] text-center">Your progress will be saved. You can resume later.</p>
               <div className="flex gap-3">
                 <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
                 <button onClick={() => { resetSession(); router.push(`/course/${courseSlug}/path`); }} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
@@ -596,46 +691,6 @@ function PracticeContent() {
             </div>
           </div>
         )}
-      </div>
-    );
-  }
-
-  // ─── Topic Intro Screen ────────────────────────────────────
-  if (isIntro && currentItem) {
-    const intro = currentItem.data as IntroTopic;
-    return (
-      <div className="min-h-[100dvh] bg-[#FAFAF8]">
-        <div className="max-w-lg mx-auto px-4 pb-8">
-          {/* Progress bar */}
-          <div className="flex items-center gap-3 py-4">
-            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
-            </div>
-            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
-              {currentItemIdx + 1}/{totalItems}
-            </span>
-          </div>
-          <div className="py-2">
-            <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">New Topic</span>
-          </div>
-          <h2 className="text-xl font-bold text-[#2C2825] mb-2">{intro.title}</h2>
-          {intro.lesson_title && (
-            <p className="text-sm text-[#6B635A] mb-4">{intro.lesson_title}</p>
-          )}
-          <div className="bg-[#F5F3EF] rounded-lg p-4 mb-8">
-            <div className="prose prose-sm max-w-none [&_p]:text-sm [&_p]:text-[#6B635A]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{intro.body_preview}</ReactMarkdown>
-            </div>
-          </div>
-          <button onClick={handleIntroSeen} className="w-full py-3 rounded-xl bg-[#2C2825] text-[#F5F3EF] font-semibold hover:bg-[#1A1816] transition-colors">
-            Got it, let&apos;s practice
-          </button>
-        </div>
       </div>
     );
   }
@@ -732,7 +787,7 @@ function PracticeContent() {
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
             <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
               <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave session?</h3>
-              <p className="text-sm text-[#6B635A] text-center">Your progress in this session won&apos;t be saved.</p>
+              <p className="text-sm text-[#6B635A] text-center">Your progress will be saved. You can resume later.</p>
               <div className="flex gap-3">
                 <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
                 <button onClick={() => { resetSession(); router.push(`/course/${courseSlug}/path`); }} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
@@ -741,16 +796,11 @@ function PracticeContent() {
           </div>
         )}
 
-        {/* Topic badge + review indicator + difficulty pill */}
+        {/* Topic badge + difficulty pill */}
         <div className="mb-4 flex items-center gap-2 flex-wrap">
           {activeQuestion.topic_title && (
             <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">
               {activeQuestion.topic_title}
-            </span>
-          )}
-          {activeQuestion.is_review && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-              Review
             </span>
           )}
           {(activeQuestion.difficulty_label === 'challenging' || (activeQuestion.difficulty ?? 0) >= 4) && (

@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     if (error) return error
 
     const body = await request.json()
-    const { session_id } = body
+    const { session_id, topic_id } = body
 
     if (!session_id) {
       return NextResponse.json({ error: 'session_id is required' }, { status: 400 })
@@ -40,14 +40,14 @@ export async function POST(request: NextRequest) {
     // Get current readiness before update
     const { data: userCourse } = await supabase
       .from('user_courses')
-      .select('id, readiness_score, sessions_completed, current_topic_id')
+      .select('id, readiness_score, sessions_completed')
       .eq('user_id', userId)
       .eq('course_id', courseId)
       .maybeSingle()
 
     const readinessBefore = userCourse?.readiness_score || 0
 
-    // Calculate new readiness using the proper weighted FSRS-based calculator
+    // Calculate new readiness
     const readinessRaw = await updateReadinessScore(supabase, userId, courseId)
     const readinessAfter = Math.round(readinessRaw * 100)
     const readinessDelta = readinessAfter - readinessBefore
@@ -94,64 +94,41 @@ export async function POST(request: NextRequest) {
         .eq('id', userCourse.id)
     }
 
-    // Check if current topic should be advanced
-    // A topic is "complete" if its readiness >= 0.7
-    let unlockedTopic: any = null
-
-    if (userCourse?.current_topic_id) {
-      const { data: currentTopicCards } = await supabase
-        .from('user_card_states')
-        .select('state')
+    // ── Mark topic as completed ──────────────────────────────────
+    if (topic_id) {
+      // Fetch current progress to get items_total
+      const { data: progressRow } = await supabase
+        .from('user_topic_progress')
+        .select('id, session_items_total')
         .eq('user_id', userId)
-        .eq('topic_id', userCourse.current_topic_id)
+        .eq('topic_id', topic_id)
+        .maybeSingle()
 
-      const { count: topicQuestionCount } = await supabase
-        .from('questions')
-        .select('id', { count: 'exact', head: true })
-        .eq('topic_id', userCourse.current_topic_id)
-        .eq('is_active', true)
-
-      const topicTotal = topicQuestionCount || 1
-      const topicReview = (currentTopicCards || []).filter((c: any) => c.state === 'review').length
-      const topicReadiness = topicReview / topicTotal
-
-      if (topicReadiness >= 0.7) {
-        // Find next topic
-        const { data: currentTopic } = await supabase
-          .from('topics')
-          .select('display_order, course_id')
-          .eq('id', userCourse.current_topic_id)
-          .single()
-
-        if (currentTopic) {
-          const { data: nextTopic } = await supabase
-            .from('topics')
-            .select('id, title')
-            .eq('course_id', currentTopic.course_id)
-            .gt('display_order', currentTopic.display_order)
-            .order('display_order', { ascending: true })
-            .limit(1)
-            .maybeSingle()
-
-          if (nextTopic) {
-            await supabase
-              .from('user_courses')
-              .update({ current_topic_id: nextTopic.id })
-              .eq('id', userCourse.id)
-
-            unlockedTopic = { id: nextTopic.id, title: nextTopic.title }
-          } else {
-            // No more topics — course may be complete
-            // Check if overall readiness is high enough
-            if (readinessAfter >= 70) {
-              await supabase
-                .from('user_courses')
-                .update({ status: 'completed', completed_at: new Date().toISOString() })
-                .eq('id', userCourse.id)
-            }
-          }
-        }
+      if (progressRow) {
+        await supabase
+          .from('user_topic_progress')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            session_items_completed: progressRow.session_items_total,
+          })
+          .eq('id', progressRow.id)
+      } else {
+        // No progress row yet — create a completed one
+        await supabase
+          .from('user_topic_progress')
+          .insert({
+            user_id: userId,
+            topic_id: topic_id,
+            course_id: courseId,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            session_items_completed: 0,
+            session_items_total: 0,
+          })
       }
+
+      // TODO: When all topics in a module are completed, trigger "Module complete!" achievement
     }
 
     // --- XP & Streaks ---
@@ -244,7 +221,6 @@ export async function POST(request: NextRequest) {
       readiness_after: readinessAfter,
       readiness_delta: readinessDelta,
       topic_breakdown: topicBreakdown,
-      unlocked_topic: unlockedTopic,
       xp_earned: sessionXp,
       streak: { current: currentStreak, longest: longestStreak },
       achievements: newAchievements,

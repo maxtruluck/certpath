@@ -1,26 +1,25 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type TopicState = 'locked' | 'new' | 'learning' | 'review' | 'mastered'
+type TopicState = 'locked' | 'available' | 'in_progress' | 'completed'
 
 interface TopicData {
   id: string;
   title: string;
   display_order: number;
   state: TopicState;
-  total_questions: number;
-  cards_seen: number;
-  cards_due: number;
   lesson_count: number;
+  question_count: number;
+  items_completed: number;
+  items_total: number;
   best_quiz_score: number | null;
-  has_read: boolean;
 }
 
 interface ModuleData {
@@ -35,10 +34,9 @@ interface ModuleData {
 }
 
 interface PrimaryCta {
-  type: 'review' | 'continue' | 'start_new' | 'caught_up';
+  type: 'continue' | 'start' | 'caught_up';
   topic_id: string | null;
   label: string;
-  due_count: number | null;
 }
 
 interface PracticeExam {
@@ -49,10 +47,11 @@ interface PracticeExam {
 }
 
 interface PathResponse {
-  course: { id: string; title: string; readiness_score: number };
+  course: { id: string; title: string };
   modules: ModuleData[];
   primary_cta: PrimaryCta;
   practice_exam: PracticeExam | null;
+  progress: { completed: number; total: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -63,79 +62,40 @@ const stateStyles: Record<TopicState, {
   bg: string; border: string; text: string; badge: string; dot: string;
 }> = {
   locked: {
-    bg: 'bg-gray-50 dark:bg-gray-800/40',
-    border: 'border-gray-200 dark:border-gray-700',
-    text: 'text-gray-400 dark:text-gray-500',
-    badge: 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500',
-    dot: 'bg-gray-300 dark:bg-gray-600',
+    bg: 'bg-[#F5F3EF]',
+    border: 'border-dashed border-[#D4CFC7]',
+    text: 'text-[#A39B90]',
+    badge: 'bg-[#EBE8E2] text-[#A39B90]',
+    dot: 'bg-[#D4CFC7]',
   },
-  new: {
-    bg: 'bg-white dark:bg-gray-900',
-    border: 'border-dashed border-gray-300 dark:border-gray-600',
-    text: 'text-gray-600 dark:text-gray-300',
-    badge: 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
-    dot: 'bg-gray-400 dark:bg-gray-500',
+  available: {
+    bg: 'bg-white',
+    border: 'border-[#E8E4DD]',
+    text: 'text-[#6B635A]',
+    badge: 'bg-[#F5F3EF] text-[#6B635A]',
+    dot: 'bg-[#6B635A]',
   },
-  learning: {
-    bg: 'bg-blue-50 dark:bg-blue-950/30',
-    border: 'border-blue-300 dark:border-blue-700',
-    text: 'text-blue-700 dark:text-blue-300',
-    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+  in_progress: {
+    bg: 'bg-blue-50',
+    border: 'border-blue-300',
+    text: 'text-blue-700',
+    badge: 'bg-blue-100 text-blue-700',
     dot: 'bg-blue-500',
   },
-  review: {
-    bg: 'bg-amber-50 dark:bg-amber-950/30',
-    border: 'border-amber-300 dark:border-amber-700',
-    text: 'text-amber-700 dark:text-amber-300',
-    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
-    dot: 'bg-amber-500',
-  },
-  mastered: {
-    bg: 'bg-green-50 dark:bg-green-950/30',
-    border: 'border-green-300 dark:border-green-700',
-    text: 'text-green-700 dark:text-green-300',
-    badge: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+  completed: {
+    bg: 'bg-green-50',
+    border: 'border-green-300',
+    text: 'text-green-700',
+    badge: 'bg-green-100 text-green-700',
     dot: 'bg-green-500',
   },
 };
 
 const ctaColors: Record<PrimaryCta['type'], string> = {
-  review: 'bg-amber-500 hover:bg-amber-600 text-white',
   continue: 'bg-blue-600 hover:bg-blue-700 text-white',
-  start_new: 'bg-blue-600 hover:bg-blue-700 text-white',
-  caught_up: 'bg-green-600 hover:bg-green-700 text-white',
+  start: 'bg-green-600 hover:bg-green-700 text-white',
+  caught_up: 'bg-[#6B635A] text-white',
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function practiceUrl(slug: string, topicId: string, sessionType: string): string {
-  return `/practice/${slug}?topic=${topicId}&session_type=${sessionType}`;
-}
-
-function guidebookUrl(slug: string, topicId: string): string {
-  return `/course/${slug}/guidebook?topic=${topicId}&from=path`;
-}
-
-/** Determine where tapping a topic row should navigate */
-function topicHref(slug: string, topic: TopicData): string {
-  switch (topic.state) {
-    case 'new':
-      // Read-first: if not read yet, go to guidebook; if already read, go to practice
-      return topic.has_read
-        ? practiceUrl(slug, topic.id, 'learn')
-        : guidebookUrl(slug, topic.id);
-    case 'learning':
-      return practiceUrl(slug, topic.id, 'learn');
-    case 'review':
-      return practiceUrl(slug, topic.id, 'review');
-    case 'mastered':
-      return practiceUrl(slug, topic.id, 'mixed');
-    default:
-      return '#';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Components
@@ -144,13 +104,13 @@ function topicHref(slug: string, topic: TopicData): string {
 function LoadingSkeleton() {
   return (
     <div className="space-y-5 animate-pulse pb-24">
-      <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded-xl w-2/3" />
-      <div className="h-24 bg-gray-200 dark:bg-gray-800 rounded-2xl" />
+      <div className="h-10 bg-[#EBE8E2] rounded-xl w-2/3" />
+      <div className="h-24 bg-[#EBE8E2] rounded-2xl" />
       {[1, 2, 3].map(i => (
         <div key={i} className="space-y-3">
-          <div className="h-6 bg-gray-200 dark:bg-gray-800 rounded-lg w-1/2" />
+          <div className="h-6 bg-[#EBE8E2] rounded-lg w-1/2" />
           {[1, 2, 3].map(j => (
-            <div key={j} className="h-16 bg-gray-200 dark:bg-gray-800 rounded-xl" />
+            <div key={j} className="h-16 bg-[#EBE8E2] rounded-xl" />
           ))}
         </div>
       ))}
@@ -181,8 +141,24 @@ function TopicRow({
     if (isLocked) {
       onLockedTap(topic.title);
     }
-    // Navigation handled by Link wrapper for non-locked
   }
+
+  const subtitle = (() => {
+    switch (topic.state) {
+      case 'locked':
+        return 'Locked';
+      case 'available':
+        return topic.question_count > 0
+          ? `${topic.question_count} question${topic.question_count === 1 ? '' : 's'}`
+          : 'Start';
+      case 'in_progress':
+        return topic.items_total > 0
+          ? `${topic.items_completed}/${topic.items_total} complete`
+          : 'In progress';
+      case 'completed':
+        return null; // Rendered as icon
+    }
+  })();
 
   const content = (
     <div className={`flex items-center gap-3 p-3 rounded-xl border ${style.bg} ${style.border} transition-all ${
@@ -192,30 +168,30 @@ function TopicRow({
       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${style.dot} ${
         topic.state === 'locked' ? 'text-white/70' : 'text-white'
       }`}>
-        {number}
+        {topic.state === 'completed' ? (
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        ) : number}
       </div>
 
       {/* Title + subtitle */}
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold truncate ${
-          isLocked ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'
+          isLocked ? 'text-[#A39B90]' : 'text-[#2C2825]'
         }`}>
           {topic.title}
         </p>
-        <p className={`text-xs mt-0.5 ${style.text}`}>
-          {topic.state === 'locked' && 'Locked'}
-          {topic.state === 'new' && `${topic.total_questions} question${topic.total_questions === 1 ? '' : 's'}`}
-          {topic.state === 'learning' && `${topic.cards_seen}/${topic.total_questions} cards seen`}
-          {topic.state === 'review' && `${topic.cards_due} due`}
-          {topic.state === 'mastered' && (
-            <span className="flex items-center gap-1">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Mastered
-            </span>
-          )}
-        </p>
+        {subtitle && (
+          <p className={`text-xs mt-0.5 ${style.text}`}>
+            {subtitle}
+          </p>
+        )}
+        {topic.state === 'completed' && (
+          <p className={`text-xs mt-0.5 ${style.text} flex items-center gap-1`}>
+            Complete
+          </p>
+        )}
       </div>
 
       {/* Right badges */}
@@ -230,16 +206,16 @@ function TopicRow({
           </span>
         )}
 
-        {/* State-specific badge */}
-        {topic.state === 'review' && topic.cards_due > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">
-            {topic.cards_due}
+        {/* Progress indicator for in_progress */}
+        {topic.state === 'in_progress' && topic.items_total > 0 && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">
+            {Math.round((topic.items_completed / topic.items_total) * 100)}%
           </span>
         )}
 
         {/* Arrow for non-locked */}
         {!isLocked && (
-          <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-[#A39B90]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         )}
@@ -251,9 +227,8 @@ function TopicRow({
     return (
       <div className="relative">
         <div onClick={handleTap}>{content}</div>
-        {/* Connecting line */}
         {!isLast && (
-          <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-gray-200 dark:bg-gray-700" />
+          <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-[#E8E4DD]" />
         )}
       </div>
     );
@@ -261,12 +236,11 @@ function TopicRow({
 
   return (
     <div className="relative">
-      <Link href={topicHref(slug, topic)}>
+      <Link href={`/practice/${slug}?topic=${topic.id}`}>
         {content}
       </Link>
-      {/* Connecting line */}
       {!isLast && (
-        <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-gray-200 dark:bg-gray-700" />
+        <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-[#E8E4DD]" />
       )}
     </div>
   );
@@ -303,8 +277,8 @@ function CoursePathContent() {
     fetchPath();
   }, [slug, router]);
 
-  function showLockedToast(title: string) {
-    setToast(`Complete the previous topic first`);
+  function showLockedToast() {
+    setToast('Complete the previous topic first');
     setTimeout(() => setToast(null), 2500);
   }
 
@@ -313,10 +287,10 @@ function CoursePathContent() {
   if (error || !data) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400 mb-4">{error || 'Path not found'}</p>
+        <p className="text-[#6B635A] mb-4">{error || 'Path not found'}</p>
         <button
           onClick={() => router.push('/home')}
-          className="text-gray-900 dark:text-gray-100 font-medium text-sm"
+          className="text-[#2C2825] font-medium text-sm"
         >
           Back to home
         </button>
@@ -324,10 +298,9 @@ function CoursePathContent() {
     );
   }
 
-  const readinessPct = Math.round((data.course.readiness_score || 0) * 100);
-  const totalDue = data.modules
-    .flatMap(m => m.topics)
-    .reduce((s, t) => s + t.cards_due, 0);
+  const progressPct = data.progress.total > 0
+    ? Math.round((data.progress.completed / data.progress.total) * 100)
+    : 0;
 
   return (
     <div className="pb-28 space-y-5">
@@ -335,45 +308,42 @@ function CoursePathContent() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push('/home')}
-          className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+          className="text-[#A39B90] hover:text-[#6B635A]"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex-1 truncate">
+        <h1 className="text-lg font-bold text-[#2C2825] flex-1 truncate">
           {data.course.title}
         </h1>
       </div>
 
-      {/* ── Readiness hero ─────────────────────────────────────── */}
-      <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-5">
+      {/* ── Progress hero ────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white border border-[#E8E4DD] p-5">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Readiness</h2>
-          <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">{readinessPct}%</span>
+          <h2 className="text-sm font-semibold text-[#6B635A]">Progress</h2>
+          <span className="text-sm font-medium text-[#2C2825]">
+            {data.progress.completed} of {data.progress.total} topics completed
+          </span>
         </div>
-        <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+        <div className="w-full h-3 bg-[#EBE8E2] rounded-full overflow-hidden mb-3">
           <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-700"
-            style={{ width: `${readinessPct}%` }}
+            className="h-full bg-green-500 rounded-full transition-all duration-700"
+            style={{ width: `${progressPct}%` }}
           />
         </div>
-        {totalDue > 0 && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-            {totalDue} card{totalDue !== 1 ? 's' : ''} due for review
-          </p>
-        )}
 
         {/* Practice exam button */}
         {data.practice_exam && (
           <Link
             href={`/course/${slug}/assessment/${data.practice_exam.id}`}
-            className="mt-3 flex items-center justify-between w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+            className="mt-3 flex items-center justify-between w-full px-4 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm hover:bg-[#EBE8E2] transition-colors"
           >
-            <span className="font-medium text-gray-900 dark:text-gray-100">
+            <span className="font-medium text-[#2C2825]">
               {data.practice_exam.title}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-[#6B635A]">
               {data.practice_exam.best_score !== null
                 ? `Best: ${data.practice_exam.best_score}%`
                 : `${data.practice_exam.attempts_count} attempts`}
@@ -385,13 +355,13 @@ function CoursePathContent() {
         <div className="flex gap-3 mt-3">
           <Link
             href={`/practice/${slug}`}
-            className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 font-semibold py-3 rounded-xl text-center text-sm transition-colors"
+            className="flex-1 bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center text-sm transition-colors"
           >
             Quick Practice
           </Link>
           <Link
             href={`/course/${slug}/guidebook${data.modules[0]?.topics[0]?.id ? `?topic=${data.modules[0].topics[0].id}` : ''}`}
-            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm font-medium text-[#6B635A] hover:bg-[#EBE8E2] transition-colors"
           >
             Guidebook
           </Link>
@@ -404,11 +374,11 @@ function CoursePathContent() {
           {/* Module header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+              <h3 className="text-sm font-bold text-[#2C2825]">
                 {mod.title}
               </h3>
               {mod.weight_percent > 0 && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B635A]">
                   {mod.weight_percent}%
                 </span>
               )}
@@ -417,7 +387,7 @@ function CoursePathContent() {
             {mod.assessment_id && (
               <Link
                 href={`/course/${slug}/assessment/${mod.assessment_id}`}
-                className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                className="flex items-center gap-1 text-xs text-[#6B635A] hover:text-[#2C2825]"
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -455,14 +425,7 @@ function CoursePathContent() {
             <Link
               href={
                 data.primary_cta.topic_id
-                  ? (() => {
-                      if (data.primary_cta.type === 'review') return practiceUrl(slug, data.primary_cta.topic_id!, 'review')
-                      if (data.primary_cta.type === 'continue') return practiceUrl(slug, data.primary_cta.topic_id!, 'learn')
-                      // start_new: check has_read on the topic
-                      const topic = data.modules.flatMap(m => m.topics).find(t => t.id === data.primary_cta.topic_id)
-                      if (topic && !topic.has_read) return guidebookUrl(slug, data.primary_cta.topic_id!)
-                      return practiceUrl(slug, data.primary_cta.topic_id!, 'learn')
-                    })()
+                  ? `/practice/${slug}?topic=${data.primary_cta.topic_id}`
                   : `/practice/${slug}`
               }
               className={`block w-full py-3.5 rounded-xl text-center text-sm font-semibold shadow-lg transition-colors ${ctaColors[data.primary_cta.type]}`}
@@ -475,7 +438,7 @@ function CoursePathContent() {
 
       {/* ── Toast ──────────────────────────────────────────────── */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium shadow-lg animate-fade-up">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#2C2825] text-white text-sm font-medium shadow-lg animate-fade-up">
           {toast}
         </div>
       )}
@@ -491,7 +454,7 @@ export default function CoursePathPage() {
   return (
     <Suspense fallback={
       <div className="min-h-[100dvh] flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-gray-900 dark:border-gray-100 border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-2 border-[#2C2825] border-t-transparent rounded-full" />
       </div>
     }>
       <CoursePathContent />
