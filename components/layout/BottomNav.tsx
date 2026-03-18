@@ -14,7 +14,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 z-50 bg-[#FAFAF8] border-t border-[#E8E4DD] pb-safe">
+    <nav aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">
       <div className="max-w-lg mx-auto flex items-center justify-around h-16 px-2">
         {tabs.map((tab) => {
           const isActive = tab.href === '/learn'
@@ -28,12 +28,9 @@ export function BottomNav() {
               href={tab.href}
               aria-current={isActive ? 'page' : undefined}
               className={`relative flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-colors ${
-                isActive ? 'text-[#2C2825]' : 'text-[#A39B90] hover:text-[#6B635A]'
+                isActive ? 'text-gray-800' : 'text-gray-400 hover:text-gray-500'
               }`}
             >
-              {isActive && (
-                <div className="absolute -top-1 w-1.5 h-1.5 rounded-full bg-[#2C2825]" />
-              )}
               <tab.icon active={isActive} />
               <span className={`text-[10px] ${isActive ? 'font-semibold' : 'font-medium'}`}>{tab.label}</span>
             </Link>

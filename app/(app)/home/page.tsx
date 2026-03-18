@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 
 interface ActiveCourse {
@@ -27,6 +27,56 @@ interface ActiveCourse {
   lessons_completed?: number;
 }
 
+interface BrowseCourse {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  thumbnail_url: string | null;
+  provider_name: string | null;
+  price_cents: number | null;
+  tags?: string[];
+  stats: {
+    module_count: number;
+    topic_count: number;
+    question_count: number;
+  };
+  user_progress: {
+    status: string;
+    readiness_score: number;
+    sessions_completed: number;
+  } | null;
+}
+
+const CATEGORY_COLORS: Record<string, { bar: string; bg: string; badge: string; badgeText: string }> = {
+  cybersecurity:     { bar: '#3b82f6', bg: '#f8faff', badge: '#E6F1FB', badgeText: '#185FA5' },
+  certification:     { bar: '#3b82f6', bg: '#f8faff', badge: '#E6F1FB', badgeText: '#185FA5' },
+  general:           { bar: '#64748b', bg: '#f8f9fb', badge: '#F1F5F9', badgeText: '#64748b' },
+  general_knowledge: { bar: '#64748b', bg: '#f8f9fb', badge: '#F1F5F9', badgeText: '#64748b' },
+  academic:          { bar: '#0d9488', bg: '#f5faf8', badge: '#E6F1FB', badgeText: '#185FA5' },
+  mathematics:       { bar: '#0d9488', bg: '#f5faf8', badge: '#E1F5EE', badgeText: '#0F6E56' },
+  business:          { bar: '#64748b', bg: '#f8f9fb', badge: '#F1F5F9', badgeText: '#475569' },
+};
+
+function getCatStyle(cat: string) {
+  const key = (cat || '').toLowerCase().replace(/\s+/g, '_');
+  return CATEGORY_COLORS[key] || { bar: '#64748b', bg: '#fafafa', badge: '#F1F5F9', badgeText: '#64748b' };
+}
+
+const CATEGORY_DISPLAY: Record<string, string> = {
+  general_knowledge: 'General',
+  certification: 'Certification',
+  cybersecurity: 'Cybersecurity',
+};
+
+function formatCategoryName(cat: string): string {
+  const key = cat.toLowerCase().replace(/\s+/g, '_');
+  if (CATEGORY_DISPLAY[key]) return CATEGORY_DISPLAY[key];
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return 'Never';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -42,133 +92,136 @@ function timeAgo(dateStr: string | null): string {
 
 export default function HomePage() {
   const [activeCourses, setActiveCourses] = useState<ActiveCourse[]>([]);
+  const [allCourses, setAllCourses] = useState<BrowseCourse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchDashboard() {
+    async function fetchData() {
       try {
-        const res = await fetch('/api/dashboard');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        setActiveCourses(data.active_courses || []);
+        const [dashRes, browseRes] = await Promise.all([
+          fetch('/api/dashboard'),
+          fetch('/api/courses'),
+        ]);
+        if (dashRes.ok) {
+          const d = await dashRes.json();
+          setActiveCourses(d.active_courses || []);
+        }
+        if (browseRes.ok) {
+          const b = await browseRes.json();
+          setAllCourses(b.courses || []);
+        }
       } catch (err) {
-        console.error('Dashboard fetch error:', err);
+        console.error('Home fetch error:', err);
       }
       setLoading(false);
     }
-    fetchDashboard();
+    fetchData();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 bg-[#EBE8E2] rounded-xl w-48" />
-        <div className="h-48 bg-[#EBE8E2] rounded-2xl" />
-        <div className="h-20 bg-[#EBE8E2] rounded-2xl" />
-      </div>
-    );
-  }
-
-  // Sort: most recently studied first, then by due cards
-  const sorted = [...activeCourses].sort((a, b) => {
+  const sorted = useMemo(() => [...activeCourses].sort((a, b) => {
     if (a.last_session_at && b.last_session_at) {
       return new Date(b.last_session_at).getTime() - new Date(a.last_session_at).getTime();
     }
     if (a.last_session_at) return -1;
     if (b.last_session_at) return 1;
     return (b.sessions_completed || 0) - (a.sessions_completed || 0);
-  });
+  }), [activeCourses]);
 
   const primaryCourse = sorted[0] || null;
   const otherCourses = sorted.slice(1);
 
-  if (!primaryCourse) {
+  const enrolledIds = useMemo(() => new Set(activeCourses.map((c) => c.course_id)), [activeCourses]);
+  const discoveryCourses = useMemo(
+    () => allCourses.filter((c) => !enrolledIds.has(c.id)).slice(0, 6),
+    [allCourses, enrolledIds],
+  );
+
+  if (loading) {
     return (
-      <div className="text-center py-16 animate-fade-up">
-        <div className="w-20 h-20 rounded-full bg-[#F5F3EF] flex items-center justify-center mx-auto mb-5">
-          <svg className="w-10 h-10 text-[#6B635A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-          </svg>
-        </div>
-        <h1 className="text-xl font-bold text-[#2C2825] mb-2">Welcome to openED</h1>
-        <p className="text-sm text-[#6B635A] mb-6">Find your first course and start learning with spaced repetition.</p>
-        <Link
-          href="/browse"
-          className="inline-block bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold px-6 py-3 rounded-xl transition-colors"
-        >
-          Find your first course
-        </Link>
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-100 rounded-xl w-48" />
+        <div className="h-48 bg-gray-100 rounded-2xl" />
+        <div className="h-20 bg-gray-100 rounded-2xl" />
       </div>
     );
   }
 
-  const primaryProgressPct = primaryCourse.questions_total > 0
-    ? Math.round((primaryCourse.questions_seen / primaryCourse.questions_total) * 100)
+  const isReturning = activeCourses.length > 0;
+
+  if (!isReturning) {
+    return (
+      <div className="space-y-6">
+        {/* New user hero */}
+        <div className="rounded-2xl bg-gray-900 p-6 text-center animate-fade-up">
+          <h1 className="text-xl font-bold text-white mb-2">Start learning today</h1>
+          <p className="text-sm text-gray-400 mb-5">Bite-sized interactive courses from expert creators</p>
+          <Link
+            href="/browse"
+            className="inline-block bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl text-sm hover:bg-gray-100 transition-colors"
+          >
+            Explore courses
+          </Link>
+        </div>
+
+        {/* Discovery grid */}
+        {allCourses.length > 0 && (
+          <div className="animate-fade-up" style={{ animationDelay: '100ms' }}>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">NEW ON OPENED</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {allCourses.slice(0, 6).map((course) => (
+                <CourseCard key={course.id} course={course} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const primaryPct = primaryCourse!.questions_total > 0
+    ? Math.round((primaryCourse!.questions_seen / primaryCourse!.questions_total) * 100)
     : 0;
 
   return (
     <div className="space-y-5">
-      {/* Hero course card */}
-      <div className="rounded-2xl bg-white border border-[#E8E4DD] p-5 animate-fade-up">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-[#2C2825] text-lg leading-tight">{primaryCourse.course.title}</h2>
-            {primaryCourse.course.provider_name && (
-              <p className="text-xs text-[#A39B90] mt-0.5">by {primaryCourse.course.provider_name}</p>
-            )}
-          </div>
+      {/* Hero course */}
+      <div className="rounded-2xl bg-gray-900 p-5 animate-fade-up">
+        <p className="text-xs text-gray-400 font-medium mb-1">Continue learning</p>
+        <h2 className="font-bold text-white text-lg leading-tight mb-1">{primaryCourse!.course.title}</h2>
+        <p className="text-sm text-gray-400 mb-3">{primaryPct}% complete</p>
+        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-4">
+          <div
+            className="h-full bg-blue-500 rounded-full transition-all duration-700"
+            style={{ width: `${primaryPct}%` }}
+          />
         </div>
-
-        {/* Progress bar */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-semibold text-[#2C2825]">{primaryProgressPct}% complete</span>
-            <span className="text-xs text-[#A39B90]">{primaryCourse.questions_seen}/{primaryCourse.questions_total} questions</span>
-          </div>
-          <div className="w-full h-2.5 bg-[#EBE8E2] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-700 progress-shine"
-              style={{ width: `${primaryProgressPct}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Continue button */}
         <Link
-          href={`/practice/${primaryCourse.course.slug}`}
-          className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3.5 rounded-xl text-center transition-colors text-sm"
+          href={`/course/${primaryCourse!.course.slug}/path`}
+          className="block w-full bg-white text-gray-900 font-semibold py-3 rounded-xl text-center text-sm hover:bg-gray-100 transition-colors"
         >
-          Continue Studying
+          Continue learning
         </Link>
-
-        {/* Last studied */}
-        <div className="flex items-center justify-between mt-3">
-          <p className="text-xs text-[#A39B90]">Last studied: {timeAgo(primaryCourse.last_session_at)}</p>
-          <Link href={`/course/${primaryCourse.course.slug}/path`} className="text-xs text-[#2C2825] font-medium hover:text-[#1A1816]">
-            View path →
-          </Link>
-        </div>
       </div>
 
-      {/* Other courses */}
+      {/* Your Courses (horizontal scroll) */}
       {otherCourses.length > 0 && (
-        <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
-          <h3 className="text-sm font-semibold text-[#2C2825] mb-3">Other Courses</h3>
-          <div className="scroll-snap-x flex gap-3 -mx-4 px-4">
+        <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">YOUR COURSES</h3>
+          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
             {otherCourses.map((uc) => {
               const pct = uc.questions_total > 0 ? Math.round((uc.questions_seen / uc.questions_total) * 100) : 0;
               return (
                 <Link
                   key={uc.id}
                   href={`/course/${uc.course.slug}/path`}
-                  className="flex-shrink-0 w-44 rounded-xl bg-white border border-[#E8E4DD] p-3 hover:border-[#D4CFC7] transition-all"
+                  className="flex-shrink-0 w-40 rounded-xl bg-gray-50 p-3 hover:bg-gray-100 transition-all"
                 >
-                  <h4 className="font-semibold text-[#2C2825] text-sm mb-2 line-clamp-2">{uc.course.title}</h4>
-                  <div className="w-full h-1.5 bg-[#EBE8E2] rounded-full overflow-hidden mb-1.5">
+                  <h4 className="font-semibold text-gray-900 text-sm mb-2 line-clamp-2">{uc.course.title}</h4>
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-1.5">
                     <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
                   </div>
-                  <p className="text-xs text-[#6B635A]">{pct}% complete</p>
-                  <p className="text-[10px] text-[#A39B90] mt-1">
+                  <p className="text-xs text-gray-500">{pct}% complete</p>
+                  <p className="text-[10px] text-gray-400 mt-1">
                     {uc.questions_seen === 0 ? 'Not started' : timeAgo(uc.last_session_at)}
                   </p>
                 </Link>
@@ -178,27 +231,84 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Quick actions */}
-      <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '180ms' }}>
-        <Link
-          href="/browse"
-          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm font-medium text-[#2C2825] hover:bg-[#EBE8E2] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          Browse Courses
-        </Link>
-        <Link
-          href="/profile"
-          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm font-medium text-[#2C2825] hover:bg-[#EBE8E2] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" />
-          </svg>
-          My Stats
-        </Link>
-      </div>
+      {/* Recommended for you (2-col grid matching mobile) */}
+      {discoveryCourses.length > 0 && (
+        <div className="animate-fade-up" style={{ animationDelay: '160ms' }}>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">RECOMMENDED FOR YOU</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {discoveryCourses.map((course) => (
+              <CourseCard key={course.id} course={course} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* Course card matching mobile DiscoveryCourseCard style */
+function CourseCard({ course }: { course: BrowseCourse }) {
+  const catStyle = getCatStyle(course.category);
+  const isFree = !course.price_cents || course.price_cents === 0;
+
+  return (
+    <Link
+      href={`/course/${course.slug}`}
+      className="rounded-[10px] overflow-hidden border border-gray-200/60 hover:border-gray-300 transition-all"
+      style={{ backgroundColor: catStyle.bg }}
+    >
+      {/* Thin color bar */}
+      <div className="h-1 w-full" style={{ backgroundColor: catStyle.bar }} />
+
+      {/* Body */}
+      <div className="p-3">
+        {/* Title row with price */}
+        <div className="flex justify-between items-start gap-1.5 mb-0.5">
+          <h3 className="text-[13px] font-bold text-gray-900 leading-tight line-clamp-2 flex-1">
+            {course.title}
+          </h3>
+          <span
+            className={`text-[9px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0 mt-0.5 ${
+              isFree ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {isFree ? 'Free' : `$${(course.price_cents! / 100).toFixed(2)}`}
+          </span>
+        </div>
+
+        {course.provider_name && (
+          <p className="text-[10px] text-gray-400 mt-0.5">by {course.provider_name}</p>
+        )}
+
+        {course.description && (
+          <p className="text-[10px] text-gray-300 mt-0.5 line-clamp-1">{course.description}</p>
+        )}
+
+        {/* Spacer */}
+        <div className="min-h-[12px]" />
+
+        {/* Meta row */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {course.stats.topic_count > 0 && (
+            <span className="text-[9px] text-gray-400">
+              {course.stats.topic_count} {course.stats.topic_count === 1 ? 'lesson' : 'lessons'}
+            </span>
+          )}
+          {course.category && (
+            <span
+              className="text-[8px] font-medium px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: catStyle.badge, color: catStyle.badgeText }}
+            >
+              {formatCategoryName(course.category)}
+            </span>
+          )}
+          {(course.tags || []).slice(0, 2).map((tag) => (
+            <span key={tag} className="text-[8px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Link>
   );
 }
