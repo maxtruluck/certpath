@@ -6,7 +6,7 @@ import { useAppStore, type SessionReviewData } from '@/lib/store';
 
 interface Mistake {
   question_id: string;
-  topic_title: string;
+  module_title: string;
   question_text: string;
   question_type: string;
   options: { id: string; text: string }[];
@@ -122,11 +122,11 @@ export default function ReviewMistakesPage() {
                 className="rounded-2xl border border-gray-200 p-4 space-y-3 animate-fade-up"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
-                {/* Topic + incorrect badge */}
+                {/* Module + incorrect badge */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {m.topic_title && (
+                  {m.module_title && (
                     <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
-                      {m.topic_title}
+                      {m.module_title}
                     </span>
                   )}
                   <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">

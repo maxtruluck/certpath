@@ -18,15 +18,13 @@ interface ActiveCourse {
   };
   status: string;
   readiness_score: number;
-  current_topic_id: string | null;
-  current_topic_title: string | null;
   questions_seen: number;
   questions_total: number;
-  topics_total: number;
+  lessons_total: number;
   sessions_completed: number;
   last_session_at: string | null;
   enrolled_at: string;
-  due_cards: number;
+  lessons_completed?: number;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -78,15 +76,11 @@ export default function HomePage() {
     }
     if (a.last_session_at) return -1;
     if (b.last_session_at) return 1;
-    return b.due_cards - a.due_cards;
+    return (b.sessions_completed || 0) - (a.sessions_completed || 0);
   });
 
   const primaryCourse = sorted[0] || null;
   const otherCourses = sorted.slice(1);
-
-  // Daily goal placeholder (3 sessions target)
-  const todaySessions = primaryCourse ? Math.min(primaryCourse.sessions_completed, 3) : 0;
-  const dailyTarget = 3;
 
   if (!primaryCourse) {
     return (
@@ -108,7 +102,9 @@ export default function HomePage() {
     );
   }
 
-  const primaryReadiness = Math.round((primaryCourse.readiness_score || 0) * 100);
+  const primaryProgressPct = primaryCourse.questions_total > 0
+    ? Math.round((primaryCourse.questions_seen / primaryCourse.questions_total) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -123,32 +119,18 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Readiness progress bar */}
-        <div className="mb-3">
+        {/* Progress bar */}
+        <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-semibold text-[#2C2825]">{primaryReadiness}% ready</span>
-            <span className="text-xs text-[#A39B90]">{primaryCourse.questions_seen}/{primaryCourse.questions_total} seen</span>
+            <span className="text-sm font-semibold text-[#2C2825]">{primaryProgressPct}% complete</span>
+            <span className="text-xs text-[#A39B90]">{primaryCourse.questions_seen}/{primaryCourse.questions_total} questions</span>
           </div>
           <div className="w-full h-2.5 bg-[#EBE8E2] rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full transition-all duration-700 progress-shine"
-              style={{ width: `${primaryReadiness}%` }}
+              style={{ width: `${primaryProgressPct}%` }}
             />
           </div>
-        </div>
-
-        {/* Due cards & current topic */}
-        <div className="space-y-1 mb-4">
-          {primaryCourse.due_cards > 0 && (
-            <p className="text-sm text-amber-600 font-medium">
-              {primaryCourse.due_cards} question{primaryCourse.due_cards !== 1 ? 's' : ''} due for review
-            </p>
-          )}
-          {primaryCourse.current_topic_title && (
-            <p className="text-sm text-[#6B635A]">
-              Current: {primaryCourse.current_topic_title}
-            </p>
-          )}
         </div>
 
         {/* Continue button */}
@@ -168,32 +150,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Daily goal */}
-      <div className="rounded-2xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 animate-fade-up" style={{ animationDelay: '60ms' }}>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-[#2C2825]">Today&apos;s Goal</h3>
-          <span className="text-xs text-[#6B635A]">{Math.min(todaySessions, dailyTarget)}/{dailyTarget} sessions</span>
-        </div>
-        <div className="w-full h-2 bg-[#D4CFC7] rounded-full overflow-hidden mb-2">
-          <div
-            className="h-full bg-blue-500 rounded-full transition-all"
-            style={{ width: `${Math.min((todaySessions / dailyTarget) * 100, 100)}%` }}
-          />
-        </div>
-        <p className="text-xs text-[#6B635A]">
-          {todaySessions >= dailyTarget
-            ? 'Daily goal complete! Keep going?'
-            : `Complete ${dailyTarget - todaySessions} more session${dailyTarget - todaySessions !== 1 ? 's' : ''} to maintain your streak!`}
-        </p>
-      </div>
-
       {/* Other courses */}
       {otherCourses.length > 0 && (
         <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
           <h3 className="text-sm font-semibold text-[#2C2825] mb-3">Other Courses</h3>
           <div className="scroll-snap-x flex gap-3 -mx-4 px-4">
             {otherCourses.map((uc) => {
-              const readiness = Math.round((uc.readiness_score || 0) * 100);
+              const pct = uc.questions_total > 0 ? Math.round((uc.questions_seen / uc.questions_total) * 100) : 0;
               return (
                 <Link
                   key={uc.id}
@@ -202,11 +165,11 @@ export default function HomePage() {
                 >
                   <h4 className="font-semibold text-[#2C2825] text-sm mb-2 line-clamp-2">{uc.course.title}</h4>
                   <div className="w-full h-1.5 bg-[#EBE8E2] rounded-full overflow-hidden mb-1.5">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${readiness}%` }} />
+                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
                   </div>
-                  <p className="text-xs text-[#6B635A]">{readiness}% ready</p>
+                  <p className="text-xs text-[#6B635A]">{pct}% complete</p>
                   <p className="text-[10px] text-[#A39B90] mt-1">
-                    {uc.due_cards > 0 ? `${uc.due_cards} due` : uc.questions_seen === 0 ? 'Not started' : timeAgo(uc.last_session_at)}
+                    {uc.questions_seen === 0 ? 'Not started' : timeAgo(uc.last_session_at)}
                   </p>
                 </Link>
               );

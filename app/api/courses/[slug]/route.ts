@@ -27,15 +27,15 @@ export async function GET(
     }
 
     // Fetch stats
-    const [modulesRes, topicsRes, questionsRes] = await Promise.all([
+    const [modulesRes, lessonsRes, questionsRes] = await Promise.all([
       supabase.from('modules').select('id').eq('course_id', course.id),
-      supabase.from('topics').select('id').eq('course_id', course.id),
+      supabase.from('lessons').select('id').eq('course_id', course.id).eq('is_active', true),
       supabase.from('questions').select('id').eq('course_id', course.id).eq('is_active', true),
     ])
 
     const stats = {
       module_count: modulesRes.data?.length || 0,
-      topic_count: topicsRes.data?.length || 0,
+      lesson_count: lessonsRes.data?.length || 0,
       question_count: questionsRes.data?.length || 0,
     }
 

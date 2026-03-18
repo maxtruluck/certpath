@@ -11,7 +11,7 @@ interface CourseItem {
   category: string
   difficulty: string
   module_count: number
-  topic_count: number
+  lesson_count: number
   question_count: number
   student_count: number
   created_at: string
@@ -21,13 +21,11 @@ interface CourseItem {
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-600',
-    in_review: 'bg-amber-50 text-amber-700',
     published: 'bg-green-50 text-green-700',
     archived: 'bg-red-50 text-red-600',
   }
   const labels: Record<string, string> = {
     draft: 'Draft',
-    in_review: 'In Review',
     published: 'Published',
     archived: 'Archived',
   }
@@ -94,7 +92,6 @@ export default function MyCoursesPage() {
           { key: 'all', label: 'All' },
           { key: 'published', label: 'Published' },
           { key: 'draft', label: 'Drafts' },
-          { key: 'in_review', label: 'In Review' },
         ].map(f => (
           <button
             key={f.key}
@@ -131,7 +128,7 @@ export default function MyCoursesPage() {
                   <div className="flex items-center gap-4 text-xs text-gray-400">
                     <span>{course.question_count} questions</span>
                     <span>{course.module_count} modules</span>
-                    <span>{course.topic_count} topics</span>
+                    <span>{course.lesson_count} lessons</span>
                     {course.student_count > 0 && <span>{course.student_count.toLocaleString()} students</span>}
                     <span className="text-gray-300">|</span>
                     <span>{course.category}</span>

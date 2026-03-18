@@ -101,7 +101,7 @@ const TYPE_LABELS: Record<string, string> = {
 // ─── Topic Completeness Helpers ──────────────────────────────────
 type TopicStatus = 'empty' | 'needs_content' | 'needs_questions' | 'partial' | 'complete'
 
-function getTopicStatus(topic: Topic, guidance?: { questionsPerTopic: { recommended: number }; contentBlocksPerTopic: { recommended: number } }): TopicStatus {
+function getTopicStatus(topic: Topic, guidance?: { questionsPerLesson: { recommended: number }; contentBlocksPerLesson: { recommended: number } }): TopicStatus {
   const lessonCount = topic.lesson_count || 0
   const qCount = topic.question_count
 
@@ -109,7 +109,7 @@ function getTopicStatus(topic: Topic, guidance?: { questionsPerTopic: { recommen
   if (qCount > 0 && lessonCount === 0) return 'needs_content'
   if (lessonCount > 0 && qCount === 0) return 'needs_questions'
 
-  const qTarget = guidance?.questionsPerTopic.recommended || 10
+  const qTarget = guidance?.questionsPerLesson.recommended || 10
   if (qCount >= qTarget && lessonCount >= 1) return 'complete'
   return 'partial'
 }
@@ -147,7 +147,7 @@ function TopicCompletenessBar({
   courseFormat?: CourseFormat
 }) {
   const guidance = courseFormat ? COURSE_FORMATS[courseFormat]?.guidance : null
-  const qTarget = guidance?.questionsPerTopic.recommended || 10
+  const qTarget = guidance?.questionsPerLesson.recommended || 10
   const lessonCount = topic.lesson_count || 0
 
   // Bloom's summary

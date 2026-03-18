@@ -23,7 +23,7 @@ interface CourseDetail {
   } | null;
   stats: {
     module_count: number;
-    topic_count: number;
+    lesson_count: number;
     question_count: number;
   };
   cert_info: {
@@ -57,6 +57,7 @@ export default function CourseOverviewPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     async function fetchCourse() {
@@ -192,23 +193,23 @@ export default function CourseOverviewPage() {
         </div>
       </div>
 
-      {/* Stats row 2: Pass score, Exam time, Topics */}
+      {/* Stats row 2: Pass score, Exam time, Lessons */}
       <div className="grid grid-cols-3 gap-3 animate-fade-up">
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
           <p className="text-lg font-bold text-[#2C2825] font-mono">
-            {course.cert_info.passing_score || '—'}
+            {course.cert_info.passing_score || '---'}
           </p>
           <p className="text-[10px] text-[#6B635A] font-medium">Pass score</p>
         </div>
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
           <p className="text-lg font-bold text-[#2C2825] font-mono">
-            {course.cert_info.exam_duration_minutes ? `${course.cert_info.exam_duration_minutes}m` : '—'}
+            {course.cert_info.exam_duration_minutes ? `${course.cert_info.exam_duration_minutes}m` : '---'}
           </p>
           <p className="text-[10px] text-[#6B635A] font-medium">Exam time</p>
         </div>
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.topic_count}</p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Topics</p>
+          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.lesson_count}</p>
+          <p className="text-[10px] text-[#6B635A] font-medium">Lessons</p>
         </div>
       </div>
 
@@ -216,7 +217,7 @@ export default function CourseOverviewPage() {
       <div className="animate-fade-up">
         <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
         <p className="text-sm text-[#6B635A]">
-          {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.topic_count} topic{course.stats.topic_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
+          {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.lesson_count} lesson{course.stats.lesson_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
         </p>
       </div>
 
@@ -250,17 +251,86 @@ export default function CourseOverviewPage() {
         >
           Continue studying
         </Link>
+      ) : course.price_cents > 0 ? (
+        <div className="space-y-2">
+          <button
+            onClick={async () => {
+              if (actionLoading) return;
+              setActionLoading(true);
+              try {
+                const res = await fetch('/api/checkout', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ course_id: course.id }),
+                });
+                const data = await res.json();
+                if (data.url) {
+                  window.location.href = data.url;
+                } else {
+                  setError(data.error || 'Checkout failed');
+                  setActionLoading(false);
+                }
+              } catch {
+                setError('Something went wrong');
+                setActionLoading(false);
+              }
+            }}
+            disabled={actionLoading}
+            className="w-full bg-[#2C2825] hover:bg-[#1A1816] disabled:opacity-50 text-[#F5F3EF] font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {actionLoading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Redirecting...
+              </>
+            ) : (
+              `Buy Course — ${priceFormatted}`
+            )}
+          </button>
+          <p className="text-xs text-[#A39B90] text-center">One-time payment, lifetime access</p>
+        </div>
       ) : (
         <div className="space-y-2">
-          <Link
-            href={`/course/${course.slug}/enroll`}
-            className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
+          <button
+            onClick={async () => {
+              if (actionLoading) return;
+              setActionLoading(true);
+              try {
+                const res = await fetch(`/api/courses/${course.slug}/enroll`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                });
+                if (res.ok || res.status === 409) {
+                  router.push(`/course/${course.slug}/path`);
+                } else {
+                  const data = await res.json();
+                  setError(data.error || 'Enrollment failed');
+                  setActionLoading(false);
+                }
+              } catch {
+                setError('Something went wrong');
+                setActionLoading(false);
+              }
+            }}
+            disabled={actionLoading}
+            className="w-full bg-[#2C2825] hover:bg-[#1A1816] disabled:opacity-50 text-[#F5F3EF] font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
           >
-            Enroll in this course
-          </Link>
-          <p className="text-xs text-[#A39B90] text-center">
-            {priceFormatted === 'Free' ? 'Free' : `${priceFormatted} one-time or included with Pro`}
-          </p>
+            {actionLoading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Enrolling...
+              </>
+            ) : (
+              'Enroll Free'
+            )}
+          </button>
+          <p className="text-xs text-[#A39B90] text-center">Free - start studying immediately</p>
         </div>
       )}
     </div>

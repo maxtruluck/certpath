@@ -3,6 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { DEMO_MODE } from '@/lib/demo';
 
 export async function updateSession(request: NextRequest) {
+  // Bypass cookie-based auth logic for API routes with Bearer tokens (mobile app)
+  if (
+    request.nextUrl.pathname.startsWith('/api/') &&
+    request.headers.get('authorization')?.startsWith('Bearer ')
+  ) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

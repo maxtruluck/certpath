@@ -6,13 +6,16 @@ import Papa from 'papaparse'
  * Unified CSV import: structure + lesson content + questions in one file.
  *
  * Each row has a `row_type` column:
- *   - "structure"  → creates module/topic/lesson (deduped by title)
- *   - "content"    → sets the markdown body for a lesson
- *   - "question"   → adds a question linked to a lesson
+ *   - "structure"  -> creates module/lesson (deduped by title)
+ *   - "content"    -> sets the markdown body for a lesson
+ *   - "question"   -> adds a question linked to a lesson
  *
- * All rows use module_title + topic_title + lesson_title to locate the target.
+ * All rows use module_title + lesson_title to locate the target.
  * Structure rows are processed first (sorted to front) so content/question rows
  * can reference lessons created in the same file.
+ *
+ * topic_title column is accepted for backward compatibility but ignored
+ * (or used as lesson title fallback if lesson_title is empty).
  */
 export async function POST(
   request: NextRequest,
@@ -86,8 +89,10 @@ export async function POST(
 
     // In-memory maps for dedup
     const moduleMap = new Map<string, string>()   // lowercase title -> id
-    const topicMap = new Map<string, { id: string; moduleId: string; lessonOrder: number }>()
-    const lessonMap = new Map<string, string>()    // "topicId|lowercase title" -> id
+    const lessonMap = new Map<string, { id: string; nextOrder?: number }>()  // "moduleId|lowercase title" -> { id }
+
+    // Track lesson order per module
+    const lessonOrderByModule = new Map<string, number>()
 
     // Load existing structure so we can append rather than replace
     const { data: existingModules } = await supabase
@@ -100,42 +105,36 @@ export async function POST(
       moduleMap.set(m.title.toLowerCase(), m.id)
     }
 
-    const { data: existingTopics } = await supabase
-      .from('topics')
+    const { data: existingLessons } = await supabase
+      .from('lessons')
       .select('id, title, module_id, display_order')
       .eq('course_id', id)
 
-    for (const t of existingTopics || []) {
-      const key = `${t.module_id}::${t.title.toLowerCase()}`
-      topicMap.set(key, { id: t.id, moduleId: t.module_id, lessonOrder: 0 })
-    }
-
-    const { data: existingLessons } = await supabase
-      .from('lessons')
-      .select('id, title, topic_id, display_order')
-      .eq('course_id', id)
-
     for (const l of existingLessons || []) {
-      lessonMap.set(`${l.topic_id}|${l.title.toLowerCase()}`, l.id)
-      // Update lessonOrder for existing topics
-      for (const [, entry] of topicMap) {
-        if (entry.id === l.topic_id) {
-          entry.lessonOrder = Math.max(entry.lessonOrder, (l.display_order || 0) + 1)
-        }
-      }
+      lessonMap.set(`${l.module_id}|${l.title.toLowerCase()}`, { id: l.id })
+      // Track max lesson order per module
+      const currentMax = lessonOrderByModule.get(l.module_id) || 0
+      lessonOrderByModule.set(l.module_id, Math.max(currentMax, (l.display_order || 0) + 1))
     }
 
-    const stats = { modules: 0, topics: 0, lessons: 0, content: 0, questions: 0 }
+    const stats = { modules: 0, lessons: 0, content: 0, questions: 0 }
     const importErrors: { row: number; message: string }[] = []
 
-    // Helper: resolve or create module/topic/lesson from a row
-    const resolveStructure = async (row: TaggedRow): Promise<{ moduleId: string; topicId: string; lessonId: string | null } | null> => {
+    // Helper: resolve or create module/lesson from a row
+    const resolveStructure = async (row: TaggedRow): Promise<{ moduleId: string; lessonId: string | null } | null> => {
       const moduleTitle = str(row, 'module_title')
-      const topicTitle = str(row, 'topic_title')
-      const lessonTitle = str(row, 'lesson_title')
+      // lesson_title is primary; fall back to topic_title for backward compat
+      let lessonTitle = str(row, 'lesson_title')
+      if (!lessonTitle) {
+        const topicTitle = str(row, 'topic_title')
+        // Use topic_title as lesson title fallback only if no lesson_title
+        if (topicTitle) {
+          lessonTitle = topicTitle
+        }
+      }
 
-      if (!moduleTitle || !topicTitle) {
-        importErrors.push({ row: row._origRow, message: 'module_title and topic_title are required' })
+      if (!moduleTitle) {
+        importErrors.push({ row: row._origRow, message: 'module_title is required' })
         return null
       }
 
@@ -167,51 +166,23 @@ export async function POST(
 
       if (!moduleId) return null
 
-      // Get or create topic
-      const topicKey = `${moduleId}::${topicTitle.toLowerCase()}`
-      let topicEntry = topicMap.get(topicKey)
-
-      if (!topicEntry) {
-        const topicsInModule = [...topicMap.keys()].filter(k => k.startsWith(`${moduleId}::`)).length
-        const { data: newTopic, error: topicErr } = await supabase
-          .from('topics')
-          .insert({
-            module_id: moduleId,
-            course_id: id,
-            title: topicTitle,
-            description: str(row, 'topic_description') || null,
-            display_order: topicsInModule,
-          })
-          .select('id')
-          .single()
-
-        if (topicErr || !newTopic) {
-          importErrors.push({ row: row._origRow, message: `Failed to create topic: ${topicTitle}` })
-          return null
-        }
-        topicEntry = { id: newTopic.id, moduleId, lessonOrder: 0 }
-        topicMap.set(topicKey, topicEntry)
-        stats.topics++
-      }
-
-      if (!topicEntry) return null
-
-      // Get or create lesson
+      // Get or create lesson (directly under module, no topic)
       let lessonId: string | null = null
       if (lessonTitle) {
-        const lessonKey = `${topicEntry.id}|${lessonTitle.toLowerCase()}`
-        lessonId = lessonMap.get(lessonKey) || null
+        const lessonKey = `${moduleId}|${lessonTitle.toLowerCase()}`
+        const existing = lessonMap.get(lessonKey)
+        lessonId = existing?.id || null
 
         if (!lessonId) {
+          const currentOrder = lessonOrderByModule.get(moduleId) || 0
           const { data: newLesson, error: lessonErr } = await supabase
             .from('lessons')
             .insert({
-              topic_id: topicEntry.id,
-              course_id: id,
               module_id: moduleId,
+              course_id: id,
               title: lessonTitle,
               body: '',
-              display_order: topicEntry.lessonOrder,
+              display_order: currentOrder,
             })
             .select('id')
             .single()
@@ -221,13 +192,13 @@ export async function POST(
             return null
           }
           lessonId = newLesson.id
-          lessonMap.set(lessonKey, lessonId!)
-          topicEntry.lessonOrder++
+          lessonMap.set(lessonKey, { id: lessonId! })
+          lessonOrderByModule.set(moduleId, currentOrder + 1)
           stats.lessons++
         }
       }
 
-      return { moduleId, topicId: topicEntry.id, lessonId }
+      return { moduleId, lessonId }
     }
 
     // Process all rows
@@ -302,7 +273,7 @@ export async function POST(
         const tags = tagsStr ? tagsStr.split(';').map(t => t.trim()).filter(Boolean) : []
 
         const insertData: Record<string, unknown> = {
-          topic_id: resolved.topicId,
+          topic_id: null,
           module_id: resolved.moduleId,
           course_id: id,
           creator_id: creatorId,
@@ -370,7 +341,7 @@ export async function POST(
       importErrors.push({ row: row._origRow, message: `Unknown row_type: "${rowType}". Use structure, content, or question.` })
     }
 
-    const totalImported = stats.modules + stats.topics + stats.lessons + stats.content + stats.questions
+    const totalImported = stats.modules + stats.lessons + stats.content + stats.questions
 
     return NextResponse.json({
       imported: totalImported,

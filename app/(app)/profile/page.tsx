@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 interface ProfileData {
-  user: { display_name: string; avatar_url: string | null; total_xp: number };
+  user: { display_name: string; avatar_url: string | null };
   stats: {
     courses_enrolled: number;
     courses_completed: number;
@@ -14,44 +14,14 @@ interface ProfileData {
     accuracy_percent: number;
     total_sessions: number;
   };
-  xp: { total: number; level?: number };
-  streak: { current_streak: number; longest_streak: number };
-  achievements: any[];
 }
 
 interface DashboardCourse {
   course_id: string;
   course: { title: string; slug: string };
-  readiness_score: number;
   questions_seen: number;
   questions_total: number;
   status: string;
-}
-
-function ActivityGrid() {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  // Placeholder — would need real data from review_log
-  const today = new Date().getDay();
-  const active = days.map((_, i) => i < today || (i === today - 1));
-
-  return (
-    <div className="flex items-center justify-between gap-1">
-      {days.map((day, i) => (
-        <div key={day} className="flex flex-col items-center gap-1">
-          <span className="text-[10px] text-[#A39B90]">{day}</span>
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-            active[i] ? 'bg-green-100' : 'bg-[#EBE8E2]'
-          }`}>
-            {active[i] ? (
-              <span className="text-green-600 text-xs">✓</span>
-            ) : (
-              <span className="text-[#D4CFC7] text-xs">·</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export default function ProfilePage() {
@@ -91,8 +61,6 @@ export default function ProfilePage() {
 
   const user = profile?.user;
   const stats = profile?.stats;
-  const streak = profile?.streak;
-  const xp = profile?.xp;
 
   const initials = user?.display_name
     ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -107,48 +75,42 @@ export default function ProfilePage() {
         </div>
         <div>
           <h1 className="text-lg font-bold text-[#2C2825]">{user?.display_name || 'Learner'}</h1>
-          <p className="text-xs text-[#6B635A]">Member since 2026</p>
+          <p className="text-xs text-[#6B635A]">Member since {new Date().getFullYear()}</p>
         </div>
       </div>
 
       {/* Stats cards */}
       <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '60ms' }}>
         <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-xl font-bold text-[#2C2825]">{streak?.current_streak || 0}</p>
-          <p className="text-[10px] text-[#6B635A] mt-0.5">streak days</p>
-        </div>
-        <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-xl font-bold text-[#2C2825]">{(xp?.total || 0).toLocaleString()}</p>
-          <p className="text-[10px] text-[#6B635A] mt-0.5">total XP</p>
-        </div>
-        <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
           <p className="text-xl font-bold text-[#2C2825]">{stats?.accuracy_percent || 0}%</p>
           <p className="text-[10px] text-[#6B635A] mt-0.5">accuracy</p>
         </div>
-      </div>
-
-      {/* This week */}
-      <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
-        <h2 className="text-sm font-bold text-[#2C2825] mb-3">This Week</h2>
-        <ActivityGrid />
+        <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-xl font-bold text-[#2C2825]">{stats?.total_sessions || 0}</p>
+          <p className="text-[10px] text-[#6B635A] mt-0.5">sessions</p>
+        </div>
+        <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
+          <p className="text-xl font-bold text-[#2C2825]">{(stats?.total_questions_seen || 0).toLocaleString()}</p>
+          <p className="text-[10px] text-[#6B635A] mt-0.5">questions</p>
+        </div>
       </div>
 
       {/* Courses */}
       {courses.length > 0 && (
-        <div className="animate-fade-up" style={{ animationDelay: '180ms' }}>
+        <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
           <h2 className="text-sm font-bold text-[#2C2825] mb-3">Courses</h2>
           <div className="space-y-2">
             {courses.map((c: any) => {
-              const readiness = Math.round((c.readiness_score || 0) * 100);
+              const pct = c.questions_total > 0 ? Math.round((c.questions_seen / c.questions_total) * 100) : 0;
               return (
                 <Link key={c.course_id} href={`/course/${c.course.slug}/path`} className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E8E4DD] hover:border-[#D4CFC7] transition-all">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#2C2825] truncate">{c.course.title}</p>
                     <div className="w-full h-1 bg-[#EBE8E2] rounded-full overflow-hidden mt-1.5">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${readiness}%` }} />
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
-                  <span className="text-xs text-[#6B635A] ml-3 flex-shrink-0">{readiness}%</span>
+                  <span className="text-xs text-[#6B635A] ml-3 flex-shrink-0">{pct}%</span>
                 </Link>
               );
             })}
@@ -157,7 +119,7 @@ export default function ProfilePage() {
       )}
 
       {/* Stats */}
-      <div className="animate-fade-up" style={{ animationDelay: '240ms' }}>
+      <div className="animate-fade-up" style={{ animationDelay: '180ms' }}>
         <h2 className="text-sm font-bold text-[#2C2825] mb-3">Stats</h2>
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] divide-y divide-[#E8E4DD]">
           <div className="flex items-center justify-between px-4 py-3">
@@ -172,22 +134,18 @@ export default function ProfilePage() {
             <span className="text-sm text-[#6B635A]">Sessions completed</span>
             <span className="text-sm font-bold text-[#2C2825] font-mono">{stats?.total_sessions || 0}</span>
           </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-sm text-[#6B635A]">Longest streak</span>
-            <span className="text-sm font-bold text-[#2C2825] font-mono">{streak?.longest_streak || 0} days</span>
-          </div>
         </div>
       </div>
 
       {/* Become a creator */}
-      <div className="animate-fade-up" style={{ animationDelay: '300ms' }}>
+      <div className="animate-fade-up" style={{ animationDelay: '240ms' }}>
         <Link href="/creator" className="block w-full py-3 rounded-xl bg-[#2C2825] text-[#F5F3EF] font-semibold text-sm text-center hover:bg-[#1A1816] transition-colors">
           Become a Creator
         </Link>
       </div>
 
       {/* Settings & sign out */}
-      <div className="flex items-center justify-between pt-4 border-t border-[#E8E4DD] animate-fade-up" style={{ animationDelay: '360ms' }}>
+      <div className="flex items-center justify-between pt-4 border-t border-[#E8E4DD] animate-fade-up" style={{ animationDelay: '300ms' }}>
         <button className="text-sm text-[#6B635A] hover:text-[#2C2825]">Settings</button>
         <button
           onClick={async () => {

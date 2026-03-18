@@ -12,21 +12,11 @@ interface CompleteData {
   readiness_before: number;
   readiness_after: number;
   readiness_delta: number;
-  topic_breakdown: { topic_id: string; topic_title: string; correct: number; total: number }[];
-  xp_earned?: number;
-  streak?: { current: number; longest: number };
-  achievements?: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    description: string;
-    icon: string;
-    xp_reward: number;
-  }>;
+  module_breakdown: { module_id: string; module_title: string; correct: number; total: number }[];
   sections_read?: number;
   concepts_learned?: number;
   questions_answered?: number;
-  topic_title?: string;
+  lesson_title?: string;
   is_lesson?: boolean;
 }
 
@@ -95,8 +85,6 @@ export default function SessionCompletePage() {
 
   const correctCount = data?.correct_count ?? 0;
   const totalCount = data?.total_count ?? 0;
-  const xpEarned = data?.xp_earned ?? 0;
-  const streakDays = data?.streak?.current ?? 0;
   const sectionsRead = data?.sections_read ?? 0;
   const conceptsLearned = data?.concepts_learned ?? 0;
   const isLesson = data?.is_lesson ?? false;
@@ -113,10 +101,10 @@ export default function SessionCompletePage() {
             </svg>
           </div>
           <h1 className="text-xl font-bold text-[#2C2825]">
-            {isLesson ? 'Topic Complete!' : 'Session Complete!'}
+            {isLesson ? 'Lesson Complete!' : 'Session Complete!'}
           </h1>
-          {data?.topic_title && (
-            <p className="text-sm text-[#6B635A] mt-1">{data.topic_title}</p>
+          {data?.lesson_title && (
+            <p className="text-sm text-[#6B635A] mt-1">{data.lesson_title}</p>
           )}
         </div>
 
@@ -128,28 +116,16 @@ export default function SessionCompletePage() {
         )}
 
         {/* Stats row */}
-        <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '200ms' }}>
-          <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-            <p className="text-xl font-bold text-[#2C2825]">
-              <AnimatedNumber value={`+${xpEarned}`} />
-            </p>
-            <p className="text-[10px] text-[#6B635A] mt-0.5">XP earned</p>
-          </div>
-          <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-            <p className="text-xl font-bold text-[#2C2825]">
-              <AnimatedNumber value={streakDays} />
-            </p>
-            <p className="text-[10px] text-[#6B635A] mt-0.5">streak days</p>
-          </div>
-          {totalCount > 0 && (
+        {totalCount > 0 && (
+          <div className="flex gap-3 animate-fade-up" style={{ animationDelay: '200ms' }}>
             <div className="flex-1 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
               <p className="text-xl font-bold text-[#2C2825]">
                 <AnimatedNumber value={`${Math.round((correctCount / totalCount) * 100)}%`} />
               </p>
               <p className="text-[10px] text-[#6B635A] mt-0.5">accuracy</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Lesson stats (sections read, concepts learned) */}
         {(sectionsRead > 0 || conceptsLearned > 0) && (
@@ -173,37 +149,21 @@ export default function SessionCompletePage() {
           </div>
         )}
 
-        {/* Achievements */}
-        {data?.achievements && data.achievements.length > 0 && (
-          <div className="space-y-2 animate-fade-up" style={{ animationDelay: '300ms' }}>
-            {data.achievements.map(a => (
-              <div key={a.id} className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                <span className="text-2xl">{a.icon}</span>
-                <div className="flex-1">
-                  <p className="font-semibold text-sm text-[#2C2825]">{a.title}</p>
-                  <p className="text-xs text-[#6B635A]">{a.description}</p>
-                </div>
-                {a.xp_reward > 0 && <span className="text-xs font-bold text-[#2C2825]">+{a.xp_reward} XP</span>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Topic breakdown */}
-        {data?.topic_breakdown && data.topic_breakdown.length > 0 && (
+        {/* Module breakdown */}
+        {data?.module_breakdown && data.module_breakdown.length > 0 && (
           <div className="space-y-2 animate-fade-up" style={{ animationDelay: '400ms' }}>
-            <h3 className="text-sm font-semibold text-[#2C2825]">Topic Breakdown</h3>
-            {data.topic_breakdown.map(topic => {
-              const pct = topic.total > 0 ? Math.round((topic.correct / topic.total) * 100) : 0;
+            <h3 className="text-sm font-semibold text-[#2C2825]">Module Breakdown</h3>
+            {data.module_breakdown.map(mod => {
+              const pct = mod.total > 0 ? Math.round((mod.correct / mod.total) * 100) : 0;
               const barColor = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
               return (
-                <div key={topic.topic_id} className="flex items-center gap-3">
-                  <span className="text-sm text-[#6B635A] flex-1 truncate">{topic.topic_title}</span>
+                <div key={mod.module_id} className="flex items-center gap-3">
+                  <span className="text-sm text-[#6B635A] flex-1 truncate">{mod.module_title}</span>
                   <div className="w-20 h-1.5 bg-[#EBE8E2] rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                   </div>
                   <span className={`text-xs font-mono font-medium w-12 text-right ${pct >= 80 ? 'text-green-600' : pct >= 60 ? 'text-amber-600' : 'text-red-600'}`}>
-                    {topic.correct}/{topic.total}
+                    {mod.correct}/{mod.total}
                   </span>
                 </div>
               );
@@ -217,7 +177,7 @@ export default function SessionCompletePage() {
             onClick={handleDone}
             className="block w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-bold text-sm text-center transition-colors"
           >
-            {isLesson ? 'Next Topic' : 'Back to Course'}
+            {isLesson ? 'Next Lesson' : 'Back to Course'}
           </button>
           {mistakeCount > 0 && (
             <Link

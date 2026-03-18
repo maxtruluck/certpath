@@ -28,8 +28,8 @@ interface ConceptCardEntry {
     content: string
     lesson_id: string
     lesson_title: string
-    topic_id: string
-    topic_title: string
+    module_id: string
+    module_title: string
   }
 }
 
@@ -37,7 +37,7 @@ interface QuestionCardEntry {
   card_type: 'question'
   question: Record<string, unknown> & {
     difficulty_label: DifficultyLabel
-    topic_title: string
+    module_title: string
     lesson_id: string | null
   }
 }
@@ -110,8 +110,8 @@ function splitLessonIntoSections(body: string): { title: string; content: string
 
 function buildConceptCards(
   lesson: any,
-  topicId: string,
-  topicTitle: string,
+  moduleId: string,
+  moduleTitle: string,
   maxCards: number = 5,
 ): ConceptCardEntry[] {
   const stored: any[] = lesson.concept_cards || []
@@ -125,8 +125,8 @@ function buildConceptCards(
         content: c.content || '',
         lesson_id: lesson.id,
         lesson_title: lesson.title,
-        topic_id: topicId,
-        topic_title: topicTitle,
+        module_id: moduleId,
+        module_title: moduleTitle,
       },
     }))
   }
@@ -153,8 +153,8 @@ function buildConceptCards(
         content,
         lesson_id: lesson.id,
         lesson_title: lesson.title,
-        topic_id: topicId,
-        topic_title: topicTitle,
+        module_id: moduleId,
+        module_title: moduleTitle,
       },
     })
   }
@@ -162,13 +162,13 @@ function buildConceptCards(
   return cards
 }
 
-function questionCard(q: any, topicTitle: string): QuestionCardEntry {
+function questionCard(q: any, moduleTitle: string): QuestionCardEntry {
   return {
     card_type: 'question',
     question: {
       ...q,
       difficulty_label: difficultyLabel(q.difficulty ?? 3, q.attempt_count, q.pass_rate),
-      topic_title: topicTitle,
+      module_title: moduleTitle,
       lesson_id: q.lesson_id ?? null,
     },
   }
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
     // Verify enrollment
     const { data: userCourse } = await supabase
       .from('user_courses')
-      .select('id, current_topic_id')
+      .select('id, current_topic_id, current_lesson_id')
       .eq('user_id', userId)
       .eq('course_id', courseId)
       .eq('status', 'active')
@@ -204,146 +204,129 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not enrolled in this course' }, { status: 403 })
     }
 
-    const topicIdParam = request.nextUrl.searchParams.get('topic_id')
+    const lessonIdParam = request.nextUrl.searchParams.get('lesson_id')
 
     // ══════════════════════════════════════════════════════════════
-    // TOPIC LESSON SESSION (primary flow)
+    // LESSON SESSION (primary flow)
     // ══════════════════════════════════════════════════════════════
-    if (topicIdParam) {
-      // Fetch topic title
-      const { data: topic } = await supabase
-        .from('topics')
-        .select('title')
-        .eq('id', topicIdParam)
+    if (lessonIdParam) {
+      // Fetch the lesson directly
+      const { data: lesson } = await supabase
+        .from('lessons')
+        .select('id, title, body, concept_cards, display_order, video_url, video_start_seconds, video_end_seconds, module_id')
+        .eq('id', lessonIdParam)
+        .eq('is_active', true)
         .single()
-      const topicTitle = topic?.title || ''
 
-      // Parallel: lessons, questions, progress
+      if (!lesson) {
+        return NextResponse.json({ error: 'Lesson not found' }, { status: 404 })
+      }
+
+      // Fetch the lesson's module for title
+      const { data: mod } = await supabase
+        .from('modules')
+        .select('id, title')
+        .eq('id', lesson.module_id)
+        .single()
+      const moduleTitle = mod?.title || ''
+      const moduleId = mod?.id || lesson.module_id
+
+      // Parallel: questions + progress
       const [
-        { data: lessons },
-        { data: topicQuestions },
+        { data: lessonQuestions },
         { data: existingProgress },
       ] = await Promise.all([
         supabase
-          .from('lessons')
-          .select('id, title, body, concept_cards, display_order, video_url, video_start_seconds, video_end_seconds')
-          .eq('topic_id', topicIdParam)
-          .eq('is_active', true)
-          .order('display_order', { ascending: true }),
-        supabase
           .from('questions')
           .select(QUESTION_FIELDS)
-          .eq('topic_id', topicIdParam)
+          .eq('lesson_id', lessonIdParam)
           .eq('course_id', courseId)
           .eq('is_active', true),
         supabase
-          .from('user_topic_progress')
+          .from('user_lesson_progress')
           .select('id, status, session_items_completed, session_items_total')
           .eq('user_id', userId)
-          .eq('topic_id', topicIdParam)
+          .eq('lesson_id', lessonIdParam)
           .maybeSingle(),
       ])
 
-      // Group questions by lesson
-      const questionsByLesson: Record<string, any[]> = {}
-      const unlinkedQuestions: any[] = []
-      for (const q of topicQuestions || []) {
-        if (q.lesson_id) {
-          if (!questionsByLesson[q.lesson_id]) questionsByLesson[q.lesson_id] = []
-          questionsByLesson[q.lesson_id].push(q)
-        } else {
-          unlinkedQuestions.push(q)
-        }
-      }
-
-      // Sort questions within each lesson by difficulty ASC
-      for (const lid of Object.keys(questionsByLesson)) {
-        questionsByLesson[lid].sort((a: any, b: any) => (a.difficulty ?? 3) - (b.difficulty ?? 3))
-      }
-      unlinkedQuestions.sort((a: any, b: any) => (a.difficulty ?? 3) - (b.difficulty ?? 3))
+      // Sort questions by difficulty ASC
+      const sortedQuestions = (lessonQuestions || []).sort(
+        (a: any, b: any) => (a.difficulty ?? 3) - (b.difficulty ?? 3),
+      )
 
       // Build ordered card stack
       const cards: CardEntry[] = []
+      const sections = splitLessonIntoSections(lesson.body || '')
+      const conceptCards = buildConceptCards(lesson, moduleId, moduleTitle, 3)
+      let qIdx = 0
+      let cIdx = 0
 
-      for (const lesson of lessons || []) {
-        const sections = splitLessonIntoSections(lesson.body || '')
-        const lessonQs = questionsByLesson[lesson.id] || []
-        const conceptCards = buildConceptCards(lesson, topicIdParam, topicTitle, 3)
-        let qIdx = 0
-        let cIdx = 0
+      if (sections.length > 0) {
+        // Distribute questions across sections
+        const qPerSection = sortedQuestions.length > 0
+          ? Math.max(1, Math.ceil(sortedQuestions.length / sections.length))
+          : 0
 
-        if (sections.length > 0) {
-          // Distribute questions across sections
-          const qPerSection = lessonQs.length > 0
-            ? Math.max(1, Math.ceil(lessonQs.length / sections.length))
-            : 0
+        for (let si = 0; si < sections.length; si++) {
+          const sec = sections[si]
+          // Add lesson_section card (first section carries the lesson video)
+          cards.push({
+            card_type: 'lesson_section',
+            section: {
+              title: sec.title,
+              content: sec.content,
+              lesson_id: lesson.id,
+              lesson_title: lesson.title,
+              video_url: si === 0 ? (lesson.video_url || null) : null,
+              video_start_seconds: si === 0 ? (lesson.video_start_seconds ?? null) : null,
+              video_end_seconds: si === 0 ? (lesson.video_end_seconds ?? null) : null,
+            },
+          })
 
-          for (let si = 0; si < sections.length; si++) {
-            const sec = sections[si]
-            // Add lesson_section card (first section carries the lesson video)
-            cards.push({
-              card_type: 'lesson_section',
-              section: {
-                title: sec.title,
-                content: sec.content,
-                lesson_id: lesson.id,
-                lesson_title: lesson.title,
-                video_url: si === 0 ? (lesson.video_url || null) : null,
-                video_start_seconds: si === 0 ? (lesson.video_start_seconds ?? null) : null,
-                video_end_seconds: si === 0 ? (lesson.video_end_seconds ?? null) : null,
-              },
-            })
-
-            // Add concept card if available for this section area
-            if (cIdx < conceptCards.length) {
-              cards.push(conceptCards[cIdx++])
-            }
-
-            // Add 1-2 questions for this section
-            const batchSize = Math.min(qPerSection, 2)
-            for (let qi = 0; qi < batchSize && qIdx < lessonQs.length; qi++) {
-              const stripped = stripAnswers(lessonQs[qIdx++])
-              cards.push(questionCard(stripped, topicTitle))
-            }
+          // Add concept card if available for this section area
+          if (cIdx < conceptCards.length) {
+            cards.push(conceptCards[cIdx++])
           }
 
-          // Remaining questions after all sections
-          while (qIdx < lessonQs.length) {
-            const stripped = stripAnswers(lessonQs[qIdx++])
-            cards.push(questionCard(stripped, topicTitle))
-          }
-        } else {
-          // No ## headings — concept cards first, then questions
-          for (const cc of conceptCards) {
-            cards.push(cc)
-          }
-          for (const q of lessonQs) {
-            const stripped = stripAnswers(q)
-            cards.push(questionCard(stripped, topicTitle))
+          // Add 1-2 questions for this section
+          const batchSize = Math.min(qPerSection, 2)
+          for (let qi = 0; qi < batchSize && qIdx < sortedQuestions.length; qi++) {
+            const stripped = stripAnswers(sortedQuestions[qIdx++])
+            cards.push(questionCard(stripped, moduleTitle))
           }
         }
-      }
 
-      // Add unlinked questions at the end
-      for (const q of unlinkedQuestions) {
-        const stripped = stripAnswers(q)
-        cards.push(questionCard(stripped, topicTitle))
+        // Remaining questions after all sections
+        while (qIdx < sortedQuestions.length) {
+          const stripped = stripAnswers(sortedQuestions[qIdx++])
+          cards.push(questionCard(stripped, moduleTitle))
+        }
+      } else {
+        // No ## headings -- concept cards first, then questions
+        for (const cc of conceptCards) {
+          cards.push(cc)
+        }
+        for (const q of sortedQuestions) {
+          const stripped = stripAnswers(q)
+          cards.push(questionCard(stripped, moduleTitle))
+        }
       }
 
       // If no cards at all, return error
       if (cards.length === 0) {
-        return NextResponse.json({ error: 'No content available for this topic' }, { status: 404 })
+        return NextResponse.json({ error: 'No content available for this lesson' }, { status: 404 })
       }
 
-      // Handle user_topic_progress
+      // Handle user_lesson_progress
       let itemsCompleted = 0
       const totalItems = cards.length
 
       if (!existingProgress) {
         // Create new progress row
-        await supabase.from('user_topic_progress').insert({
+        await supabase.from('user_lesson_progress').insert({
           user_id: userId,
-          topic_id: topicIdParam,
+          lesson_id: lessonIdParam,
           course_id: courseId,
           status: 'in_progress',
           session_items_completed: 0,
@@ -355,13 +338,13 @@ export async function GET(request: NextRequest) {
         itemsCompleted = existingProgress.session_items_completed || 0
         // Update total in case content changed
         await supabase
-          .from('user_topic_progress')
+          .from('user_lesson_progress')
           .update({ session_items_total: totalItems })
           .eq('id', existingProgress.id)
       } else if (existingProgress.status === 'completed') {
         // Redo mode: serve full stack, reset progress to in_progress
         await supabase
-          .from('user_topic_progress')
+          .from('user_lesson_progress')
           .update({
             status: 'in_progress',
             session_items_completed: 0,
@@ -381,8 +364,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         session_id: sessionId,
         course_id: courseId,
-        topic_id: topicIdParam,
-        topic_title: topicTitle,
+        lesson_id: lessonIdParam,
+        lesson_title: lesson.title,
         session_type: 'lesson',
         cards: resumedCards,
         total_items: totalItems,
@@ -392,7 +375,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // QUICK PRACTICE (no topic_id — random questions across course)
+    // QUICK PRACTICE (no lesson_id -- random questions across course)
     // ══════════════════════════════════════════════════════════════
     const questionCountParam = request.nextUrl.searchParams.get('question_count')
     const SESSION_SIZE = Math.min(Math.max(parseInt(questionCountParam || '10', 10) || 10, 5), 20)
@@ -411,16 +394,16 @@ export async function GET(request: NextRequest) {
     fisherYatesShuffle(allQuestions)
     const selectedQuestions = allQuestions.slice(0, SESSION_SIZE)
 
-    // Build topic title cache
-    const topicIds = [...new Set(selectedQuestions.map((q: any) => q.topic_id))]
-    const topicTitleCache: Record<string, string> = {}
-    if (topicIds.length > 0) {
-      const { data: topicRows } = await supabase
-        .from('topics')
+    // Build module title cache from module_id on questions
+    const moduleIds = [...new Set(selectedQuestions.map((q: any) => q.module_id).filter(Boolean))]
+    const moduleTitleCache: Record<string, string> = {}
+    if (moduleIds.length > 0) {
+      const { data: moduleRows } = await supabase
+        .from('modules')
         .select('id, title')
-        .in('id', topicIds)
-      for (const t of topicRows || []) {
-        topicTitleCache[t.id] = t.title
+        .in('id', moduleIds)
+      for (const m of moduleRows || []) {
+        moduleTitleCache[m.id] = m.title
       }
     }
 
@@ -429,8 +412,8 @@ export async function GET(request: NextRequest) {
 
     for (const q of selectedQuestions) {
       const stripped = stripAnswers(q)
-      const tTitle = topicTitleCache[q.topic_id] || ''
-      const card = questionCard(stripped, tTitle)
+      const mTitle = moduleTitleCache[q.module_id] || ''
+      const card = questionCard(stripped, mTitle)
       cards.push(card)
       questionsOnly.push(card.question)
     }

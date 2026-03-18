@@ -33,59 +33,53 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
-    // Get modules with topics and question counts
+    // Get modules
     const { data: modules } = await supabase
       .from('modules')
       .select('*')
       .eq('course_id', id)
       .order('display_order')
 
-    const { data: topics } = await supabase
-      .from('topics')
+    // Get lessons directly
+    const { data: lessons } = await supabase
+      .from('lessons')
       .select('*')
       .eq('course_id', id)
+      .eq('is_active', true)
       .order('display_order')
 
-    const [questionsRes, lessonsRes] = await Promise.all([
-      supabase
-        .from('questions')
-        .select('id, topic_id, module_id')
-        .eq('course_id', id)
-        .eq('is_active', true),
-      supabase
-        .from('lessons')
-        .select('id, topic_id')
-        .eq('course_id', id)
-        .eq('is_active', true),
-    ])
+    // Count questions per lesson
+    const { data: questions } = await supabase
+      .from('questions')
+      .select('id, lesson_id, module_id')
+      .eq('course_id', id)
+      .eq('is_active', true)
 
-    const questions = questionsRes.data || []
-    const lessons = lessonsRes.data || []
-
-    // Count lessons per topic
-    const lessonCountByTopic = new Map<string, number>()
-    for (const l of lessons) {
-      lessonCountByTopic.set(l.topic_id, (lessonCountByTopic.get(l.topic_id) || 0) + 1)
+    const questionsByLesson = new Map<string, number>()
+    for (const q of questions || []) {
+      if (q.lesson_id) {
+        questionsByLesson.set(q.lesson_id, (questionsByLesson.get(q.lesson_id) || 0) + 1)
+      }
     }
 
-    const modulesWithTopics = (modules || []).map((mod: any) => ({
+    const modulesWithLessons = (modules || []).map((mod: any) => ({
       ...mod,
-      topics: (topics || [])
-        .filter((t: any) => t.module_id === mod.id)
-        .map((t: any) => ({
-          ...t,
-          question_count: questions.filter((q: any) => q.topic_id === t.id).length,
-          lesson_count: lessonCountByTopic.get(t.id) || 0,
+      lessons: (lessons || [])
+        .filter((l: any) => l.module_id === mod.id)
+        .map((l: any) => ({
+          ...l,
+          question_count: questionsByLesson.get(l.id) || 0,
+          word_count: (l.body || '').split(/\s+/).filter(Boolean).length,
         })),
-      question_count: questions.filter((q: any) => q.module_id === mod.id).length,
+      question_count: (questions || []).filter((q: any) => q.module_id === mod.id).length,
     }))
 
     return NextResponse.json({
       ...course,
-      modules: modulesWithTopics,
+      modules: modulesWithLessons,
       stats: {
         module_count: (modules || []).length,
-        topic_count: (topics || []).length,
+        lesson_count: (lessons || []).length,
         question_count: (questions || []).length,
       },
     })

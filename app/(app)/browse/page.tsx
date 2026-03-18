@@ -20,7 +20,7 @@ interface Course {
   } | null;
   stats: {
     module_count: number;
-    topic_count: number;
+    lesson_count: number;
     question_count: number;
   };
   user_progress: {
@@ -191,10 +191,16 @@ function BrowseContent() {
               href={`/course/${course.slug}`}
               className="flex items-center gap-3 rounded-2xl bg-white border border-gray-200 p-4 hover:border-blue-300 transition-all"
             >
-              {/* Icon */}
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-blue-600">{getAbbreviation(course.title)}</span>
-              </div>
+              {/* Icon / Thumbnail */}
+              {course.thumbnail_url ? (
+                <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                  <img src={course.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-blue-600">{getAbbreviation(course.title)}</span>
+                </div>
+              )}
 
               {/* Info */}
               <div className="flex-1 min-w-0">
@@ -211,9 +217,13 @@ function BrowseContent() {
                       {course.difficulty}
                     </span>
                   )}
-                  {course.price_cents === 0 && (
+                  {!course.price_cents || course.price_cents === 0 ? (
                     <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
                       Free
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                      ${(course.price_cents / 100).toFixed(2)}
                     </span>
                   )}
                 </div>

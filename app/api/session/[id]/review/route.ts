@@ -14,7 +14,7 @@ export async function GET(
     // Fetch review logs for this session where user got it wrong
     const { data: reviews, error: reviewError } = await supabase
       .from('review_log')
-      .select('id, question_id, topic_id, is_correct, selected_option_ids, time_spent_ms, rating, reviewed_at')
+      .select('id, question_id, topic_id, module_id, is_correct, selected_option_ids, time_spent_ms, rating, reviewed_at')
       .eq('user_id', userId)
       .eq('session_id', sessionId)
       .eq('is_correct', false)
@@ -38,16 +38,16 @@ export async function GET(
 
     const questionMap = new Map((questions || []).map((q: any) => [q.id, q]))
 
-    // Get topic names
-    const topicIds = [...new Set(reviews.map((r: any) => r.topic_id))]
-    let topicNames: Record<string, string> = {}
-    if (topicIds.length > 0) {
-      const { data: topics } = await supabase
-        .from('topics')
+    // Get module names
+    const moduleIds = [...new Set(reviews.map((r: any) => r.module_id).filter(Boolean))]
+    let moduleNames: Record<string, string> = {}
+    if (moduleIds.length > 0) {
+      const { data: modules } = await supabase
+        .from('modules')
         .select('id, title')
-        .in('id', topicIds)
-      for (const t of topics || []) {
-        topicNames[t.id] = t.title
+        .in('id', moduleIds)
+      for (const m of modules || []) {
+        moduleNames[m.id] = m.title
       }
     }
 
@@ -56,8 +56,8 @@ export async function GET(
       return {
         review_id: r.id,
         question_id: r.question_id,
-        topic_id: r.topic_id,
-        topic_title: topicNames[r.topic_id] || 'Unknown',
+        module_id: r.module_id,
+        module_title: r.module_id ? (moduleNames[r.module_id] || 'Unknown') : 'Unknown',
         question_text: question?.question_text || '',
         question_type: question?.question_type || '',
         options: question?.options || [],

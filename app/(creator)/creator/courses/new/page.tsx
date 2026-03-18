@@ -4,10 +4,6 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StepCourseInfo, { type CourseFormData, INITIAL_FORM } from './components/StepCourseInfo'
 import StepBuildCourse from './components/StepBuildCourse'
-import StepReviewDashboard from './components/StepReviewDashboard'
-import StepSubmitted from './components/StepSubmitted'
-import StepFormatSelect from './components/StepFormatSelect'
-import { COURSE_FORMATS, type CourseFormat } from './lib/course-formats'
 
 // ─── Progress Bar ───────────────────────────────────────────────
 function StepHeader({ current, total, label }: { current: number; total: number; label: string }) {
@@ -29,19 +25,8 @@ function CreateCourseContent() {
   const [form, setForm] = useState<CourseFormData>(INITIAL_FORM)
   const [courseId, setCourseId] = useState<string | null>(editId)
   const [saving, setSaving] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitResult, setSubmitResult] = useState<{
-    status: string
-    warnings: string[]
-    stats: { question_count: number; module_count: number; topic_count: number }
-  } | null>(null)
 
-  // Course format state (client-side only)
-  const [courseFormat, setCourseFormat] = useState<CourseFormat | null>(
-    editId ? 'blank' : null
-  )
-
-  const stepLabels = ['Course Info', 'Build Course', 'Review & Submit', 'Submitted']
+  const stepLabels = ['Course Info', 'Build Course']
   const totalSteps = stepLabels.length
 
   // ─── Session persistence ─────────────────────────────────────
@@ -49,11 +34,8 @@ function CreateCourseContent() {
   const isInitialized = useRef(false)
 
   // Restore state from sessionStorage on mount
-  // Only restores Step 1 form data + format. Step 2+ depend on live DB data
-  // so we always start at the last safe step (1 if no courseId, else 2 max).
   useEffect(() => {
     if (editId) {
-      setCourseFormat('blank')
       isInitialized.current = true
       return
     }
@@ -62,10 +44,8 @@ function CreateCourseContent() {
       if (saved) {
         const parsed = JSON.parse(saved)
         if (parsed.form) setForm(prev => ({ ...prev, ...parsed.form }))
-        if (parsed.courseFormat) setCourseFormat(parsed.courseFormat)
         if (parsed.courseId) {
           setCourseId(parsed.courseId)
-          // Resume at saved step, but cap at step 2 since DB state may have changed
           if (parsed.step && parsed.step <= 2) setStep(parsed.step)
           else if (parsed.step > 2) setStep(2)
         }
@@ -84,10 +64,9 @@ function CreateCourseContent() {
         form: JSON.parse(formJson),
         step,
         courseId,
-        courseFormat,
       }))
     } catch { /* ignore */ }
-  }, [formJson, step, courseId, courseFormat, editId, storageKey])
+  }, [formJson, step, courseId, editId, storageKey])
 
   // Load existing course if editing
   useEffect(() => {
@@ -99,20 +78,15 @@ function CreateCourseContent() {
             setForm({
               title: d.title || '',
               description: d.description || '',
-              category: d.category || 'certification',
+              category: d.category || 'Cybersecurity',
               difficulty: d.difficulty || 'beginner',
-              expected_knowledge: d.expected_knowledge || '',
               is_free: d.is_free ?? true,
               price_cents: d.price_cents || 0,
-              provider_name: d.provider_name || '',
-              exam_fee_cents: d.exam_fee_cents || 0,
-              passing_score: d.passing_score || 0,
-              exam_duration_minutes: d.exam_duration_minutes || 0,
-              total_questions_on_exam: d.total_questions_on_exam || 0,
-              max_score: d.max_score || 0,
+              thumbnail_url: d.thumbnail_url || '',
+              tags: d.tags || [],
             })
             setCourseId(editId)
-            // If course has modules, jump to structure step
+            // If course has modules, jump to build step
             if (d.modules && d.modules.length > 0) {
               setStep(2)
             }
@@ -121,21 +95,6 @@ function CreateCourseContent() {
         .catch(() => {})
     }
   }, [editId])
-
-  const handleFormatSelect = (format: CourseFormat) => {
-    setCourseFormat(format)
-    // Apply format defaults to form
-    const config = COURSE_FORMATS[format]
-    setForm(prev => ({
-      ...prev,
-      category: config.defaults.category,
-      difficulty: config.defaults.difficulty,
-    }))
-  }
-
-  const handleChangeFormat = () => {
-    setCourseFormat(null)
-  }
 
   const updateForm = (updates: Partial<CourseFormData>) => {
     setForm(prev => ({ ...prev, ...updates }))
@@ -178,28 +137,22 @@ function CreateCourseContent() {
     if (id) setStep(2)
   }
 
-  const handleSubmitForReview = async () => {
+  const handlePublish = async () => {
     if (!courseId) return
-    setSubmitting(true)
     try {
-      const res = await fetch(`/api/creator/courses/${courseId}/submit`, { method: 'POST' })
+      const res = await fetch(`/api/creator/courses/${courseId}/publish`, { method: 'POST' })
       const data = await res.json()
-      if (data.error && !data.stats) {
-        // Submission failed with validation errors — stay on review
-        setSubmitting(false)
+      if (!res.ok) {
+        alert(data.error || 'Failed to publish')
         return
       }
-      setSubmitResult(data)
-      setStep(4)
+      // Clear wizard session data
+      sessionStorage.removeItem(storageKey)
+      // Redirect to My Courses
+      router.push('/creator/courses')
     } catch {
-      // handle error
+      alert('Failed to publish. Please try again.')
     }
-    setSubmitting(false)
-  }
-
-  // If no format selected yet and not editing, show format selector
-  if (!courseFormat) {
-    return <StepFormatSelect onSelect={handleFormatSelect} />
   }
 
   return (
@@ -213,29 +166,14 @@ function CreateCourseContent() {
           onContinue={handleContinueToStructure}
           onSaveDraft={() => saveDraft()}
           saving={saving}
-          courseFormat={courseFormat}
-          onChangeFormat={handleChangeFormat}
         />
       )}
       {step === 2 && courseId && (
         <StepBuildCourse
           courseId={courseId}
           onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
-          courseFormat={courseFormat}
+          onPublish={handlePublish}
         />
-      )}
-      {step === 3 && courseId && (
-        <StepReviewDashboard
-          courseId={courseId}
-          onBack={() => setStep(2)}
-          onSubmit={handleSubmitForReview}
-          submitting={submitting}
-          courseFormat={courseFormat}
-        />
-      )}
-      {step === 4 && submitResult && (
-        <StepSubmitted result={submitResult} />
       )}
     </div>
   )

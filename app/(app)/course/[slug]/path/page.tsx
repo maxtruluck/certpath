@@ -8,18 +8,17 @@ import Link from 'next/link';
 // Types
 // ---------------------------------------------------------------------------
 
-type TopicState = 'locked' | 'available' | 'in_progress' | 'completed'
+type LessonState = 'locked' | 'available' | 'in_progress' | 'completed'
 
-interface TopicData {
+interface LessonData {
   id: string;
   title: string;
   display_order: number;
-  state: TopicState;
-  lesson_count: number;
+  state: LessonState;
   question_count: number;
+  word_count: number;
   items_completed: number;
   items_total: number;
-  best_quiz_score: number | null;
 }
 
 interface ModuleData {
@@ -28,14 +27,14 @@ interface ModuleData {
   description: string | null;
   display_order: number;
   weight_percent: number;
-  topics: TopicData[];
+  lessons: LessonData[];
   best_test_score: number | null;
   assessment_id: string | null;
 }
 
 interface PrimaryCta {
   type: 'continue' | 'start' | 'caught_up';
-  topic_id: string | null;
+  lesson_id: string | null;
   label: string;
 }
 
@@ -58,7 +57,7 @@ interface PathResponse {
 // State styling
 // ---------------------------------------------------------------------------
 
-const stateStyles: Record<TopicState, {
+const stateStyles: Record<LessonState, {
   bg: string; border: string; text: string; badge: string; dot: string;
 }> = {
   locked: {
@@ -118,42 +117,44 @@ function LoadingSkeleton() {
   );
 }
 
-function TopicRow({
-  topic,
+function LessonRow({
+  lesson,
   moduleIndex,
-  topicIndex,
+  lessonIndex,
   isLast,
   slug,
   onLockedTap,
 }: {
-  topic: TopicData;
+  lesson: LessonData;
   moduleIndex: number;
-  topicIndex: number;
+  lessonIndex: number;
   isLast: boolean;
   slug: string;
   onLockedTap: (title: string) => void;
 }) {
-  const style = stateStyles[topic.state];
-  const number = `${moduleIndex + 1}.${topicIndex + 1}`;
-  const isLocked = topic.state === 'locked';
+  const style = stateStyles[lesson.state];
+  const number = `${moduleIndex + 1}.${lessonIndex + 1}`;
+  const isLocked = lesson.state === 'locked';
 
   function handleTap() {
     if (isLocked) {
-      onLockedTap(topic.title);
+      onLockedTap(lesson.title);
     }
   }
 
   const subtitle = (() => {
-    switch (topic.state) {
+    switch (lesson.state) {
       case 'locked':
         return 'Locked';
       case 'available':
-        return topic.question_count > 0
-          ? `${topic.question_count} question${topic.question_count === 1 ? '' : 's'}`
-          : 'Start';
+        return lesson.word_count > 0
+          ? `${lesson.word_count.toLocaleString()} words`
+          : lesson.question_count > 0
+            ? `${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'}`
+            : 'Start';
       case 'in_progress':
-        return topic.items_total > 0
-          ? `${topic.items_completed}/${topic.items_total} complete`
+        return lesson.items_total > 0
+          ? `${lesson.items_completed}/${lesson.items_total} complete`
           : 'In progress';
       case 'completed':
         return null; // Rendered as icon
@@ -166,9 +167,9 @@ function TopicRow({
     }`}>
       {/* Number circle */}
       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${style.dot} ${
-        topic.state === 'locked' ? 'text-white/70' : 'text-white'
+        lesson.state === 'locked' ? 'text-white/70' : 'text-white'
       }`}>
-        {topic.state === 'completed' ? (
+        {lesson.state === 'completed' ? (
           <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
@@ -180,14 +181,14 @@ function TopicRow({
         <p className={`text-sm font-semibold truncate ${
           isLocked ? 'text-[#A39B90]' : 'text-[#2C2825]'
         }`}>
-          {topic.title}
+          {lesson.title}
         </p>
         {subtitle && (
           <p className={`text-xs mt-0.5 ${style.text}`}>
             {subtitle}
           </p>
         )}
-        {topic.state === 'completed' && (
+        {lesson.state === 'completed' && (
           <p className={`text-xs mt-0.5 ${style.text} flex items-center gap-1`}>
             Complete
           </p>
@@ -196,20 +197,10 @@ function TopicRow({
 
       {/* Right badges */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Quiz score */}
-        {topic.best_quiz_score !== null && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${style.badge} flex items-center gap-1`}>
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-            </svg>
-            {topic.best_quiz_score}%
-          </span>
-        )}
-
         {/* Progress indicator for in_progress */}
-        {topic.state === 'in_progress' && topic.items_total > 0 && (
+        {lesson.state === 'in_progress' && lesson.items_total > 0 && (
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">
-            {Math.round((topic.items_completed / topic.items_total) * 100)}%
+            {Math.round((lesson.items_completed / lesson.items_total) * 100)}%
           </span>
         )}
 
@@ -236,7 +227,7 @@ function TopicRow({
 
   return (
     <div className="relative">
-      <Link href={`/practice/${slug}?topic=${topic.id}`}>
+      <Link href={`/practice/${slug}?lesson=${lesson.id}`}>
         {content}
       </Link>
       {!isLast && (
@@ -278,7 +269,7 @@ function CoursePathContent() {
   }, [slug, router]);
 
   function showLockedToast() {
-    setToast('Complete the previous topic first');
+    setToast('Complete the previous lesson first');
     setTimeout(() => setToast(null), 2500);
   }
 
@@ -304,7 +295,7 @@ function CoursePathContent() {
 
   return (
     <div className="pb-28 space-y-5">
-      {/* ── Header ─────────────────────────────────────────────── */}
+      {/* -- Header --------------------------------------------------- */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push('/home')}
@@ -319,12 +310,12 @@ function CoursePathContent() {
         </h1>
       </div>
 
-      {/* ── Progress hero ────────────────────────────────────────── */}
+      {/* -- Progress hero ---------------------------------------------- */}
       <div className="rounded-2xl bg-white border border-[#E8E4DD] p-5">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-[#6B635A]">Progress</h2>
           <span className="text-sm font-medium text-[#2C2825]">
-            {data.progress.completed} of {data.progress.total} topics completed
+            {data.progress.completed} of {data.progress.total} lessons completed
           </span>
         </div>
         <div className="w-full h-3 bg-[#EBE8E2] rounded-full overflow-hidden mb-3">
@@ -360,7 +351,7 @@ function CoursePathContent() {
             Quick Practice
           </Link>
           <Link
-            href={`/course/${slug}/guidebook${data.modules[0]?.topics[0]?.id ? `?topic=${data.modules[0].topics[0].id}` : ''}`}
+            href={`/course/${slug}/guidebook${data.modules[0]?.lessons[0]?.id ? `?lesson=${data.modules[0].lessons[0].id}` : ''}`}
             className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm font-medium text-[#6B635A] hover:bg-[#EBE8E2] transition-colors"
           >
             Guidebook
@@ -368,7 +359,7 @@ function CoursePathContent() {
         </div>
       </div>
 
-      {/* ── Modules + Topics ───────────────────────────────────── */}
+      {/* -- Modules + Lessons ----------------------------------------- */}
       {data.modules.map((mod, modIdx) => (
         <div key={mod.id} className="animate-fade-up" style={{ animationDelay: `${(modIdx + 1) * 60}ms` }}>
           {/* Module header */}
@@ -397,15 +388,15 @@ function CoursePathContent() {
             )}
           </div>
 
-          {/* Topic rows */}
+          {/* Lesson rows */}
           <div className="space-y-2">
-            {mod.topics.map((topic, topicIdx) => (
-              <TopicRow
-                key={topic.id}
-                topic={topic}
+            {mod.lessons.map((lesson, lessonIdx) => (
+              <LessonRow
+                key={lesson.id}
+                lesson={lesson}
                 moduleIndex={modIdx}
-                topicIndex={topicIdx}
-                isLast={topicIdx === mod.topics.length - 1}
+                lessonIndex={lessonIdx}
+                isLast={lessonIdx === mod.lessons.length - 1}
                 slug={slug}
                 onLockedTap={showLockedToast}
               />
@@ -414,7 +405,7 @@ function CoursePathContent() {
         </div>
       ))}
 
-      {/* ── Sticky CTA ─────────────────────────────────────────── */}
+      {/* -- Sticky CTA ------------------------------------------------ */}
       <div className="fixed bottom-20 left-0 right-0 px-4 pb-4 z-40">
         <div className="max-w-lg mx-auto">
           {data.primary_cta.type === 'caught_up' ? (
@@ -424,8 +415,8 @@ function CoursePathContent() {
           ) : (
             <Link
               href={
-                data.primary_cta.topic_id
-                  ? `/practice/${slug}?topic=${data.primary_cta.topic_id}`
+                data.primary_cta.lesson_id
+                  ? `/practice/${slug}?lesson=${data.primary_cta.lesson_id}`
                   : `/practice/${slug}`
               }
               className={`block w-full py-3.5 rounded-xl text-center text-sm font-semibold shadow-lg transition-colors ${ctaColors[data.primary_cta.type]}`}
@@ -436,7 +427,7 @@ function CoursePathContent() {
         </div>
       </div>
 
-      {/* ── Toast ──────────────────────────────────────────────── */}
+      {/* -- Toast ----------------------------------------------------- */}
       {toast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#2C2825] text-white text-sm font-medium shadow-lg animate-fade-up">
           {toast}

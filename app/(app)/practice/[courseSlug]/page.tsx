@@ -37,7 +37,7 @@ interface Question {
   explanation: string;
   difficulty: number;
   tags: string[];
-  topic_title?: string;
+  module_title?: string;
   matching_items?: { lefts: string[]; rights: string[] };
   difficulty_label?: 'easy' | 'medium' | 'challenging';
   lesson_id?: string | null;
@@ -47,7 +47,7 @@ interface AnswerResult {
   is_correct: boolean;
   correct_option_ids: string[];
   explanation: string;
-  xp_earned: number;
+
   option_explanation?: string | null;
   linked_lesson?: { title: string; body: string } | null;
   correct_order?: string[];
@@ -71,8 +71,8 @@ interface ConceptData {
   content: string;
   lesson_id: string;
   lesson_title: string;
-  topic_id: string;
-  topic_title: string;
+  module_id: string;
+  module_title: string;
 }
 
 type QueueItem =
@@ -126,8 +126,8 @@ function ConceptCard({ concept, onNext }: { concept: ConceptData; onNext: () => 
           <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
             Concept
           </span>
-          {concept.topic_title && (
-            <span className="text-xs text-[#6B635A]">{concept.topic_title}</span>
+          {concept.module_title && (
+            <span className="text-xs text-[#6B635A]">{concept.module_title}</span>
           )}
         </div>
         <div className="border-l-4 border-green-500 pl-4 mb-6">
@@ -179,7 +179,7 @@ function PracticeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const courseSlug = params.courseSlug as string;
-  const topicId = searchParams.get('topic');
+  const lessonId = searchParams.get('lesson');
 
   const { sessionId, questions: storeQuestions, currentIndex, questionStartTime, startSession, answerQuestion, nextQuestion, resetSession, saveSessionForReview } = useAppStore();
 
@@ -213,11 +213,11 @@ function PracticeContent() {
   const [conceptCount, setConceptCount] = useState(0);
 
   // Session metadata from API
-  const [topicTitle, setTopicTitle] = useState('');
+  const [lessonTitle, setLessonTitle] = useState('');
   const [totalItemsFromApi, setTotalItemsFromApi] = useState(0);
   const [itemsCompletedFromApi, setItemsCompletedFromApi] = useState(0);
   const [estimatedMinutes, setEstimatedMinutes] = useState(0);
-  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -245,19 +245,19 @@ function PracticeContent() {
       setCourseId(courseData.id);
 
       let url = `/api/session/generate?course_id=${courseData.id}`;
-      if (topicId) url += `&topic_id=${topicId}`;
-      if (!topicId) url += `&question_count=${questionCount}`;
+      if (lessonId) url += `&lesson_id=${lessonId}`;
+      if (!lessonId) url += `&question_count=${questionCount}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to generate session');
       const data = await res.json();
 
       // Store metadata
-      setTopicTitle(data.topic_title || '');
+      setLessonTitle(data.lesson_title || '');
       setTotalItemsFromApi(data.total_items || 0);
       setItemsCompletedFromApi(data.items_completed || 0);
       setEstimatedMinutes(data.estimated_minutes || 0);
-      setActiveTopicId(data.topic_id || null);
+      setActiveLessonId(data.lesson_id || null);
 
       const hasCards = data.cards && data.cards.length > 0;
       const hasQuestions = data.questions && data.questions.length > 0;
@@ -316,7 +316,7 @@ function PracticeContent() {
       console.error('Session load error:', err);
     }
     setLoading(false);
-  }, [courseSlug, topicId, questionCount, startSession]);
+  }, [courseSlug, lessonId, questionCount, startSession]);
 
   useEffect(() => {
     if (sessionStarted) loadSession();
@@ -448,7 +448,7 @@ function PracticeContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          topic_id: activeTopicId,
+          lesson_id: activeLessonId,
         }),
       });
       const data = await res.json();
@@ -457,17 +457,14 @@ function PracticeContent() {
         sections_read: sectionsRead,
         concepts_learned: conceptCount,
         questions_answered: questionsAnswered,
-        topic_title: topicTitle,
-        is_lesson: !!activeTopicId,
+        lesson_title: lessonTitle,
+        is_lesson: !!activeLessonId,
       }));
       sessionStorage.setItem('sessionId', sessionId || '');
       saveSessionForReview({
         ...data,
         sessionId: sessionId || '',
         courseSlug,
-        xpEarned: data.xp_earned,
-        streak: data.streak,
-        achievements: data.achievements,
       });
     } catch (err) {
       console.error('Session complete error:', err);
@@ -524,7 +521,7 @@ function PracticeContent() {
 
   // ─── Session Start Screen ──────────────────────────────────
   if (!sessionStarted) {
-    const isLesson = !!topicId;
+    const isLesson = !!lessonId;
     const SESSION_OPTIONS = [5, 10, 15, 20];
 
     if (isLesson) {
@@ -804,11 +801,11 @@ function PracticeContent() {
           </div>
         )}
 
-        {/* Topic badge + difficulty pill */}
+        {/* Module badge + difficulty pill */}
         <div className="mb-4 flex items-center gap-2 flex-wrap">
-          {activeQuestion.topic_title && (
+          {activeQuestion.module_title && (
             <span className="text-xs font-medium text-[#2C2825] bg-[#F5F3EF] px-3 py-1 rounded-full border border-[#E8E4DD]">
-              {activeQuestion.topic_title}
+              {activeQuestion.module_title}
             </span>
           )}
           {(activeQuestion.difficulty_label === 'challenging' || (activeQuestion.difficulty ?? 0) >= 4) && (
@@ -978,11 +975,6 @@ function PracticeContent() {
               <h3 className={`font-bold text-lg ${answerResult.is_correct ? 'text-green-700' : 'text-red-700'}`}>
                 {answerResult.is_correct ? 'Correct!' : 'Not quite'}
               </h3>
-              {answerResult.is_correct && answerResult.xp_earned > 0 && (
-                <span className="text-sm font-bold text-green-600 bg-green-100 px-2.5 py-1 rounded-full animate-bounce-in">
-                  +{answerResult.xp_earned} XP
-                </span>
-              )}
             </div>
 
             {!answerResult.is_correct && answerResult.option_explanation && (

@@ -31,9 +31,9 @@ export async function GET(_request: NextRequest) {
     let coursesWithStats = courseList
 
     if (courseIds.length > 0) {
-      const [modulesRes, topicsRes, questionsRes, enrollmentsRes] = await Promise.all([
+      const [modulesRes, lessonsRes, questionsRes, enrollmentsRes] = await Promise.all([
         supabase.from('modules').select('id, course_id').in('course_id', courseIds),
-        supabase.from('topics').select('id, course_id').in('course_id', courseIds),
+        supabase.from('lessons').select('id, course_id').in('course_id', courseIds).eq('is_active', true),
         supabase.from('questions').select('id, course_id').in('course_id', courseIds).eq('is_active', true),
         supabase.from('user_courses').select('id, course_id, status, readiness_score').in('course_id', courseIds),
       ])
@@ -41,7 +41,7 @@ export async function GET(_request: NextRequest) {
       coursesWithStats = courseList.map((c: any) => ({
         ...c,
         module_count: (modulesRes.data || []).filter((m: any) => m.course_id === c.id).length,
-        topic_count: (topicsRes.data || []).filter((t: any) => t.course_id === c.id).length,
+        lesson_count: (lessonsRes.data || []).filter((l: any) => l.course_id === c.id).length,
         question_count: (questionsRes.data || []).filter((q: any) => q.course_id === c.id).length,
         student_count: (enrollmentsRes.data || []).filter((e: any) => e.course_id === c.id).length,
       }))

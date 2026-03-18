@@ -4,12 +4,12 @@ import { create } from 'zustand';
 
 export interface SessionQuestion {
   id: string;
-  topic_id: string;
-  topic_title: string;
   question_text: string;
   question_type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'fill_blank' | 'ordering' | 'matching';
   options: { id: string; text: string }[];
   difficulty: number;
+  topic_id?: string;
+  topic_title?: string;
 }
 
 export interface AnswerResult {
@@ -28,19 +28,8 @@ export interface SessionReviewData {
   readinessBefore: number;
   readinessAfter: number;
   readinessDelta: number;
-  topicBreakdown: { topic_id: string; topic_title: string; correct: number; total: number; is_review: boolean }[];
-  unlockedTopic: { id: string; title: string } | null;
-  mistakes: { questionId: string; questionText: string; topicTitle: string; questionType: string; options: { id: string; text: string }[]; selectedIds: string[]; correctIds: string[]; explanation: string }[];
-  xpEarned?: number;
-  streak?: { current: number; longest: number };
-  achievements?: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    description: string;
-    icon: string;
-    xp_reward: number;
-  }>;
+  moduleBreakdown: { module_id: string; module_title: string; correct: number; total: number; is_review: boolean }[];
+  mistakes: { questionId: string; questionText: string; moduleTitle: string; questionType: string; options: { id: string; text: string }[]; selectedIds: string[]; correctIds: string[]; explanation: string }[];
 }
 
 interface AppStore {

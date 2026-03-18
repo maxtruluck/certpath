@@ -18,7 +18,7 @@ interface CourseItem {
   category: string
   difficulty: string
   module_count: number
-  topic_count: number
+  lesson_count: number
   question_count: number
   student_count: number
   created_at: string
@@ -38,13 +38,11 @@ function formatCents(cents: number): string {
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
     draft: 'bg-slate-300',
-    in_review: 'bg-amber-400',
     published: 'bg-emerald-400',
     archived: 'bg-red-400',
   }
   const labels: Record<string, string> = {
     draft: 'Draft',
-    in_review: 'In Review',
     published: 'Published',
     archived: 'Archived',
   }
@@ -196,7 +194,7 @@ export default function CreatorDashboard() {
                   <div className="flex items-center gap-5 text-xs text-slate-400 font-medium">
                     <span className="tabular-nums">{course.question_count} questions</span>
                     <span className="tabular-nums">{course.module_count} modules</span>
-                    <span className="tabular-nums">{course.topic_count} topics</span>
+                    <span className="tabular-nums">{course.lesson_count} lessons</span>
                     {course.student_count > 0 && (
                       <span className="tabular-nums">{course.student_count} students</span>
                     )}

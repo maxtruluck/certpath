@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from './server';
 import { DEMO_MODE, DEMO_USER_ID } from '@/lib/demo';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 
 interface ApiAuthResult {
   supabase: SupabaseClient;
@@ -17,7 +18,18 @@ export async function getApiUser(): Promise<ApiAuthResult> {
     return { supabase: serviceClient, userId: DEMO_USER_ID };
   }
 
-  // Check auth from cookies
+  // Check for Bearer token (mobile app auth)
+  const headerStore = await headers();
+  const authHeader = headerStore.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const { data: { user }, error: tokenError } = await serviceClient.auth.getUser(token);
+    if (user && !tokenError) {
+      return { supabase: serviceClient, userId: user.id };
+    }
+  }
+
+  // Check auth from cookies (web app auth)
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
 

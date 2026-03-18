@@ -8,7 +8,7 @@ export async function GET(_request: NextRequest) {
 
     const { data: creator, error: queryError } = await supabase
       .from('creators')
-      .select('status, created_at')
+      .select('status, created_at, updated_at')
       .eq('user_id', userId)
       .single()
 
@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({
       status: creator.status,
       applied_at: creator.created_at,
-      approved_at: creator.status === 'approved' ? creator.created_at : null,
+      approved_at: creator.status === 'approved' ? creator.updated_at : null,
     })
   } catch (err) {
     console.error('GET /api/creator/status error:', err)

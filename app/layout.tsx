@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "openED — The Learning Engine That Makes Education Stick",
-  description: "Adaptive learning with spaced repetition, gamification, and a creator marketplace. Free to learn. Fair to create. Built to last.",
+  title: "openED — Courses That Actually Teach",
+  description: "Expert-created courses in bite-sized, interactive lessons. Browse free and paid courses, or create your own. Learn on your terms.",
   openGraph: {
-    title: "openED — The Learning Engine That Makes Education Stick",
-    description: "Adaptive learning with spaced repetition and a creator marketplace.",
+    title: "openED — Courses That Actually Teach",
+    description: "Expert-created courses in bite-sized, interactive lessons. Free to learn, fair to create.",
     type: "website",
   },
   appleWebApp: {

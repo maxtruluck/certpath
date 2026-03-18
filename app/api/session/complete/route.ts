@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     if (error) return error
 
     const body = await request.json()
-    const { session_id, topic_id } = body
+    const { session_id, lesson_id } = body
 
     if (!session_id) {
       return NextResponse.json({ error: 'session_id is required' }, { status: 400 })
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     // Query review_log for this session
     const { data: reviews, error: reviewError } = await supabase
       .from('review_log')
-      .select('id, question_id, course_id, topic_id, is_correct, rating, time_spent_ms')
+      .select('id, question_id, course_id, module_id, is_correct, rating, time_spent_ms')
       .eq('user_id', userId)
       .eq('session_id', session_id)
 
@@ -42,35 +42,35 @@ export async function POST(request: NextRequest) {
       .eq('course_id', courseId)
       .maybeSingle()
 
-    // Topic breakdown
-    const topicMap: Record<string, { correct: number; total: number; topic_id: string }> = {}
+    // Module breakdown: group reviews by module_id
+    const moduleMap: Record<string, { correct: number; total: number; module_id: string }> = {}
     for (const r of reviews) {
-      if (!topicMap[r.topic_id]) {
-        topicMap[r.topic_id] = { correct: 0, total: 0, topic_id: r.topic_id }
+      if (!moduleMap[r.module_id]) {
+        moduleMap[r.module_id] = { correct: 0, total: 0, module_id: r.module_id }
       }
-      topicMap[r.topic_id].total++
-      if (r.is_correct) topicMap[r.topic_id].correct++
+      moduleMap[r.module_id].total++
+      if (r.is_correct) moduleMap[r.module_id].correct++
     }
 
-    // Get topic names
-    const topicIds = Object.keys(topicMap)
-    let topicNames: Record<string, string> = {}
-    if (topicIds.length > 0) {
-      const { data: topics } = await supabase
-        .from('topics')
+    // Get module names
+    const moduleIds = Object.keys(moduleMap)
+    let moduleNames: Record<string, string> = {}
+    if (moduleIds.length > 0) {
+      const { data: modulesData } = await supabase
+        .from('modules')
         .select('id, title')
-        .in('id', topicIds)
-      for (const t of topics || []) {
-        topicNames[t.id] = t.title
+        .in('id', moduleIds)
+      for (const m of modulesData || []) {
+        moduleNames[m.id] = m.title
       }
     }
 
-    const topicBreakdown = Object.values(topicMap).map((t: any) => ({
-      topic_id: t.topic_id,
-      topic_title: topicNames[t.topic_id] || 'Unknown',
-      correct: t.correct,
-      total: t.total,
-      accuracy_percent: Math.round((t.correct / t.total) * 100),
+    const moduleBreakdown = Object.values(moduleMap).map((m: any) => ({
+      module_id: m.module_id,
+      module_title: moduleNames[m.module_id] || 'Unknown',
+      correct: m.correct,
+      total: m.total,
+      accuracy_percent: Math.round((m.correct / m.total) * 100),
     }))
 
     // Update user_courses
@@ -84,18 +84,27 @@ export async function POST(request: NextRequest) {
         .eq('id', userCourse.id)
     }
 
-    // Mark topic as completed
-    if (topic_id) {
+    // Mark lesson as completed
+    if (lesson_id) {
+      // Fetch the lesson to get module_id
+      const { data: lesson } = await supabase
+        .from('lessons')
+        .select('id, module_id')
+        .eq('id', lesson_id)
+        .single()
+
+      const moduleId = lesson?.module_id || reviews[0].module_id
+
       const { data: progressRow } = await supabase
-        .from('user_topic_progress')
+        .from('user_lesson_progress')
         .select('id, session_items_total')
         .eq('user_id', userId)
-        .eq('topic_id', topic_id)
+        .eq('lesson_id', lesson_id)
         .maybeSingle()
 
       if (progressRow) {
         await supabase
-          .from('user_topic_progress')
+          .from('user_lesson_progress')
           .update({
             status: 'completed',
             completed_at: new Date().toISOString(),
@@ -104,15 +113,16 @@ export async function POST(request: NextRequest) {
           .eq('id', progressRow.id)
       } else {
         await supabase
-          .from('user_topic_progress')
+          .from('user_lesson_progress')
           .insert({
             user_id: userId,
-            topic_id: topic_id,
+            lesson_id: lesson_id,
             course_id: courseId,
+            module_id: moduleId,
             status: 'completed',
             completed_at: new Date().toISOString(),
-            session_items_completed: 0,
-            session_items_total: 0,
+            session_items_completed: totalCount,
+            session_items_total: totalCount,
           })
       }
     }
@@ -121,7 +131,7 @@ export async function POST(request: NextRequest) {
       correct_count: correctCount,
       total_count: totalCount,
       accuracy_percent: accuracyPercent,
-      topic_breakdown: topicBreakdown,
+      module_breakdown: moduleBreakdown,
     })
   } catch (err) {
     console.error('POST /api/session/complete error:', err)

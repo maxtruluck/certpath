@@ -14,13 +14,18 @@ export async function POST(
     // Look up course by slug
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .select('id')
+      .select('id, price_cents')
       .eq('slug', slug)
       .eq('status', 'published')
       .single()
 
     if (courseError || !course) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
+    }
+
+    // Only allow free enrollment through this route
+    if (course.price_cents && course.price_cents > 0) {
+      return NextResponse.json({ error: 'This course requires payment' }, { status: 402 })
     }
 
     // Check if already enrolled
@@ -35,11 +40,12 @@ export async function POST(
       return NextResponse.json({ error: 'Already enrolled in this course' }, { status: 409 })
     }
 
-    // Find first topic (lowest display_order)
-    const { data: firstTopic } = await supabase
-      .from('topics')
+    // Find first lesson (lowest display_order, active)
+    const { data: firstLesson } = await supabase
+      .from('lessons')
       .select('id')
       .eq('course_id', course.id)
+      .eq('is_active', true)
       .order('display_order', { ascending: true })
       .limit(1)
       .maybeSingle()
@@ -51,7 +57,8 @@ export async function POST(
         user_id: userId,
         course_id: course.id,
         status: 'active',
-        current_topic_id: firstTopic?.id || null,
+        current_topic_id: null,
+        current_lesson_id: firstLesson?.id || null,
         readiness_score: 0,
         questions_seen: 0,
         questions_correct: 0,

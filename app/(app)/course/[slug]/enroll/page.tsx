@@ -17,7 +17,7 @@ interface CourseInfo {
   stats: {
     question_count: number;
     module_count: number;
-    topic_count: number;
+    lesson_count: number;
   };
 }
 
@@ -52,10 +52,34 @@ export default function EnrollPage() {
   }, [params.slug, router]);
 
   async function handleEnroll() {
-    if (enrolling) return;
+    if (enrolling || !course) return;
     setEnrolling(true);
     setError(null);
 
+    // Paid course: redirect to Stripe Checkout
+    if (course.price_cents && course.price_cents > 0) {
+      try {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course_id: course.id }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          setError(data.error || 'Checkout failed');
+          setEnrolling(false);
+        }
+      } catch (err) {
+        setError('Something went wrong. Please try again.');
+        console.error(err);
+        setEnrolling(false);
+      }
+      return;
+    }
+
+    // Free course: enroll directly
     try {
       const res = await fetch(`/api/courses/${params.slug}/enroll`, {
         method: 'POST',
@@ -119,7 +143,7 @@ export default function EnrollPage() {
     'Adaptive spaced repetition engine',
     'Detailed explanations for every question',
     'Readiness score tracking per module',
-    `Guidebook content for all ${course.stats.topic_count} topics`,
+    `${course.stats.lesson_count} lessons with guided content`,
   ];
 
   return (
@@ -200,10 +224,12 @@ export default function EnrollPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              Enrolling...
+              {course?.price_cents && course.price_cents > 0 ? 'Redirecting...' : 'Enrolling...'}
             </>
+          ) : course?.price_cents && course.price_cents > 0 ? (
+            `Buy Course — ${priceFormatted}`
           ) : (
-            'Enroll now'
+            'Enroll Free'
           )}
         </button>
         <p className="text-xs text-gray-400 text-center">You can start studying immediately</p>
