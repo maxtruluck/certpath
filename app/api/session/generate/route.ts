@@ -383,17 +383,8 @@ export async function GET(request: NextRequest) {
             .eq('id', existingProgress.id)
         }
       } else if (existingProgress.status === 'completed') {
-        // Redo mode: serve full stack, reset progress to in_progress
-        await supabase
-          .from('user_lesson_progress')
-          .update({
-            status: 'in_progress',
-            session_items_completed: 0,
-            session_items_total: totalItems,
-            started_at: new Date().toISOString(),
-            completed_at: null,
-          })
-          .eq('id', existingProgress.id)
+        // Review mode: serve full stack but keep completed status
+        // Don't reset progress -- user is just reviewing
       }
 
       // Slice cards for resume
