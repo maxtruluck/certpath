@@ -366,13 +366,22 @@ export async function GET(request: NextRequest) {
           started_at: new Date().toISOString(),
         })
       } else if (existingProgress.status === 'in_progress') {
-        // Resume: skip already-completed items
-        itemsCompleted = existingProgress.session_items_completed || 0
-        // Update total in case content changed
-        await supabase
-          .from('user_lesson_progress')
-          .update({ session_items_total: totalItems })
-          .eq('id', existingProgress.id)
+        const oldTotal = existingProgress.session_items_total || 0
+        const oldCompleted = existingProgress.session_items_completed || 0
+        // If card count changed significantly or completed exceeds new total, reset
+        if (Math.abs(oldTotal - totalItems) > 1 || oldCompleted >= totalItems) {
+          itemsCompleted = 0
+          await supabase
+            .from('user_lesson_progress')
+            .update({ session_items_completed: 0, session_items_total: totalItems, started_at: new Date().toISOString() })
+            .eq('id', existingProgress.id)
+        } else {
+          itemsCompleted = oldCompleted
+          await supabase
+            .from('user_lesson_progress')
+            .update({ session_items_total: totalItems })
+            .eq('id', existingProgress.id)
+        }
       } else if (existingProgress.status === 'completed') {
         // Redo mode: serve full stack, reset progress to in_progress
         await supabase

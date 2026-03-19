@@ -196,8 +196,8 @@ export default function HomePage() {
   }
 
   if (isReturningUser) {
-    const heroProgress = heroCourse!.questions_total > 0
-      ? Math.round((heroCourse!.questions_seen / heroCourse!.questions_total) * 100) : 0;
+    const heroProgress = (heroCourse! as any).lessons_total > 0
+      ? Math.min(100, Math.round(((heroCourse! as any).lessons_completed || 0) / (heroCourse! as any).lessons_total * 100)) : 0;
     const heroSubtitle = heroCourse!.lessons_total > 0
       ? `${heroProgress}% complete` : `${heroCourse!.sessions_completed} sessions completed`;
 
@@ -218,7 +218,7 @@ export default function HomePage() {
             <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">YOUR COURSES</p>
             <div className="flex gap-[10px] overflow-x-auto pb-1 -mx-4 px-4">
               {otherEnrolled.map((item) => {
-                const pct = item.questions_total > 0 ? Math.round((item.questions_seen / item.questions_total) * 100) : 0;
+                const pct = (item as any).lessons_total > 0 ? Math.min(100, Math.round(((item as any).lessons_completed || 0) / (item as any).lessons_total * 100)) : 0;
                 return (
                   <Link key={item.id} href={`/course/${item.course.slug}/path`}
                     className="flex-shrink-0 w-[150px] min-h-[100px] bg-[#f8fafc] rounded-lg border border-[#e2e8f0] p-3 flex flex-col justify-between hover:bg-[#f1f5f9] transition-colors"

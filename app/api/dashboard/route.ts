@@ -34,9 +34,10 @@ export async function GET(request: NextRequest) {
     const courseIds = (userCourses || []).map((uc: any) => uc.course_id)
     let questionCounts: Record<string, number> = {}
     let lessonCounts: Record<string, number> = {}
+    let lessonsCompletedCounts: Record<string, number> = {}
 
     if (courseIds.length > 0) {
-      const [questionsRes, lessonsRes] = await Promise.all([
+      const [questionsRes, lessonsRes, lessonProgressRes] = await Promise.all([
         supabase
           .from('questions')
           .select('course_id')
@@ -47,11 +48,18 @@ export async function GET(request: NextRequest) {
           .select('course_id')
           .in('course_id', courseIds)
           .eq('is_active', true),
+        supabase
+          .from('user_lesson_progress')
+          .select('course_id')
+          .eq('user_id', userId)
+          .in('course_id', courseIds)
+          .eq('status', 'completed'),
       ])
 
       for (const id of courseIds) {
         questionCounts[id] = (questionsRes.data || []).filter((q: any) => q.course_id === id).length
         lessonCounts[id] = (lessonsRes.data || []).filter((l: any) => l.course_id === id).length
+        lessonsCompletedCounts[id] = (lessonProgressRes.data || []).filter((lp: any) => lp.course_id === id).length
       }
     }
 
@@ -65,6 +73,7 @@ export async function GET(request: NextRequest) {
       questions_correct: uc.questions_correct,
       questions_total: questionCounts[uc.course_id] || 0,
       lessons_total: lessonCounts[uc.course_id] || 0,
+      lessons_completed: lessonsCompletedCounts[uc.course_id] || 0,
       sessions_completed: uc.sessions_completed,
       last_session_at: uc.last_session_at,
       enrolled_at: uc.enrolled_at,
