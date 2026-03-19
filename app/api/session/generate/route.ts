@@ -258,7 +258,11 @@ export async function GET(request: NextRequest) {
       // Build ordered card stack
       const cards: CardEntry[] = []
       const sections = splitLessonIntoSections(lesson.body || '')
-      const conceptCards = buildConceptCards(lesson, moduleId, moduleTitle, 3)
+      // Only use stored concept cards -- auto-extracted ones duplicate section content
+      const storedConcepts: any[] = lesson.concept_cards || []
+      const conceptCards = storedConcepts.length > 0
+        ? buildConceptCards(lesson, moduleId, moduleTitle, 3)
+        : []
       let qIdx = 0
       let cIdx = 0
 
@@ -284,7 +288,7 @@ export async function GET(request: NextRequest) {
             },
           })
 
-          // Add concept card if available for this section area
+          // Add concept card if we have stored ones
           if (cIdx < conceptCards.length) {
             cards.push(conceptCards[cIdx++])
           }
@@ -310,6 +314,34 @@ export async function GET(request: NextRequest) {
         for (const q of sortedQuestions) {
           const stripped = stripAnswers(q)
           cards.push(questionCard(stripped, moduleTitle))
+        }
+      }
+
+      // Shuffle question positions: keep teaching cards in order, randomize questions
+      // within each section group (questions that appear between two teaching cards)
+      {
+        let groupStart = 0
+        for (let i = 0; i <= cards.length; i++) {
+          const isTeaching = i < cards.length && cards[i].card_type !== 'question'
+          const isEnd = i === cards.length
+          if (isTeaching || isEnd) {
+            // Shuffle questions in [groupStart, i)
+            const groupQuestions: QuestionCardEntry[] = []
+            const groupIndices: number[] = []
+            for (let j = groupStart; j < i; j++) {
+              if (cards[j].card_type === 'question') {
+                groupQuestions.push(cards[j] as QuestionCardEntry)
+                groupIndices.push(j)
+              }
+            }
+            if (groupQuestions.length > 1) {
+              fisherYatesShuffle(groupQuestions)
+              for (let k = 0; k < groupIndices.length; k++) {
+                cards[groupIndices[k]] = groupQuestions[k]
+              }
+            }
+            groupStart = i + 1
+          }
         }
       }
 
