@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (!creator) {
       return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })
     }
-    if (creator.status !== 'approved') {
+    if (creator.status !== 'approved' && creator.status !== 'pending') {
       return NextResponse.json({ error: 'Creator must be approved to create courses' }, { status: 403 })
     }
 
@@ -43,6 +43,11 @@ export async function POST(request: NextRequest) {
       total_questions_on_exam,
       max_score,
       provider_url,
+      estimated_duration,
+      prerequisites,
+      learning_objectives,
+      card_color,
+      tags,
     } = body
 
     if (!title) {
@@ -78,6 +83,11 @@ export async function POST(request: NextRequest) {
         total_questions_on_exam: total_questions_on_exam || null,
         max_score: max_score || null,
         provider_url: provider_url || null,
+        estimated_duration: estimated_duration || null,
+        prerequisites: prerequisites || null,
+        learning_objectives: learning_objectives || [],
+        card_color: card_color || '#3b82f6',
+        tags: tags || [],
         status: 'draft',
       })
       .select('id, slug, status')

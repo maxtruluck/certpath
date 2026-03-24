@@ -9,8 +9,11 @@ export interface CourseFormData {
   difficulty: string
   is_free: boolean
   price_cents: number
-  thumbnail_url: string
   tags: string[]
+  estimated_duration: string
+  prerequisites: string
+  learning_objectives: string[]
+  card_color: string
 }
 
 export const INITIAL_FORM: CourseFormData = {
@@ -20,8 +23,11 @@ export const INITIAL_FORM: CourseFormData = {
   difficulty: 'beginner',
   is_free: true,
   price_cents: 0,
-  thumbnail_url: '',
   tags: [],
+  estimated_duration: '',
+  prerequisites: '',
+  learning_objectives: ['', ''],
+  card_color: '#3b82f6',
 }
 
 const DIFFICULTIES = [
@@ -88,21 +94,38 @@ const CATEGORY_GROUPS = [
       { value: 'General', label: 'General' },
     ],
   },
+  {
+    label: 'Other',
+    options: [
+      { value: 'Other', label: 'Other' },
+    ],
+  },
 ]
 
-const AVAILABLE_TAGS = [
+const PREDEFINED_TAGS = [
   'Certification Prep',
-  'Beginner Friendly',
-  'Advanced',
+  'Practice Exams',
   'Hands-On',
+  'Self-Paced',
   'YouTube Companion',
   'Quick Course',
+  'Deep Dive',
+  'Study Guide',
+  'Lab-Based',
+  'Project-Based',
 ]
 
-// Shared input classes
-const inputClass = 'w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
+const CARD_COLORS = [
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#8b5cf6', label: 'Purple' },
+  { value: '#10b981', label: 'Green' },
+  { value: '#f59e0b', label: 'Amber' },
+  { value: '#ef4444', label: 'Red' },
+  { value: '#ec4899', label: 'Pink' },
+]
 
-// Block non-numeric keys on number inputs (allow digits, backspace, delete, arrows, tab)
+const inputClass = 'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
+
 const numericOnly = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (
     e.key.length === 1 &&
@@ -113,11 +136,9 @@ const numericOnly = (e: React.KeyboardEvent<HTMLInputElement>) => {
   }
 }
 
-// Price input that preserves decimal typing (e.g. "29." won't snap to "29")
 function PriceInput({ value, onChange }: { value: number; onChange: (cents: number) => void }) {
   const [display, setDisplay] = useState(value ? (value / 100).toString() : '')
 
-  // Sync display when external value changes (e.g. loading saved draft)
   useEffect(() => {
     const current = Math.round(parseFloat(display || '0') * 100)
     if (current !== value) {
@@ -127,25 +148,27 @@ function PriceInput({ value, onChange }: { value: number; onChange: (cents: numb
   }, [value])
 
   return (
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={display}
-        onChange={e => {
-          const raw = e.target.value
-          // Allow empty, digits, and one decimal point
-          if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
-            setDisplay(raw)
-            const cents = Math.round(parseFloat(raw || '0') * 100)
-            onChange(cents)
-          }
-        }}
-        onKeyDown={numericOnly}
-        placeholder="29.99"
-        className={`${inputClass} pl-7`}
-      />
+    <div>
+      <div className="relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">$</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={display}
+          onChange={e => {
+            const raw = e.target.value
+            if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+              setDisplay(raw)
+              const cents = Math.round(parseFloat(raw || '0') * 100)
+              onChange(cents)
+            }
+          }}
+          onKeyDown={numericOnly}
+          placeholder="29.99"
+          className={`${inputClass} pl-8`}
+        />
+      </div>
+      <p className="text-xs text-gray-400 mt-1">Minimum $0.99</p>
     </div>
   )
 }
@@ -163,14 +186,47 @@ export default function StepCourseInfo({
   onSaveDraft: () => void
   saving: boolean
 }) {
+  const [customTagInput, setCustomTagInput] = useState('')
+  const [showCustomTag, setShowCustomTag] = useState(false)
+
   const toggleTag = (tag: string) => {
     const current = form.tags || []
     if (current.includes(tag)) {
       onChange({ tags: current.filter(t => t !== tag) })
-    } else {
+    } else if (current.length < 5) {
       onChange({ tags: [...current, tag] })
     }
   }
+
+  const addCustomTag = () => {
+    const trimmed = customTagInput.trim()
+    if (!trimmed || trimmed.length > 30) return
+    const current = form.tags || []
+    if (current.length >= 5 || current.includes(trimmed)) return
+    onChange({ tags: [...current, trimmed] })
+    setCustomTagInput('')
+    setShowCustomTag(false)
+  }
+
+  const updateObjective = (index: number, value: string) => {
+    const updated = [...form.learning_objectives]
+    updated[index] = value
+    onChange({ learning_objectives: updated })
+  }
+
+  const addObjective = () => {
+    if (form.learning_objectives.length < 6) {
+      onChange({ learning_objectives: [...form.learning_objectives, ''] })
+    }
+  }
+
+  const removeObjective = (index: number) => {
+    if (form.learning_objectives.length > 1) {
+      onChange({ learning_objectives: form.learning_objectives.filter((_, i) => i !== index) })
+    }
+  }
+
+  const descriptionLength = form.description.length
 
   return (
     <div className="max-w-xl mx-auto">
@@ -180,72 +236,125 @@ export default function StepCourseInfo({
         <input
           type="text"
           value={form.title}
-          onChange={e => onChange({ title: e.target.value })}
+          onChange={e => {
+            if (e.target.value.length <= 120) onChange({ title: e.target.value })
+          }}
           placeholder="e.g., CompTIA Security+ SY0-701"
           className={inputClass}
           autoFocus
         />
       </div>
 
-      {/* Description */}
+      {/* Description with char counter */}
       <div className="mb-5">
         <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
         <textarea
           value={form.description}
-          onChange={e => onChange({ description: e.target.value })}
+          onChange={e => {
+            if (e.target.value.length <= 500) onChange({ description: e.target.value })
+          }}
           rows={3}
           placeholder="What will learners gain from this course?"
           className={`${inputClass} resize-none`}
         />
+        <p className={`text-xs mt-1 text-right ${descriptionLength > 450 ? 'text-amber-500' : 'text-gray-400'}`}>
+          {descriptionLength} / 500
+        </p>
       </div>
 
-      {/* Thumbnail URL */}
+      {/* Category + Difficulty (two-column row) */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+          <select
+            value={form.category}
+            onChange={e => onChange({ category: e.target.value })}
+            className={inputClass}
+          >
+            {CATEGORY_GROUPS.map(group => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Difficulty</label>
+          <select
+            value={form.difficulty}
+            onChange={e => onChange({ difficulty: e.target.value })}
+            className={inputClass}
+          >
+            {DIFFICULTIES.map(d => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            {DIFFICULTIES.find(d => d.value === form.difficulty)?.desc}
+          </p>
+        </div>
+      </div>
+
+      {/* Duration + Pricing (two-column row) */}
       <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Course Thumbnail</label>
-        <p className="text-xs text-gray-400 mb-1.5">Recommended: 800x600px. Shows on course cards in the marketplace.</p>
-        <input
-          type="url"
-          value={form.thumbnail_url}
-          onChange={e => onChange({ thumbnail_url: e.target.value })}
-          placeholder="https://example.com/image.jpg"
-          className={inputClass}
-        />
-        {form.thumbnail_url && (
-          <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
-            <img
-              src={form.thumbnail_url}
-              alt="Thumbnail preview"
-              className="w-full h-32 object-cover"
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Est. Duration</label>
+            <input
+              type="text"
+              value={form.estimated_duration}
+              onChange={e => onChange({ estimated_duration: e.target.value })}
+              placeholder="e.g., 12 hours"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Pricing</label>
+            {/* Segmented toggle */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => onChange({ is_free: true, price_cents: 0 })}
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                  form.is_free
+                    ? 'bg-blue-50 text-blue-700 border-r border-blue-200'
+                    : 'bg-white text-gray-500 hover:bg-gray-50 border-r border-gray-200'
+                }`}
+              >
+                Free
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ is_free: false })}
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                  !form.is_free
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                Paid
+              </button>
+            </div>
+          </div>
+        </div>
+        {!form.is_free && (
+          <div className="mt-2">
+            <PriceInput
+              value={form.price_cents}
+              onChange={cents => onChange({ price_cents: cents })}
             />
           </div>
         )}
       </div>
 
-      {/* Category (grouped dropdown) */}
-      <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-        <select
-          value={form.category}
-          onChange={e => onChange({ category: e.target.value })}
-          className={inputClass}
-        >
-          {CATEGORY_GROUPS.map(group => (
-            <optgroup key={group.label} label={group.label}>
-              {group.options.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
-
       {/* Tags */}
       <div className="mb-5">
         <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-        <p className="text-xs text-gray-400 mb-2">Optional labels to help learners find your course.</p>
+        <p className="text-xs text-gray-400 mb-2">Topic labels to help learners find your course (max 5)</p>
         <div className="flex flex-wrap gap-2">
-          {AVAILABLE_TAGS.map(tag => {
+          {PREDEFINED_TAGS.map(tag => {
             const active = (form.tags || []).includes(tag)
             return (
               <button
@@ -255,66 +364,155 @@ export default function StepCourseInfo({
                 className={`px-3 py-1.5 rounded-lg border text-sm transition-all ${
                   active
                     ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                    : 'border-gray-200 text-gray-500 hover:border-blue-300'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                 }`}
               >
                 {tag}
               </button>
             )
           })}
+          {/* Custom tags already added */}
+          {(form.tags || [])
+            .filter(t => !PREDEFINED_TAGS.includes(t))
+            .map(tag => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className="px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-50 text-blue-700 font-medium text-sm"
+              >
+                {tag}
+              </button>
+            ))}
+          {/* + Custom button / inline input */}
+          {(form.tags || []).length < 5 && (
+            showCustomTag ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={customTagInput}
+                  onChange={e => {
+                    if (e.target.value.length <= 30) setCustomTagInput(e.target.value)
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); addCustomTag() }
+                    if (e.key === 'Escape') { setShowCustomTag(false); setCustomTagInput('') }
+                  }}
+                  placeholder="Custom tag..."
+                  className="px-2 py-1 border border-blue-300 rounded-lg text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={addCustomTag}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowCustomTag(false); setCustomTagInput('') }}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowCustomTag(true)}
+                className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+              >
+                + Custom
+              </button>
+            )
+          )}
         </div>
       </div>
 
-      {/* Difficulty */}
+      {/* Prerequisites */}
       <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Difficulty</label>
-        <div className="flex gap-2">
-          {DIFFICULTIES.map(d => (
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Prerequisites</label>
+        <input
+          type="text"
+          value={form.prerequisites}
+          onChange={e => {
+            if (e.target.value.length <= 200) onChange({ prerequisites: e.target.value })
+          }}
+          placeholder="e.g., Basic networking knowledge, familiarity with Linux"
+          className={inputClass}
+        />
+        <p className="text-xs text-gray-400 mt-1">Optional. Comma-separated list of recommended prior knowledge.</p>
+      </div>
+
+      {/* Learning Objectives */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Learning Objectives</label>
+        <div className="space-y-2">
+          {form.learning_objectives.map((obj, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-4 flex-shrink-0">{idx + 1}.</span>
+              <input
+                type="text"
+                value={obj}
+                onChange={e => {
+                  if (e.target.value.length <= 200) updateObjective(idx, e.target.value)
+                }}
+                placeholder={`Objective ${idx + 1}`}
+                className={`${inputClass} flex-1`}
+              />
+              {form.learning_objectives.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeObjective(idx)}
+                  className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M3 3L11 11M3 11L11 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
+          {form.learning_objectives.length < 6 && (
             <button
-              key={d.value}
-              onClick={() => onChange({ difficulty: d.value })}
-              className={`flex-1 px-3 py-2.5 rounded-lg border-2 text-center transition-all ${
-                form.difficulty === d.value
-                  ? 'border-blue-500 bg-blue-50/50 text-blue-700'
-                  : 'border-gray-200 hover:border-blue-300 text-gray-600'
-              }`}
+              type="button"
+              onClick={addObjective}
+              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
             >
-              <span className="text-sm font-medium block">{d.label}</span>
-              <span className="text-[11px] text-gray-400 block mt-0.5">{d.desc}</span>
+              + Add objective
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">Optional. What learners will be able to do after completing this course.</p>
+      </div>
+
+      {/* Card Color */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Card Accent Color</label>
+        <p className="text-xs text-gray-400 mb-2">Shown as the accent bar on your course card in the marketplace.</p>
+        <div className="flex gap-3">
+          {CARD_COLORS.map(color => (
+            <button
+              key={color.value}
+              type="button"
+              onClick={() => onChange({ card_color: color.value })}
+              className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
+                form.card_color === color.value
+                  ? 'border-gray-900 scale-110 shadow-md'
+                  : 'border-gray-200 hover:scale-105'
+              }`}
+              style={{ backgroundColor: color.value }}
+              title={color.label}
+            >
+              {form.card_color === color.value && (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8L6.5 11.5L13 4.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Pricing */}
-      <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Pricing</label>
-        <div className="flex gap-3 mb-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              checked={form.is_free}
-              onChange={() => onChange({ is_free: true, price_cents: 0 })}
-              className="text-blue-500"
-            />
-            <span className="text-sm text-gray-700">Free</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              checked={!form.is_free}
-              onChange={() => onChange({ is_free: false })}
-              className="text-blue-500"
-            />
-            <span className="text-sm text-gray-700">Paid</span>
-          </label>
-        </div>
-        {!form.is_free && (
-          <PriceInput
-            value={form.price_cents}
-            onChange={cents => onChange({ price_cents: cents })}
-          />
-        )}
       </div>
 
       {/* Navigation */}
@@ -328,7 +526,7 @@ export default function StepCourseInfo({
         </button>
         <button
           onClick={onContinue}
-          disabled={!form.title.trim() || saving}
+          disabled={!form.title.trim() || !form.description.trim() || saving}
           className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Continue to Builder'}

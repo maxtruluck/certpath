@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   DndContext,
   DragOverlay,
@@ -21,268 +19,29 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import CreatorTip from './CreatorTip'
 
-// ─── Types ───────────────────────────────────────────────────────
-interface Lesson {
+import type { Lesson, Module } from './build/types'
+import { hasContent } from './build/types'
+import ContextMenu from './build/ContextMenu'
+import LessonStatusBadge from './build/LessonStatusBadge'
+import CompletionProgressBar from './build/CompletionProgressBar'
+import SaveStatusIndicator from './build/SaveStatusIndicator'
+import StepSequencer from './build/StepSequencer'
+import LearnerPreviewModal from './build/LearnerPreviewModal'
+import TestEditor from './build/TestEditor'
+import type { SaveStatus, Question } from './build/types'
+
+interface TestItem {
   id: string
   title: string
-  body: string | null
-  video_url: string | null
-  display_order: number
-  module_id: string
+  test_type: string
+  module_id: string | null
   question_count: number
-  word_count: number
-}
-
-interface Module {
-  id: string
-  title: string
-  display_order: number
-  lessons: Lesson[]
-  question_count: number
-}
-
-interface Question {
-  id: string
-  question_text: string
-  question_type: string
-  options: { id: string; text: string }[]
-  correct_option_ids: string[]
-  explanation: string
-  difficulty: number
-  tags: string[]
-  option_explanations?: Record<string, string> | null
-  acceptable_answers?: string[] | null
-  match_mode?: string
-  correct_order?: string[] | null
-  matching_pairs?: { left: string; right: string }[] | null
-  lesson_id?: string | null
-}
-
-// ─── AI Import Modal ────────────────────────────────────────
-interface UploadedFile {
-  id: string
-  name: string
-  type: string
-  size_bytes: number
   status: string
 }
 
-function AIImportModal({
-  courseId,
-  hasModules,
-  onClose,
-  onImported,
-  onSourceMap,
-}: {
-  courseId: string
-  hasModules: boolean
-  onClose: () => void
-  onImported: () => void
-  onSourceMap: (map: Record<string, string>) => void
-}) {
-  const [existingFiles, setExistingFiles] = useState<UploadedFile[]>([])
-  const [loadingFiles, setLoadingFiles] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState('')
-  const [result, setResult] = useState<{ modules_created: number; topics_created: number; lessons_created: number } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    fetch(`/api/creator/courses/${courseId}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.files && Array.isArray(d.files)) setExistingFiles(d.files)
-      })
-      .catch(() => {})
-      .finally(() => setLoadingFiles(false))
-  }, [courseId])
-
-  const handleUpload = async (selectedFiles: FileList | null) => {
-    if (!selectedFiles || selectedFiles.length === 0) return
-    setUploading(true)
-    setError('')
-    try {
-      const formData = new FormData()
-      for (let i = 0; i < selectedFiles.length; i++) {
-        formData.append('files', selectedFiles[i])
-      }
-      const res = await fetch(`/api/creator/courses/${courseId}/upload`, {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'Upload failed')
-      } else if (data.uploaded_files) {
-        setExistingFiles(prev => [...prev, ...data.uploaded_files])
-      }
-    } catch {
-      setError('Upload failed. Please try again.')
-    }
-    setUploading(false)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const handleGenerate = async () => {
-    setGenerating(true)
-    setError('')
-    try {
-      const res = await fetch(`/api/creator/courses/${courseId}/generate-structure`, {
-        method: 'POST',
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'Failed to organize content')
-        setGenerating(false)
-        return
-      }
-      setResult(data)
-      if (data.source_map) {
-        onSourceMap(data.source_map)
-      }
-      onImported()
-    } catch {
-      setError('Import failed. Please try again.')
-    }
-    setGenerating(false)
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / 1048576).toFixed(1)} MB`
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-bold text-gray-900">Import Course Content</h3>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M4 4L12 12M4 12L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        {result ? (
-          <div className="text-center py-6">
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12L10 17L20 7" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h4 className="text-base font-semibold text-gray-900 mb-1">Content Imported</h4>
-            <p className="text-sm text-gray-500 mb-4">
-              Your content has been organized into {result.modules_created} modules and {result.lessons_created} lessons.
-            </p>
-            <p className="text-xs text-gray-400 mb-4">Review and edit the structure below. Drag to reorder.</p>
-            <button onClick={onClose} className="btn-primary px-6 py-2.5 text-sm">Done</button>
-          </div>
-        ) : generating ? (
-          <div className="text-center py-8">
-            <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-sm font-medium text-gray-700 mb-1">Organizing your content...</p>
-            <p className="text-xs text-gray-400">Organizing your content into modules and lessons. This usually takes 15-30 seconds.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-gray-500 mb-4">
-              Upload your course materials and they will be organized into modules and lessons.
-            </p>
-
-            {hasModules && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-                <p className="text-xs text-amber-700">This will add to your existing structure. Existing modules won&apos;t be deleted.</p>
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            )}
-
-            {loadingFiles ? (
-              <div className="h-16 bg-gray-100 rounded-lg animate-pulse mb-4" />
-            ) : existingFiles.length > 0 ? (
-              <div className="mb-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Uploaded Files</h4>
-                <div className="space-y-1.5">
-                  {existingFiles.map(file => (
-                    <div key={file.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
-                      <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-blue-600">
-                          {file.name.split('.').pop()?.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 truncate">{file.name}</p>
-                        <p className="text-[10px] text-gray-400">{formatBytes(file.size_bytes)}</p>
-                      </div>
-                      <span className="text-[10px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">Ready</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".docx,.csv,.txt"
-              className="hidden"
-              onChange={e => handleUpload(e.target.files)}
-            />
-
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files) }}
-              onDragOver={e => e.preventDefault()}
-              className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors mb-4"
-            >
-              {uploading ? (
-                <p className="text-sm text-gray-500">Uploading...</p>
-              ) : (
-                <>
-                  <p className="text-sm font-medium text-gray-700">
-                    {existingFiles.length > 0 ? 'Add more files' : 'Upload your course materials'}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">DOCX, CSV, TXT</p>
-                </>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-              <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
-              <button
-                onClick={handleGenerate}
-                disabled={existingFiles.length === 0}
-                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Organize into Course Structure
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── CSV Import Modal (Unified) ──────────────────────────────────
+// ─── CSV Import Modal ────────────────────────────────────────────
+// (kept from v1, unchanged)
 interface UnifiedImportResult {
   imported: number
   stats?: { modules: number; topics: number; lessons: number; content: number; questions: number }
@@ -364,35 +123,25 @@ function CSVImportModal({
             </svg>
           </button>
         </div>
-
         <p className="text-sm text-gray-500 mb-4">
-          Import your full course in one CSV: structure, lesson content, and questions. Use the <code className="bg-gray-100 px-1 rounded text-xs">row_type</code> column to indicate what each row is.
+          Import your full course in one CSV: structure, lesson content, and questions.
         </p>
-
         <div className="bg-gray-50 rounded-lg px-3 py-2.5 mb-4 space-y-1.5">
           <p className="text-xs font-semibold text-gray-600">Row types:</p>
           <div className="flex items-start gap-2 text-xs text-gray-500">
             <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">structure</code>
-            <span>Creates modules and lessons (deduped by title)</span>
+            <span>Creates modules and lessons</span>
           </div>
           <div className="flex items-start gap-2 text-xs text-gray-500">
             <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">content</code>
-            <span>Sets the markdown body for a lesson via <code className="bg-gray-100 px-1 rounded">lesson_body</code></span>
+            <span>Sets the markdown body for a lesson</span>
           </div>
           <div className="flex items-start gap-2 text-xs text-gray-500">
             <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-semibold text-gray-700 flex-shrink-0">question</code>
-            <span>Adds a question linked to a lesson (MC, MS, T/F, Fill Blank, Ordering, Matching)</span>
+            <span>Adds a question linked to a lesson</span>
           </div>
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv"
-          className="hidden"
-          onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
-        />
-
+        <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }} />
         <div
           onClick={() => fileInputRef.current?.click()}
           onDrop={handleDrop}
@@ -404,43 +153,21 @@ function CSVImportModal({
         >
           {file ? (
             <div>
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M5 10L8.5 13.5L15 6.5" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
               <p className="text-sm font-medium text-gray-900">{file.name}</p>
               <p className="text-xs text-gray-400 mt-0.5">{formatBytes(file.size)}</p>
-              <button
-                onClick={e => { e.stopPropagation(); setFile(null) }}
-                className="text-xs text-red-500 hover:text-red-700 mt-2"
-              >
-                Remove
-              </button>
+              <button onClick={e => { e.stopPropagation(); setFile(null) }} className="text-xs text-red-500 hover:text-red-700 mt-2">Remove</button>
             </div>
           ) : (
             <div>
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-                  <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
               <p className="text-sm font-medium text-gray-700">Drop your CSV file here</p>
               <p className="text-xs text-gray-400 mt-0.5">or click to browse</p>
             </div>
           )}
         </div>
-
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={downloadFullTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
-            Full Course Template
-          </button>
-          <button onClick={downloadOutlineTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
-            Outline Only Template
-          </button>
+          <button onClick={downloadFullTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">Full Course Template</button>
+          <button onClick={downloadOutlineTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">Outline Only Template</button>
         </div>
-
         {result && (
           <div className={`mb-4 p-3 rounded-lg text-sm ${result.errors.length > 0 && result.imported === 0 ? 'bg-red-50 text-red-700' : result.errors.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
             {result.stats ? (
@@ -456,168 +183,10 @@ function CSVImportModal({
             ) : (
               <p className="font-medium">Imported {result.imported} item{result.imported !== 1 ? 's' : ''}</p>
             )}
-            {result.errors.slice(0, 5).map((e, i) => (
-              <p key={i} className="text-xs mt-1">Row {e.row}: {e.message}</p>
-            ))}
+            {result.errors.slice(0, 5).map((e, i) => <p key={i} className="text-xs mt-1">Row {e.row}: {e.message}</p>)}
             {result.errors.length > 5 && <p className="text-xs mt-1">... and {result.errors.length - 5} more errors</p>}
           </div>
         )}
-
-        <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
-            {result ? 'Done' : 'Cancel'}
-          </button>
-          {!result && (
-            <button
-              onClick={handleImport}
-              disabled={!file || importing}
-              className="btn-primary px-5 py-2 text-sm disabled:opacity-50"
-            >
-              {importing ? 'Importing...' : 'Import'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── CSV Import Questions Modal ──────────────────────────────────
-function CSVImportQuestionsModal({
-  courseId,
-  onClose,
-  onImported,
-}: {
-  courseId: string
-  onClose: () => void
-  onImported: () => void
-}) {
-  const [file, setFile] = useState<File | null>(null)
-  const [importing, setImporting] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
-  const [result, setResult] = useState<{ imported: number; errors: { row: number; message: string }[] } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const handleFile = (f: File) => {
-    if (f.name.endsWith('.csv') || f.type === 'text/csv') setFile(f)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0])
-  }
-
-  const handleImport = async () => {
-    if (!file) return
-    setImporting(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch(`/api/creator/courses/${courseId}/import/questions`, { method: 'POST', body: formData })
-      const data = await res.json()
-      setResult(data)
-      if (data.imported > 0) onImported()
-    } catch {
-      setResult({ imported: 0, errors: [{ row: 0, message: 'Import failed' }] })
-    }
-    setImporting(false)
-  }
-
-  const downloadTemplate = () => {
-    const csv = `lesson_title,question_text,question_type,option_a,option_b,option_c,option_d,correct_answers,explanation,difficulty,tags,blooms_level\n"Security Concepts","What does CIA stand for in information security?","multiple_choice","Confidentiality, Integrity, Availability","Central Intelligence Agency","Certified Information Auditor","None of the above","a","CIA stands for Confidentiality, Integrity, and Availability - the three pillars of information security.",2,"cia;fundamentals","remember"`
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'openED-questions-template.csv'; a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / 1048576).toFixed(1)} MB`
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-gray-900">Import Questions from CSV</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M4 4L12 12M4 12L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv"
-          className="hidden"
-          onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
-        />
-
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors mb-4 ${
-            dragOver ? 'border-blue-400 bg-blue-50' : file ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
-          }`}
-        >
-          {file ? (
-            <div>
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M5 10L8.5 13.5L15 6.5" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-gray-900">{file.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{formatBytes(file.size)}</p>
-              <button
-                onClick={e => { e.stopPropagation(); setFile(null) }}
-                className="text-xs text-red-500 hover:text-red-700 mt-2"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-                  <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-gray-700">Drop your CSV file here</p>
-              <p className="text-xs text-gray-400 mt-0.5">or click to browse</p>
-            </div>
-          )}
-        </div>
-
-        <p className="text-xs text-gray-400 mb-3">
-          Supports all 6 question types: MC, MS, T/F, Fill Blank, Ordering, Matching. Optional: <code className="bg-gray-100 px-1 rounded">blooms_level</code> column.
-        </p>
-
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={downloadTemplate} className="text-xs font-medium text-blue-500 hover:text-blue-700">
-            Download Template
-          </button>
-        </div>
-
-        {result && (
-          <div className={`mb-4 p-3 rounded-lg text-sm ${result.errors.length > 0 && result.imported === 0 ? 'bg-red-50 text-red-700' : result.errors.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
-            <p className="font-medium">Imported {result.imported} question{result.imported !== 1 ? 's' : ''}</p>
-            {result.errors.slice(0, 10).map((e, i) => (
-              <p key={i} className="text-xs mt-1">Row {e.row}: {e.message}</p>
-            ))}
-            {result.errors.length > 10 && <p className="text-xs mt-1">... and {result.errors.length - 10} more errors</p>}
-          </div>
-        )}
-
         <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
           <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">{result ? 'Done' : 'Cancel'}</button>
           {!result && (
@@ -631,10 +200,10 @@ function CSVImportQuestionsModal({
   )
 }
 
-// ─── Drag Handle Icon ────────────────────────────────────────────
+// ─── Drag Handle ─────────────────────────────────────────────────
 function DragHandleIcon({ className }: { className?: string }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className={className}>
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className={className}>
       <circle cx="6" cy="3.5" r="1.2" /><circle cx="10" cy="3.5" r="1.2" />
       <circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" />
       <circle cx="6" cy="12.5" r="1.2" /><circle cx="10" cy="12.5" r="1.2" />
@@ -642,107 +211,224 @@ function DragHandleIcon({ className }: { className?: string }) {
   )
 }
 
-// ─── Inline Editable Title ───────────────────────────────────────
-function InlineTitle({
-  value,
-  onSave,
-  className,
-  placeholder,
-  autoEdit,
+// ─── Module Name Popup ───────────────────────────────────────────
+function ModuleNamePopup({
+  onSubmit,
+  onCancel,
 }: {
-  value: string
-  onSave: (newTitle: string) => void
-  className?: string
-  placeholder?: string
-  autoEdit?: boolean
+  onSubmit: (name: string) => void
+  onCancel: () => void
 }) {
-  const [editing, setEditing] = useState(autoEdit || false)
-  const [text, setText] = useState(value)
-  const [saving, setSaving] = useState(false)
+  const [name, setName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { setText(value) }, [value])
   useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
+    inputRef.current?.focus()
+  }, [])
 
-  const handleSave = async () => {
-    setEditing(false)
-    if (text.trim() && text.trim() !== value) {
-      setSaving(true)
-      await onSave(text.trim())
-      setSaving(false)
-    } else {
-      setText(value)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSave()
-    if (e.key === 'Escape') { setText(value); setEditing(false) }
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className={`bg-white border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${className || ''}`}
-      />
-    )
+  const handleSubmit = () => {
+    if (name.trim()) onSubmit(name.trim())
   }
 
   return (
-    <span
-      onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-      className={`cursor-pointer hover:text-blue-600 transition-colors ${className || ''} ${saving ? 'opacity-50' : ''}`}
-    >
-      {value || placeholder}
-      {saving && <span className="ml-1.5 inline-block w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin" />}
-    </span>
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 space-y-2">
+      <p className="text-xs font-semibold text-gray-500">New module</p>
+      <input
+        ref={inputRef}
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') handleSubmit()
+          if (e.key === 'Escape') onCancel()
+        }}
+        placeholder="e.g., Network Security Fundamentals"
+        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      />
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+        <button
+          onClick={handleSubmit}
+          disabled={!name.trim()}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
+          Add module
+        </button>
+      </div>
+    </div>
   )
 }
 
-// ─── Status Dot ──────────────────────────────────────────────────
-function StatusDot({ lesson }: { lesson: Lesson }) {
-  const hasBody = !!lesson.body && lesson.body.trim().length > 0
-  const hasQuestions = lesson.question_count > 0
-  if (hasBody && hasQuestions) return <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-  if (hasBody || hasQuestions) return <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-  return <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+// ─── Sortable Lesson Row (sidebar) ───────────────────────────────
+function SortableSidebarLesson({
+  lesson,
+  idx,
+  isActive,
+  onClick,
+  modules,
+  onDelete,
+  onDuplicate,
+  onMoveTo,
+  onPreview,
+  onRename,
+}: {
+  lesson: Lesson
+  idx: number
+  isActive: boolean
+  onClick: () => void
+  modules: Module[]
+  onDelete: () => void
+  onDuplicate: () => void
+  onMoveTo: (targetModuleId: string) => void
+  onPreview: () => void
+  onRename: (title: string) => void
+}) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleText, setTitleText] = useState(lesson.title)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `lesson-${lesson.id}`, data: { type: 'lesson', lesson, moduleId: lesson.module_id } })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  }
+
+  useEffect(() => {
+    if (editingTitle) {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    }
+  }, [editingTitle])
+
+  useEffect(() => { setTitleText(lesson.title) }, [lesson.title])
+
+  const handleTitleSave = () => {
+    setEditingTitle(false)
+    const trimmed = titleText.trim()
+    if (trimmed && trimmed !== lesson.title) {
+      onRename(trimmed)
+    } else {
+      setTitleText(lesson.title)
+    }
+  }
+
+  const otherModules = modules.filter(m => m.id !== lesson.module_id)
+
+  const menuItems = [
+    { label: 'Rename', onClick: () => setEditingTitle(true) },
+    { label: 'Preview', onClick: onPreview },
+    ...(otherModules.length > 0
+      ? [{ divider: true as const }, ...otherModules.map(m => ({ label: `Move to ${m.title}`, onClick: () => onMoveTo(m.id) }))]
+      : []),
+    { label: 'Duplicate', onClick: onDuplicate },
+    { divider: true as const },
+    { label: 'Delete', onClick: () => { if (confirm('Delete this lesson?')) onDelete() }, destructive: true },
+  ]
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        onClick={editingTitle ? undefined : onClick}
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group transition-colors ${
+          isActive
+            ? 'bg-blue-50 border border-blue-200'
+            : 'hover:bg-gray-50 border border-transparent'
+        }`}
+      >
+        <button
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-manipulation opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <DragHandleIcon />
+        </button>
+        <span className="text-[11px] text-gray-400 w-4 flex-shrink-0">{idx + 1}</span>
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            value={titleText}
+            onChange={e => setTitleText(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleTitleSave()
+              if (e.key === 'Escape') { setTitleText(lesson.title); setEditingTitle(false) }
+            }}
+            onClick={e => e.stopPropagation()}
+            className="text-xs text-gray-900 bg-white border border-blue-300 rounded px-1.5 py-0.5 flex-1 min-w-0 focus:outline-none"
+          />
+        ) : (
+          <span
+            className={`text-xs truncate flex-1 ${isActive ? 'text-blue-700 font-medium' : 'text-gray-700'}`}
+            onDoubleClick={(e) => { e.stopPropagation(); setEditingTitle(true) }}
+          >
+            {lesson.title}
+          </span>
+        )}
+        <LessonStatusBadge lesson={lesson} />
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+          <ContextMenu items={menuItems} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// ─── Sortable Module Accordion ───────────────────────────────────
-function SortableModuleCard({
+// ─── Sortable Module Row (sidebar) ───────────────────────────────
+function SortableSidebarModule({
   mod,
   expanded,
   onToggle,
   onEditTitle,
   onDeleteModule,
+  onDuplicateModule,
   onAddLesson,
-  onEditLessonTitle,
+  activeLessonId,
+  onSelectLesson,
   onDeleteLesson,
-  onEditLesson,
-  newLessonId,
+  onDuplicateLesson,
+  onMoveLesson,
+  onPreviewLesson,
+  onRenameLesson,
+  modules,
+  moduleTests,
+  activeTestId,
+  onSelectTest,
+  onAddQuiz,
 }: {
   mod: Module
   expanded: boolean
   onToggle: () => void
-  onEditTitle: (moduleId: string, title: string) => void
-  onDeleteModule: (moduleId: string) => void
-  onAddLesson: (moduleId: string) => void
-  onEditLessonTitle: (lessonId: string, title: string) => void
+  onEditTitle: (title: string) => void
+  onDeleteModule: () => void
+  onDuplicateModule: () => void
+  onAddLesson: () => void
+  activeLessonId: string | null
+  onSelectLesson: (lessonId: string) => void
   onDeleteLesson: (lessonId: string) => void
-  onEditLesson: (lessonId: string) => void
-  newLessonId: string | null
+  onDuplicateLesson: (lessonId: string) => void
+  onMoveLesson: (lessonId: string, targetModuleId: string) => void
+  onPreviewLesson: (lessonId: string) => void
+  onRenameLesson: (lessonId: string, title: string) => void
+  modules: Module[]
+  moduleTests?: TestItem[]
+  activeTestId?: string | null
+  onSelectTest?: (testId: string) => void
+  onAddQuiz?: () => void
 }) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleText, setTitleText] = useState(mod.title)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
   const {
     attributes,
     listeners,
@@ -758,719 +444,146 @@ function SortableModuleCard({
     opacity: isDragging ? 0.3 : 1,
   }
 
+  useEffect(() => {
+    if (editingTitle && titleInputRef.current) {
+      titleInputRef.current.focus()
+      titleInputRef.current.select()
+    }
+  }, [editingTitle])
+
+  const handleTitleSave = () => {
+    setEditingTitle(false)
+    if (titleText.trim() && titleText.trim() !== mod.title) {
+      onEditTitle(titleText.trim())
+    } else {
+      setTitleText(mod.title)
+    }
+  }
+
+  const moduleMenuItems = [
+    { label: 'Rename', onClick: () => setEditingTitle(true) },
+    { label: 'Add lesson', onClick: onAddLesson },
+    { label: 'Duplicate module', onClick: onDuplicateModule },
+    { divider: true as const },
+    { label: 'Delete module', onClick: () => { if (confirm('Delete this module and all its lessons?')) onDeleteModule() }, destructive: true },
+  ]
+
+  const lessonIds = mod.lessons.map(l => `lesson-${l.id}`)
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${isDragging ? 'shadow-xl ring-2 ring-blue-200' : ''}`}
-    >
-      {/* Module Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+    <div ref={setNodeRef} style={style}>
+      {/* Module header */}
+      <div className="flex items-center gap-1 px-2 py-1.5 group">
         <button
           {...attributes}
           {...listeners}
-          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-manipulation p-1 -m-1"
+          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <DragHandleIcon />
         </button>
-
-        <button
-          onClick={onToggle}
-          className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-transform p-1 -m-1"
-        >
+        <button onClick={onToggle} className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-0.5">
           <svg
-            width="16" height="16" viewBox="0 0 16 16" fill="none"
+            width="14" height="14" viewBox="0 0 16 16" fill="none"
             className={`transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
           >
             <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-
         <div className="flex-1 min-w-0">
-          <InlineTitle
-            value={mod.title}
-            onSave={(title) => onEditTitle(mod.id, title)}
-            className="text-sm font-semibold text-gray-900"
-            placeholder="Module title..."
-          />
-          <p className="text-xs text-gray-400 mt-0.5">
-            {mod.lessons.length} lesson{mod.lessons.length !== 1 ? 's' : ''}
-          </p>
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={titleText}
+              onChange={e => setTitleText(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') { setTitleText(mod.title); setEditingTitle(false) } }}
+              className="text-xs font-semibold text-gray-900 bg-white border border-blue-300 rounded px-1.5 py-0.5 w-full focus:outline-none"
+            />
+          ) : (
+            <span
+              className="text-xs font-semibold text-gray-900 truncate block cursor-pointer hover:text-blue-600"
+              onDoubleClick={() => setEditingTitle(true)}
+            >
+              {mod.title}
+            </span>
+          )}
+          <span className="text-[10px] text-gray-400">{mod.lessons.length} lesson{mod.lessons.length !== 1 ? 's' : ''}</span>
         </div>
-
-        <button
-          onClick={(e) => { e.stopPropagation(); if (confirm('Delete this module and all its lessons?')) onDeleteModule(mod.id) }}
-          className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 p-1 -m-1"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3 3L11 11M3 11L11 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <ContextMenu items={moduleMenuItems} />
+        </div>
       </div>
 
       {/* Lessons */}
       {expanded && (
-        <div className="p-3 space-y-1.5">
-          {mod.lessons.map((lesson, idx) => (
-            <div
-              key={lesson.id}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg hover:border-gray-200 transition-colors group"
-            >
-              <span className="text-xs font-semibold text-gray-400 w-5 text-center flex-shrink-0">
-                {idx + 1}
-              </span>
-              <StatusDot lesson={lesson} />
-              <div className="flex-1 min-w-0">
-                <InlineTitle
-                  value={lesson.title}
-                  onSave={(title) => onEditLessonTitle(lesson.id, title)}
-                  className="text-xs text-gray-700 font-medium"
-                  placeholder="Lesson title..."
-                  autoEdit={lesson.id === newLessonId}
-                />
-              </div>
-              <span className="text-[11px] text-gray-400 flex-shrink-0">
-                {lesson.question_count > 0 && `${lesson.question_count}q`}
-                {lesson.question_count > 0 && lesson.word_count > 0 && ' · '}
-                {lesson.word_count > 0 ? `${lesson.word_count}w` : (lesson.question_count === 0 ? 'no content' : '')}
-              </span>
-              <button
-                onClick={() => onEditLesson(lesson.id)}
-                className="text-xs text-blue-500 hover:text-blue-700 font-medium flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); if (confirm('Delete this lesson?')) onDeleteLesson(lesson.id) }}
-                className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 p-1 -m-1 opacity-0 group-hover:opacity-100"
-              >
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                  <path d="M3 3L11 11M3 11L11 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-          ))}
-
+        <div className="ml-5 space-y-0.5 pb-1">
+          <SortableContext items={lessonIds} strategy={verticalListSortingStrategy}>
+            {mod.lessons.map((lesson, idx) => (
+              <SortableSidebarLesson
+                key={lesson.id}
+                lesson={lesson}
+                idx={idx}
+                isActive={activeLessonId === lesson.id}
+                onClick={() => onSelectLesson(lesson.id)}
+                modules={modules}
+                onDelete={() => onDeleteLesson(lesson.id)}
+                onDuplicate={() => onDuplicateLesson(lesson.id)}
+                onMoveTo={(targetId) => onMoveLesson(lesson.id, targetId)}
+                onPreview={() => onPreviewLesson(lesson.id)}
+                onRename={(title) => onRenameLesson(lesson.id, title)}
+              />
+            ))}
+          </SortableContext>
           <button
-            onClick={() => onAddLesson(mod.id)}
-            className="w-full py-2.5 border border-dashed border-gray-200 rounded-lg text-xs font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+            onClick={onAddLesson}
+            className="w-full text-left px-2 py-1 text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
           >
-            {mod.lessons.length === 0 ? '+ Add first lesson' : '+ Add lesson'}
+            + lesson
           </button>
+
+          {/* Module quizzes */}
+          {moduleTests && moduleTests.length > 0 && moduleTests.map(t => (
+            <button
+              key={t.id}
+              onClick={() => onSelectTest?.(t.id)}
+              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left transition-colors ${
+                activeTestId === t.id ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+              </svg>
+              <span className="text-[11px] font-medium truncate">{t.title}</span>
+            </button>
+          ))}
+
+          {/* Add quiz button */}
+          {onAddQuiz && !(moduleTests && moduleTests.some(t => t.test_type === 'module_quiz')) && (
+            <button
+              onClick={onAddQuiz}
+              className="w-full text-left px-2 py-1 text-[11px] text-gray-400 hover:text-purple-500 transition-colors"
+            >
+              + quiz
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-// ─── Question Form ───────────────────────────────────────────────
-const QUESTION_TYPES = [
-  { value: 'multiple_choice', label: 'MC' },
-  { value: 'multiple_select', label: 'MS' },
-  { value: 'true_false', label: 'T/F' },
-  { value: 'fill_blank', label: 'Fill Blank' },
-  { value: 'ordering', label: 'Ordering' },
-  { value: 'matching', label: 'Matching' },
-]
-
-const TYPE_LABELS: Record<string, string> = {
-  multiple_choice: 'MC', multiple_select: 'MS', true_false: 'T/F',
-  fill_blank: 'FB', ordering: 'ORD', matching: 'MATCH',
-}
-
-function QuestionForm({
-  courseId,
-  lessonId,
-  onCreated,
-}: {
-  courseId: string
-  lessonId: string
-  onCreated: (q: Question) => void
-}) {
-  const [questionText, setQuestionText] = useState('')
-  const [questionType, setQuestionType] = useState('multiple_choice')
-  const [options, setOptions] = useState<{ id: string; text: string }[]>([
-    { id: 'a', text: '' }, { id: 'b', text: '' }, { id: 'c', text: '' }, { id: 'd', text: '' },
-  ])
-  const [correctIds, setCorrectIds] = useState<string[]>([])
-  const [explanation, setExplanation] = useState('')
-  const [difficulty, setDifficulty] = useState(3)
-  const [tags, setTags] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [optionExplanations, setOptionExplanations] = useState<Record<string, string>>({})
-  const [showOptExpl, setShowOptExpl] = useState<Set<string>>(new Set())
-  const [acceptableAnswers, setAcceptableAnswers] = useState<string[]>([''])
-  const [matchMode, setMatchMode] = useState('exact')
-  const [correctOrder, setCorrectOrder] = useState<string[]>([])
-  const [matchingPairs, setMatchingPairs] = useState<{ left: string; right: string }[]>([
-    { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' },
-  ])
-  const [dismissedTips, setDismissedTips] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (questionType === 'true_false') {
-      setOptions([{ id: 'a', text: 'True' }, { id: 'b', text: 'False' }])
-      setCorrectIds([])
-    } else if (['multiple_choice', 'multiple_select'].includes(questionType) && options.length < 3) {
-      setOptions([{ id: 'a', text: '' }, { id: 'b', text: '' }, { id: 'c', text: '' }, { id: 'd', text: '' }])
-    }
-    setOptionExplanations({})
-    setShowOptExpl(new Set())
-  }, [questionType])
-
-  useEffect(() => {
-    if (questionType === 'ordering') {
-      setCorrectOrder(options.map(o => o.id))
-    }
-  }, [options.length, questionType])
-
-  const toggleCorrect = (id: string) => {
-    if (questionType === 'multiple_choice' || questionType === 'true_false') {
-      setCorrectIds([id])
-    } else {
-      setCorrectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-    }
-  }
-
-  const addOption = () => {
-    const nextLetter = String.fromCharCode(97 + options.length)
-    if (options.length < 6) setOptions(prev => [...prev, { id: nextLetter, text: '' }])
-  }
-
-  const removeOption = (id: string) => {
-    if (options.length > 2) {
-      setOptions(prev => prev.filter(o => o.id !== id))
-      setCorrectIds(prev => prev.filter(x => x !== id))
-    }
-  }
-
-  const moveOrderItem = (index: number, direction: -1 | 1) => {
-    const newOrder = [...correctOrder]
-    const target = index + direction
-    if (target < 0 || target >= newOrder.length) return
-    ;[newOrder[index], newOrder[target]] = [newOrder[target], newOrder[index]]
-    setCorrectOrder(newOrder)
-  }
-
-  const canSave = () => {
-    if (!questionText.trim()) return false
-    if (questionType === 'fill_blank') return acceptableAnswers.some(a => a.trim())
-    if (questionType === 'ordering') return options.length >= 3 && options.every(o => o.text.trim())
-    if (questionType === 'matching') return matchingPairs.length >= 3 && matchingPairs.every(p => p.left.trim() && p.right.trim())
-    return correctIds.length > 0
-  }
-
-  const handleSave = async () => {
-    if (!canSave()) return
-    setSaving(true)
-    try {
-      const body: Record<string, unknown> = {
-        question_text: questionText.trim(),
-        question_type: questionType,
-        explanation: explanation.trim(),
-        difficulty,
-        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        lesson_id: lessonId,
-      }
-
-      if (['multiple_choice', 'multiple_select', 'true_false'].includes(questionType)) {
-        body.options = options.filter(o => o.text.trim())
-        body.correct_option_ids = correctIds
-        const expls = Object.fromEntries(Object.entries(optionExplanations).filter(([, v]) => v.trim()))
-        if (Object.keys(expls).length > 0) body.option_explanations = expls
-      } else if (questionType === 'fill_blank') {
-        body.acceptable_answers = acceptableAnswers.filter(a => a.trim())
-        body.match_mode = matchMode
-      } else if (questionType === 'ordering') {
-        body.options = options.filter(o => o.text.trim())
-        body.correct_order = correctOrder
-      } else if (questionType === 'matching') {
-        body.matching_pairs = matchingPairs.filter(p => p.left.trim() && p.right.trim())
-      }
-
-      const res = await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const q = await res.json()
-      if (q.id) {
-        onCreated(q)
-        setQuestionText('')
-        setCorrectIds([])
-        setExplanation('')
-        setDifficulty(3)
-        setTags('')
-        setOptionExplanations({})
-        setAcceptableAnswers([''])
-        setMatchingPairs([{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }])
-        if (!['true_false', 'ordering'].includes(questionType)) {
-          setOptions([{ id: 'a', text: '' }, { id: 'b', text: '' }, { id: 'c', text: '' }, { id: 'd', text: '' }])
-        }
-      }
-    } catch (err) {
-      console.error('Failed to save question:', err)
-    }
-    setSaving(false)
-  }
-
-  const showOptions = ['multiple_choice', 'multiple_select', 'true_false', 'ordering'].includes(questionType)
-
+// ─── No Lesson Selected ──────────────────────────────────────────
+function NoLessonSelected() {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-      <h4 className="text-sm font-semibold text-gray-900">Add Question</h4>
-
-      <textarea
-        value={questionText}
-        onChange={e => setQuestionText(e.target.value)}
-        placeholder={questionType === 'fill_blank' ? 'Enter question (use ___ for the blank)...' : 'Enter your question...'}
-        rows={3}
-        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-      />
-
-      {/* Type selector */}
-      <div className="space-y-1.5">
-        <div className="flex gap-1.5">
-          {QUESTION_TYPES.slice(0, 3).map(type => (
-            <button
-              key={type.value}
-              onClick={() => setQuestionType(type.value)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                questionType === type.value
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {type.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1.5">
-          {QUESTION_TYPES.slice(3).map(type => (
-            <button
-              key={type.value}
-              onClick={() => setQuestionType(type.value)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                questionType === type.value
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {type.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <CreatorTip tipKey={`question_${questionType}`} dismissedTips={dismissedTips} onDismiss={(key) => setDismissedTips(prev => new Set([...prev, key]))} />
-
-      {/* MC / MS / TF / Ordering: Options */}
-      {showOptions && (
-        <div className="space-y-2">
-          {options.map((opt) => (
-            <div key={opt.id}>
-              <div className="flex items-center gap-2">
-                {questionType !== 'ordering' && (
-                  <button
-                    onClick={() => toggleCorrect(opt.id)}
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      correctIds.includes(opt.id) ? 'border-green-500 bg-green-50' : 'border-gray-200'
-                    }`}
-                  >
-                    {correctIds.includes(opt.id) && (
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6L5 9L10 3" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </button>
-                )}
-                <span className="text-xs font-semibold text-gray-400 w-4">{opt.id.toUpperCase()}</span>
-                <input
-                  type="text"
-                  value={opt.text}
-                  onChange={e => setOptions(prev => prev.map(o => o.id === opt.id ? { ...o, text: e.target.value } : o))}
-                  placeholder={`Option ${opt.id.toUpperCase()}`}
-                  disabled={questionType === 'true_false'}
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5 disabled:bg-gray-50"
-                />
-                {questionType !== 'true_false' && options.length > 2 && (
-                  <button onClick={() => removeOption(opt.id)} className="text-gray-300 hover:text-red-500 text-xs">x</button>
-                )}
-              </div>
-              {['multiple_choice', 'multiple_select', 'true_false'].includes(questionType) && !correctIds.includes(opt.id) && opt.text.trim() && (
-                <div className="ml-10 mt-1">
-                  {showOptExpl.has(opt.id) ? (
-                    <textarea
-                      value={optionExplanations[opt.id] || ''}
-                      onChange={e => setOptionExplanations(prev => ({ ...prev, [opt.id]: e.target.value }))}
-                      placeholder="Explain why this is wrong (shown when learner picks this)..."
-                      rows={2}
-                      className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 resize-none"
-                    />
-                  ) : (
-                    <button
-                      onClick={() => setShowOptExpl(prev => new Set([...prev, opt.id]))}
-                      className="text-[11px] text-blue-500 hover:text-blue-700"
-                    >
-                      + Add explanation
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          {!['true_false', 'ordering'].includes(questionType) && options.length < 6 && (
-            <button onClick={addOption} className="text-xs text-blue-500 hover:text-blue-700">+ Add Option</button>
-          )}
-          {questionType === 'ordering' && options.length < 6 && (
-            <button onClick={addOption} className="text-xs text-blue-500 hover:text-blue-700">+ Add Item</button>
-          )}
-        </div>
-      )}
-
-      {/* Ordering: Correct Order */}
-      {questionType === 'ordering' && options.some(o => o.text.trim()) && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Correct order (use arrows):</p>
-          <div className="space-y-1 bg-gray-50 rounded-lg p-2">
-            {correctOrder.map((optId, idx) => {
-              const opt = options.find(o => o.id === optId)
-              return (
-                <div key={optId} className="flex items-center gap-2 bg-white rounded px-2 py-1 border border-gray-200">
-                  <span className="text-xs text-gray-400 w-4">{idx + 1}.</span>
-                  <span className="text-sm text-gray-700 flex-1">{opt?.text || optId}</span>
-                  <button onClick={() => moveOrderItem(idx, -1)} disabled={idx === 0} className="text-gray-300 hover:text-gray-600 disabled:opacity-30 text-xs">&#9650;</button>
-                  <button onClick={() => moveOrderItem(idx, 1)} disabled={idx === correctOrder.length - 1} className="text-gray-300 hover:text-gray-600 disabled:opacity-30 text-xs">&#9660;</button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Fill Blank: Acceptable Answers */}
-      {questionType === 'fill_blank' && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Acceptable answers (case-insensitive):</p>
-          <div className="space-y-1">
-            {acceptableAnswers.map((ans, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={ans}
-                  onChange={e => setAcceptableAnswers(prev => prev.map((a, i) => i === idx ? e.target.value : a))}
-                  placeholder={`Answer ${idx + 1}`}
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5"
-                />
-                {acceptableAnswers.length > 1 && (
-                  <button onClick={() => setAcceptableAnswers(prev => prev.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-500 text-xs">x</button>
-                )}
-              </div>
-            ))}
-            <button onClick={() => setAcceptableAnswers(prev => [...prev, ''])} className="text-xs text-blue-500 hover:text-blue-700">+ Add answer</button>
-          </div>
-          <div className="flex items-center gap-3 mt-2">
-            <label className="flex items-center gap-1.5 text-xs">
-              <input type="radio" checked={matchMode === 'exact'} onChange={() => setMatchMode('exact')} className="text-blue-500" />
-              Exact match
-            </label>
-            <label className="flex items-center gap-1.5 text-xs">
-              <input type="radio" checked={matchMode === 'contains'} onChange={() => setMatchMode('contains')} className="text-blue-500" />
-              Contains
-            </label>
-          </div>
-        </div>
-      )}
-
-      {/* Matching: Pairs Builder */}
-      {questionType === 'matching' && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Matching pairs:</p>
-          <div className="space-y-1">
-            {matchingPairs.map((pair, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={pair.left}
-                  onChange={e => setMatchingPairs(prev => prev.map((p, i) => i === idx ? { ...p, left: e.target.value } : p))}
-                  placeholder="Left item"
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5"
-                />
-                <span className="text-xs text-gray-400">&#8596;</span>
-                <input
-                  type="text"
-                  value={pair.right}
-                  onChange={e => setMatchingPairs(prev => prev.map((p, i) => i === idx ? { ...p, right: e.target.value } : p))}
-                  placeholder="Right item"
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5"
-                />
-                {matchingPairs.length > 3 && (
-                  <button onClick={() => setMatchingPairs(prev => prev.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-500 text-xs">x</button>
-                )}
-              </div>
-            ))}
-            {matchingPairs.length < 6 && (
-              <button onClick={() => setMatchingPairs(prev => [...prev, { left: '', right: '' }])} className="text-xs text-blue-500 hover:text-blue-700">+ Add pair</button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <textarea
-        value={explanation}
-        onChange={e => setExplanation(e.target.value)}
-        placeholder="Explanation (shown after answering)..."
-        rows={2}
-        className="w-full text-sm border border-gray-200 rounded px-3 py-2 resize-none"
-      />
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Difficulty:</label>
-          <input type="range" min="1" max="5" value={difficulty} onChange={e => setDifficulty(parseInt(e.target.value))} className="w-24" />
-          <span className="text-xs font-semibold text-gray-700">{difficulty}</span>
-        </div>
-        <div className="flex-1">
-          <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (comma-separated)" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5" />
-        </div>
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={!canSave() || saving}
-        className="btn-primary px-4 py-2 text-sm disabled:opacity-50 w-full"
-      >
-        {saving ? 'Saving...' : 'Add Question'}
-      </button>
-    </div>
-  )
-}
-
-// ─── Lesson Editor Page ──────────────────────────────────────────
-function LessonEditorPage({
-  courseId,
-  lessonId,
-  modules,
-  onBack,
-  onNavigate,
-}: {
-  courseId: string
-  lessonId: string
-  modules: Module[]
-  onBack: () => void
-  onNavigate: (lessonId: string) => void
-}) {
-  const [lessonTitle, setLessonTitle] = useState('')
-  const [lessonBody, setLessonBody] = useState('')
-  const [videoUrl, setVideoUrl] = useState('')
-  const [preview, setPreview] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [loadingQuestions, setLoadingQuestions] = useState(true)
-
-  // Find current lesson context (module, position, neighbors)
-  const lessonContext = (() => {
-    for (const mod of modules) {
-      const idx = mod.lessons.findIndex(l => l.id === lessonId)
-      if (idx !== -1) {
-        const lesson = mod.lessons[idx]
-        const prev = idx > 0 ? mod.lessons[idx - 1] : null
-        const next = idx < mod.lessons.length - 1 ? mod.lessons[idx + 1] : null
-        return { lesson, module: mod, index: idx, prev, next, total: mod.lessons.length }
-      }
-    }
-    return null
-  })()
-
-  // Load lesson data
-  useEffect(() => {
-    if (!lessonContext?.lesson) return
-    setLessonTitle(lessonContext.lesson.title)
-    setLessonBody(lessonContext.lesson.body || '')
-    setVideoUrl(lessonContext.lesson.video_url || '')
-    setPreview(false)
-  }, [lessonId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load questions
-  useEffect(() => {
-    setLoadingQuestions(true)
-    fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}/questions`)
-      .then(r => r.json())
-      .then(data => {
-        setQuestions(Array.isArray(data) ? data : [])
-      })
-      .catch(() => setQuestions([]))
-      .finally(() => setLoadingQuestions(false))
-  }, [courseId, lessonId])
-
-  const saveField = async (field: string, value: string) => {
-    setSaving(true)
-    try {
-      await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value }),
-      })
-    } catch (err) {
-      console.error(`Failed to save ${field}:`, err)
-    }
-    setSaving(false)
-  }
-
-  const handleQuestionCreated = (q: Question) => {
-    setQuestions(prev => [...prev, q])
-  }
-
-  const deleteQuestion = async (questionId: string) => {
-    try {
-      await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}/questions/${questionId}`, { method: 'DELETE' })
-      setQuestions(prev => prev.filter(q => q.id !== questionId))
-    } catch (err) {
-      console.error('Failed to delete question:', err)
-    }
-  }
-
-  if (!lessonContext) {
-    return (
-      <div className="text-center py-12 text-gray-400">
-        <p>Lesson not found.</p>
-        <button onClick={onBack} className="text-blue-500 hover:text-blue-700 mt-2 text-sm">Back to outline</button>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      {/* Navigation bar */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <div className="flex items-center justify-center h-full text-center">
+      <div>
+        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-gray-400">
+            <path d="M15 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Back to outline
-        </button>
-        <span className="text-xs text-gray-400">
-          {lessonContext.module.title} &gt; Lesson {lessonContext.index + 1} of {lessonContext.total}
-        </span>
-        <button
-          onClick={() => lessonContext.next && onNavigate(lessonContext.next.id)}
-          disabled={!lessonContext.next}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-30"
-        >
-          Next lesson
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Lesson Title */}
-      <input
-        type="text"
-        value={lessonTitle}
-        onChange={e => setLessonTitle(e.target.value)}
-        onBlur={() => { if (lessonTitle.trim() !== lessonContext.lesson.title) saveField('title', lessonTitle.trim()) }}
-        className="text-xl font-bold text-gray-900 bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none w-full mb-6"
-        placeholder="Lesson title..."
-      />
-
-      {/* Video URL */}
-      <div className="mb-6">
-        <label className="block text-xs font-medium text-gray-500 mb-1.5">Video URL (optional)</label>
-        <input
-          type="text"
-          value={videoUrl}
-          onChange={e => setVideoUrl(e.target.value)}
-          onBlur={() => saveField('video_url', videoUrl.trim())}
-          placeholder="https://youtube.com/watch?v=..."
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-        />
-      </div>
-
-      {/* Lesson Content */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lesson Content</label>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPreview(false)}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                !preview ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Write
-            </button>
-            <button
-              onClick={() => setPreview(true)}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                preview ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Preview
-            </button>
-          </div>
         </div>
-        {preview ? (
-          <div className="border border-gray-200 rounded-lg p-4 prose prose-sm max-w-none min-h-[200px] [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-gray-700 [&_ul]:text-sm [&_ul]:text-gray-700 [&_ol]:text-sm [&_ol]:text-gray-700 [&_code]:text-xs [&_code]:bg-gray-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_pre]:bg-gray-800 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs [&_pre]:text-gray-100">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{lessonBody || '*No content yet*'}</ReactMarkdown>
-          </div>
-        ) : (
-          <textarea
-            value={lessonBody}
-            onChange={e => setLessonBody(e.target.value)}
-            onBlur={() => saveField('body', lessonBody)}
-            rows={14}
-            className="w-full text-sm border border-gray-200 rounded-lg px-4 py-3 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            placeholder="Write your lesson content in Markdown...&#10;&#10;## Heading&#10;Regular text with **bold** and *italic*&#10;&#10;> **Exam Tip:** Important tip here&#10;&#10;```&#10;code block&#10;```"
-          />
-        )}
-      </div>
-
-      {saving && <p className="text-xs text-gray-400 mb-2">Saving...</p>}
-
-      {/* Questions */}
-      <div className="border-t border-gray-200 pt-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-          Questions ({questions.length})
-        </h3>
-
-        {!loadingQuestions && questions.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {questions.map((q, idx) => (
-              <div key={q.id} className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm text-gray-900 flex-1">{idx + 1}. {q.question_text}</p>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] font-medium text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">
-                      {TYPE_LABELS[q.question_type] || q.question_type}
-                    </span>
-                    <button
-                      onClick={() => { if (confirm('Delete this question?')) deleteQuestion(q.id) }}
-                      className="text-xs text-gray-300 hover:text-red-500"
-                    >
-                      x
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {loadingQuestions && (
-          <div className="space-y-2 mb-4">
-            {[1, 2].map(i => <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />)}
-          </div>
-        )}
-
-        <QuestionForm
-          courseId={courseId}
-          lessonId={lessonId}
-          onCreated={handleQuestionCreated}
-        />
+        <p className="text-sm text-gray-500">Select a lesson from the outline to start editing.</p>
       </div>
     </div>
   )
@@ -1479,45 +592,34 @@ function LessonEditorPage({
 // ─── Main Component ──────────────────────────────────────────────
 export default function StepBuildCourse({
   courseId,
+  cardColor,
   onBack,
   onPublish,
 }: {
   courseId: string
+  cardColor?: string
   onBack: () => void
   onPublish: () => void
 }) {
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'outline' | 'editor'>('outline')
-  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
   const [showCSVImport, setShowCSVImport] = useState(false)
-  const [showAIImport, setShowAIImport] = useState(false)
-  const [showQImport, setShowQImport] = useState(false)
+  const [showModulePopup, setShowModulePopup] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [newLessonId, setNewLessonId] = useState<string | null>(null)
-  const [sourceMap, setSourceMap] = useState<Record<string, string>>({})
-  const [importingAll, setImportingAll] = useState(false)
-  const [importAllConfirm, setImportAllConfirm] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [previewLesson, setPreviewLesson] = useState<{ lesson: Lesson; module: Module } | null>(null)
+  const [previewQuestions, setPreviewQuestions] = useState<Question[]>([])
+  const [tests, setTests] = useState<TestItem[]>([])
+  const [activeTestId, setActiveTestId] = useState<string | null>(null)
 
-  const hasSourceMap = Object.keys(sourceMap).length > 0
+  const accentColor = cardColor || '#3b82f6'
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
-
-  // Load source_map from sessionStorage
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(`source_map_${courseId}`)
-      if (saved) {
-        setSourceMap(JSON.parse(saved))
-        sessionStorage.removeItem(`source_map_${courseId}`)
-      }
-    } catch { /* ignore */ }
-  }, [courseId])
 
   // ─── Fetch Data ──────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -1535,6 +637,7 @@ export default function StepBuildCourse({
             module_id: mod.id,
             question_count: l.question_count || 0,
             word_count: l.word_count || (l.body ? l.body.split(/\s+/).filter(Boolean).length : 0),
+            step_count: l.step_count || 0,
           }))
           return {
             id: mod.id,
@@ -1549,6 +652,10 @@ export default function StepBuildCourse({
           setExpandedModules(new Set(enriched.map(m => m.id)))
         }
       }
+      // Fetch tests
+      const testsRes = await fetch(`/api/creator/courses/${courseId}/tests`)
+      const testsData = await testsRes.json()
+      setTests(Array.isArray(testsData) ? testsData : [])
     } catch (err) {
       console.error('Failed to fetch course data:', err)
     }
@@ -1557,21 +664,48 @@ export default function StepBuildCourse({
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // ─── Get active lesson object ─────────────────────────────────
+  const activeLesson = activeLessonId
+    ? modules.flatMap(m => m.lessons).find(l => l.id === activeLessonId) || null
+    : null
+
   // ─── Module CRUD ──────────────────────────────────────────────
-  const addModule = async () => {
+  const createModuleWithName = async (name: string) => {
     try {
       const res = await fetch(`/api/creator/courses/${courseId}/modules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `Module ${modules.length + 1}` }),
+        body: JSON.stringify({ title: name }),
       })
       const mod = await res.json()
       if (mod.id) {
-        setModules(prev => [...prev, { ...mod, lessons: [], question_count: 0 }])
+        // Create first lesson
+        const lRes = await fetch(`/api/creator/courses/${courseId}/modules/${mod.id}/lessons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'Lesson 1' }),
+        })
+        const lesson = await lRes.json()
+        const newModule: Module = {
+          ...mod,
+          lessons: lesson.id ? [{
+            id: lesson.id,
+            title: lesson.title,
+            body: null,
+            video_url: null,
+            display_order: 0,
+            module_id: mod.id,
+            question_count: 0,
+            word_count: 0,
+            step_count: 0,
+          }] : [],
+          question_count: 0,
+        }
+        setModules(prev => [...prev, newModule])
         setExpandedModules(prev => new Set([...prev, mod.id]))
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 100)
+        setShowModulePopup(false)
+        // Select the first lesson for editing
+        if (lesson.id) setActiveLessonId(lesson.id)
       }
     } catch (err) {
       console.error('Failed to create module:', err)
@@ -1592,11 +726,47 @@ export default function StepBuildCourse({
   }
 
   const deleteModule = async (moduleId: string) => {
+    const mod = modules.find(m => m.id === moduleId)
+    if (mod?.lessons.some(l => l.id === activeLessonId)) {
+      setActiveLessonId(null)
+    }
     setModules(prev => prev.filter(m => m.id !== moduleId))
     try {
       await fetch(`/api/creator/courses/${courseId}/modules/${moduleId}`, { method: 'DELETE' })
     } catch (err) {
       console.error('Failed to delete module:', err)
+    }
+  }
+
+  const duplicateModule = async (moduleId: string) => {
+    const mod = modules.find(m => m.id === moduleId)
+    if (!mod) return
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/modules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `${mod.title} (copy)` }),
+      })
+      const newMod = await res.json()
+      if (!newMod.id) return
+      for (const lesson of mod.lessons) {
+        const lRes = await fetch(`/api/creator/courses/${courseId}/modules/${newMod.id}/lessons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: lesson.title }),
+        })
+        const newLesson = await lRes.json()
+        if (newLesson.id && (lesson.body || lesson.video_url)) {
+          await fetch(`/api/creator/courses/${courseId}/lessons/${newLesson.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body: lesson.body, video_url: lesson.video_url }),
+          })
+        }
+      }
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to duplicate module:', err)
     }
   }
 
@@ -1612,40 +782,29 @@ export default function StepBuildCourse({
       })
       const lesson = await res.json()
       if (lesson.id) {
+        const newLesson: Lesson = {
+          id: lesson.id,
+          title: lesson.title,
+          body: null,
+          video_url: null,
+          display_order: lesson.display_order,
+          module_id: moduleId,
+          question_count: 0,
+          word_count: 0,
+          step_count: 0,
+        }
         setModules(prev => prev.map(m =>
-          m.id === moduleId
-            ? { ...m, lessons: [...m.lessons, { id: lesson.id, title: lesson.title, body: null, video_url: null, display_order: lesson.display_order, module_id: moduleId, question_count: 0, word_count: 0 }] }
-            : m
+          m.id === moduleId ? { ...m, lessons: [...m.lessons, newLesson] } : m
         ))
-        setNewLessonId(lesson.id)
-        setTimeout(() => setNewLessonId(null), 2000)
+        setActiveLessonId(lesson.id)
       }
     } catch (err) {
       console.error('Failed to create lesson:', err)
     }
   }
 
-  const editLessonTitle = async (lessonId: string, title: string) => {
-    setModules(prev => prev.map(m => ({
-      ...m,
-      lessons: m.lessons.map(l => l.id === lessonId ? { ...l, title } : l),
-    })))
-    try {
-      await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      })
-    } catch (err) {
-      console.error('Failed to update lesson:', err)
-    }
-  }
-
   const deleteLesson = async (lessonId: string) => {
-    if (selectedLessonId === lessonId) {
-      setSelectedLessonId(null)
-      setView('outline')
-    }
+    if (activeLessonId === lessonId) setActiveLessonId(null)
     setModules(prev => prev.map(m => ({
       ...m,
       lessons: m.lessons.filter(l => l.id !== lessonId),
@@ -1657,31 +816,118 @@ export default function StepBuildCourse({
     }
   }
 
-  // ─── Edit lesson (switch to editor) ───────────────────────────
-  const editLesson = (lessonId: string) => {
-    setSelectedLessonId(lessonId)
-    setView('editor')
+  const renameLesson = async (lessonId: string, title: string) => {
+    setModules(prev => prev.map(m => ({
+      ...m,
+      lessons: m.lessons.map(l => l.id === lessonId ? { ...l, title } : l),
+    })))
+    try {
+      await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+    } catch (err) {
+      console.error('Failed to rename lesson:', err)
+    }
   }
 
-  // ─── Import All from Source ────────────────────────────────────
-  const importAllContent = async () => {
-    setImportingAll(true)
-    setImportAllConfirm(false)
+  const duplicateLesson = async (lessonId: string) => {
+    let sourceLesson: Lesson | null = null
+    let moduleId: string | null = null
+    for (const mod of modules) {
+      const found = mod.lessons.find(l => l.id === lessonId)
+      if (found) { sourceLesson = found; moduleId = mod.id; break }
+    }
+    if (!sourceLesson || !moduleId) return
     try {
-      const res = await fetch(`/api/creator/courses/${courseId}/generate-content`, {
+      const res = await fetch(`/api/creator/courses/${courseId}/modules/${moduleId}/lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true, source_map: sourceMap }),
+        body: JSON.stringify({ title: `${sourceLesson.title} (copy)` }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        console.error('Bulk import failed:', data.error)
+      const newLesson = await res.json()
+      if (newLesson.id && (sourceLesson.body || sourceLesson.video_url)) {
+        await fetch(`/api/creator/courses/${courseId}/lessons/${newLesson.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: sourceLesson.body, video_url: sourceLesson.video_url }),
+        })
       }
       await fetchData()
     } catch (err) {
-      console.error('Bulk import failed:', err)
+      console.error('Failed to duplicate lesson:', err)
     }
-    setImportingAll(false)
+  }
+
+  const moveLesson = async (lessonId: string, targetModuleId: string) => {
+    let movedLesson: Lesson | null = null
+    setModules(prev => {
+      const updated = prev.map(m => {
+        const found = m.lessons.find(l => l.id === lessonId)
+        if (found) movedLesson = { ...found, module_id: targetModuleId }
+        return { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) }
+      })
+      if (movedLesson) {
+        return updated.map(m =>
+          m.id === targetModuleId ? { ...m, lessons: [...m.lessons, movedLesson!] } : m
+        )
+      }
+      return updated
+    })
+    try {
+      await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module_id: targetModuleId }),
+      })
+    } catch (err) {
+      console.error('Failed to move lesson:', err)
+      await fetchData()
+    }
+  }
+
+  // ─── Test CRUD ──────────────────────────────────────────────
+  const addTest = async (testType: string, moduleId?: string) => {
+    const titles: Record<string, string> = {
+      module_quiz: `${modules.find(m => m.id === moduleId)?.title || 'Module'} Quiz`,
+      practice_exam: `Practice Exam ${tests.filter(t => t.test_type === 'practice_exam').length + 1}`,
+      final_assessment: 'Final Assessment',
+    }
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/tests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: titles[testType] || 'Test',
+          test_type: testType,
+          module_id: moduleId || undefined,
+        }),
+      })
+      const test = await res.json()
+      if (test.id) {
+        setTests(prev => [...prev, test])
+        setActiveLessonId(null)
+        setActiveTestId(test.id)
+      }
+    } catch (err) {
+      console.error('Failed to create test:', err)
+    }
+  }
+
+  // ─── Learner Preview ──────────────────────────────────────────
+  const openLessonPreview = async (lessonId: string) => {
+    const lesson = modules.flatMap(m => m.lessons).find(l => l.id === lessonId)
+    const mod = modules.find(m => m.lessons.some(l => l.id === lessonId))
+    if (!lesson || !mod) return
+    try {
+      const res = await fetch(`/api/creator/courses/${courseId}/lessons/${lessonId}/questions`)
+      const data = await res.json()
+      setPreviewQuestions(Array.isArray(data) ? data : [])
+    } catch {
+      setPreviewQuestions([])
+    }
+    setPreviewLesson({ lesson, module: mod })
   }
 
   // ─── Drag and Drop ────────────────────────────────────────────
@@ -1700,23 +946,46 @@ export default function StepBuildCourse({
     if (activeData?.type === 'module' && overData?.type === 'module') {
       const activeModId = (activeData.module as Module).id
       const overModId = (overData.module as Module).id
-
       setModules(prev => {
         const oldIndex = prev.findIndex(m => m.id === activeModId)
         const newIndex = prev.findIndex(m => m.id === overModId)
         const newMods = [...prev]
         const [moved] = newMods.splice(oldIndex, 1)
         newMods.splice(newIndex, 0, moved)
-
         const order = newMods.map((m, i) => ({ id: m.id, display_order: i }))
         fetch(`/api/creator/courses/${courseId}/modules`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ order }),
         }).catch(console.error)
-
         return newMods
       })
+    }
+
+    if (activeData?.type === 'lesson' && overData?.type === 'lesson') {
+      const activeLesson = activeData.lesson as Lesson
+      const overLesson = overData.lesson as Lesson
+      const sourceModuleId = activeData.moduleId as string
+      const targetModuleId = overData.moduleId as string
+
+      if (sourceModuleId === targetModuleId) {
+        setModules(prev => prev.map(m => {
+          if (m.id !== sourceModuleId) return m
+          const lessons = [...m.lessons]
+          const oldIdx = lessons.findIndex(l => l.id === activeLesson.id)
+          const newIdx = lessons.findIndex(l => l.id === overLesson.id)
+          const [moved] = lessons.splice(oldIdx, 1)
+          lessons.splice(newIdx, 0, moved)
+          fetch(`/api/creator/courses/${courseId}/modules/${sourceModuleId}/lessons/reorder`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lesson_ids: lessons.map(l => l.id) }),
+          }).catch(console.error)
+          return { ...m, lessons }
+        }))
+      } else {
+        moveLesson(activeLesson.id, targetModuleId)
+      }
     }
   }
 
@@ -1724,218 +993,266 @@ export default function StepBuildCourse({
   const toggleModule = (moduleId: string) => {
     setExpandedModules(prev => {
       const next = new Set(prev)
-      if (next.has(moduleId)) next.delete(moduleId)
-      else next.add(moduleId)
+      if (next.has(moduleId)) {
+        next.delete(moduleId)
+        // Deselect lesson if it's in this module
+        const mod = modules.find(m => m.id === moduleId)
+        if (mod?.lessons.some(l => l.id === activeLessonId)) {
+          setActiveLessonId(null)
+        }
+      } else {
+        next.add(moduleId)
+      }
       return next
     })
   }
 
   // ─── Stats ───────────────────────────────────────────────────
   const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0)
+  const lessonsWithContent = modules.flatMap(m => m.lessons).filter(hasContent).length
+  const canPublish = lessonsWithContent > 0
 
-  if (loading) {
+  // Auto-create first module + lesson when empty
+  const [autoCreating, setAutoCreating] = useState(false)
+  useEffect(() => {
+    if (!loading && modules.length === 0 && !autoCreating) {
+      setAutoCreating(true)
+      createModuleWithName('Module 1')
+    }
+  }, [loading, modules.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading || (modules.length === 0)) {
     return (
-      <div className="space-y-3 animate-pulse">
-        <div className="h-8 w-48 bg-gray-200 rounded" />
-        <div className="h-4 w-64 bg-gray-100 rounded" />
-        <div className="h-96 bg-gray-100 rounded-xl" />
+      <div className="flex-1 flex items-center justify-center bg-white">
+        <div className="text-center space-y-3">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-gray-400">Setting up your course...</p>
+        </div>
       </div>
     )
   }
 
-  // ─── Editor View ──────────────────────────────────────────────
-  if (view === 'editor' && selectedLessonId) {
-    return (
-      <div>
-        <LessonEditorPage
-          courseId={courseId}
-          lessonId={selectedLessonId}
-          modules={modules}
-          onBack={() => { setView('outline'); fetchData() }}
-          onNavigate={(id) => setSelectedLessonId(id)}
-        />
-      </div>
-    )
-  }
-
-  // ─── Outline View ─────────────────────────────────────────────
+  // ─── Split-Pane Workspace ──────────────────────────────────────
   const moduleIds = modules.map(m => `module-${m.id}`)
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Build Course</h2>
-          <p className="text-sm text-gray-500">Organize modules, write lessons, and add questions.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowCSVImport(true)}
-            className="btn-ghost px-3 py-2 text-sm"
-          >
-            CSV Import
-          </button>
-          <button
-            onClick={addModule}
-            className="btn-primary px-3 py-2 text-sm"
-          >
-            + Module
-          </button>
-          {hasSourceMap && (
-            importingAll ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600">
-                <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-                Importing...
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Split pane — fills all space between progress bar and footer */}
+        <div className="flex-1 flex min-h-0">
+          {/* ─── Left: Outline Sidebar ─── */}
+          <div className="w-60 flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50">
+            {/* Sidebar header */}
+            <div className="px-3 pt-2.5 pb-2 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Outline</span>
+                <span className="text-xs text-gray-400">
+                  {modules.length} module{modules.length !== 1 ? 's' : ''} &middot; {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}
+                </span>
               </div>
-            ) : (
-              <button
-                onClick={() => setImportAllConfirm(true)}
-                className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-              >
-                Import All from Source
-              </button>
-            )
-          )}
-          {modules.length > 0 && (
-            <span className="text-sm text-gray-400 ml-1">
-              {modules.length}m &middot; {totalLessons}l
-            </span>
-          )}
-        </div>
-      </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setShowModulePopup(true)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                >
+                  + Module
+                </button>
+                <button
+                  onClick={() => setShowCSVImport(true)}
+                  className="flex-1 border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 rounded-md px-3 py-1.5 text-xs transition-colors"
+                >
+                  Import CSV
+                </button>
+              </div>
+            </div>
 
-      {/* Import All confirmation */}
-      {importAllConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setImportAllConfirm(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-gray-900 mb-2">Import All from Source?</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Your uploaded content will be organized into lesson format for all empty lessons that have source material. This may take a few minutes.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setImportAllConfirm(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+            {/* Module list */}
+            <div className="flex-1 overflow-y-auto px-1 py-1">
+              {showModulePopup && (
+                <div className="mb-2 px-1">
+                  <ModuleNamePopup
+                    onSubmit={createModuleWithName}
+                    onCancel={() => setShowModulePopup(false)}
+                  />
+                </div>
+              )}
+
+              <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
+                {modules.map(mod => (
+                  <SortableSidebarModule
+                    key={mod.id}
+                    mod={mod}
+                    expanded={expandedModules.has(mod.id)}
+                    onToggle={() => toggleModule(mod.id)}
+                    onEditTitle={(title) => editModuleTitle(mod.id, title)}
+                    onDeleteModule={() => deleteModule(mod.id)}
+                    onDuplicateModule={() => duplicateModule(mod.id)}
+                    onAddLesson={() => addLesson(mod.id)}
+                    activeLessonId={activeLessonId}
+                    onSelectLesson={(id) => { setActiveLessonId(id); setActiveTestId(null) }}
+                    onDeleteLesson={deleteLesson}
+                    onDuplicateLesson={duplicateLesson}
+                    onMoveLesson={moveLesson}
+                    onPreviewLesson={openLessonPreview}
+                    onRenameLesson={renameLesson}
+                    modules={modules}
+                    moduleTests={tests.filter(t => t.module_id === mod.id)}
+                    activeTestId={activeTestId}
+                    onSelectTest={(id) => { setActiveTestId(id); setActiveLessonId(null) }}
+                    onAddQuiz={() => addTest('module_quiz', mod.id)}
+                  />
+                ))}
+              </SortableContext>
+
+              {/* Module quiz items rendered after each module's lessons */}
+              {tests.filter(t => t.test_type !== 'module_quiz').length > 0 && (
+                <div className="mt-3 mb-1 px-2">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tests</span>
+                </div>
+              )}
+              {tests.filter(t => t.test_type !== 'module_quiz').map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setActiveTestId(t.id); setActiveLessonId(null) }}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors mb-0.5 ${
+                    activeTestId === t.id ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+                  </svg>
+                  <span className="text-[11px] font-medium truncate flex-1">{t.title}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    t.status === 'published' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {t.question_count}q
+                  </span>
+                </button>
+              ))}
+
+              {/* Add test buttons */}
+              <div className="mt-2 px-1 space-y-1">
+                <button
+                  onClick={() => addTest('practice_exam')}
+                  className="w-full py-1.5 border border-dashed border-gray-200 rounded-lg text-[11px] text-gray-400 hover:text-purple-500 hover:border-purple-300 transition-colors"
+                >
+                  + Practice exam
+                </button>
+                {!tests.some(t => t.test_type === 'final_assessment') && (
+                  <button
+                    onClick={() => addTest('final_assessment')}
+                    className="w-full py-1.5 border border-dashed border-gray-200 rounded-lg text-[11px] text-gray-400 hover:text-amber-500 hover:border-amber-300 transition-colors"
+                  >
+                    + Final assessment
+                  </button>
+                )}
+              </div>
+
+              {/* + Add module (bottom) */}
+              {!showModulePopup && (
+                <button
+                  onClick={() => setShowModulePopup(true)}
+                  className="w-full mt-1 py-2 border border-dashed border-gray-200 rounded-lg text-[11px] text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-colors"
+                >
+                  + Add module
+                </button>
+              )}
+            </div>
+
+            {/* Sidebar footer */}
+            <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200">
+              <SaveStatusIndicator status={saveStatus} />
               <button
-                onClick={importAllContent}
-                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={() => {
+                  const firstLesson = modules.flatMap(m => m.lessons)[0]
+                  if (firstLesson) openLessonPreview(firstLesson.id)
+                }}
+                className="text-[11px] text-blue-500 hover:text-blue-700 font-medium"
               >
-                Import
+                Preview
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Empty State */}
-      {modules.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center">
-          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          {/* ─── Right: Lesson/Test Editor ─── */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {activeTestId ? (
+              <TestEditor
+                courseId={courseId}
+                testId={activeTestId}
+                onClose={() => setActiveTestId(null)}
+                onTestUpdated={fetchData}
+              />
+            ) : activeLesson ? (
+              <StepSequencer
+                courseId={courseId}
+                lesson={activeLesson}
+                modules={modules}
+                cardColor={accentColor}
+                onCollapse={() => setActiveLessonId(null)}
+                onLessonUpdated={fetchData}
+              />
+            ) : (
+              <NoLessonSelected />
+            )}
           </div>
-          <h3 className="text-base font-semibold text-gray-900 mb-1">Start building your course</h3>
-          <p className="text-sm text-gray-500 mb-6">Add modules, then lessons within each module.</p>
-          <div className="flex items-center justify-center gap-3">
+        </div>
+
+        <DragOverlay>
+          {activeId ? (
+            <div className="bg-white border-2 border-blue-300 rounded-lg px-3 py-2 shadow-xl">
+              <span className="text-xs font-medium text-gray-900">Moving...</span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Footer bar */}
+      <div className="border-t border-gray-200 px-6 py-2.5 flex items-center justify-between">
+        <button onClick={onBack} className="btn-ghost px-5 py-2 text-sm">Back</button>
+        <div className="flex items-center gap-4">
+          {totalLessons > 0 && (
+            <CompletionProgressBar modules={modules} />
+          )}
+          <div className="relative group">
             <button
-              onClick={() => setShowAIImport(true)}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={onPublish}
+              disabled={!canPublish}
+              className="px-5 py-2 text-sm font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <span className="flex items-center gap-1.5">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
-                  <path d="M12 16V4M12 4L8 8M12 4L16 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M20 16V18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Upload &amp; Organize
-              </span>
+              Review & Publish
             </button>
-            <button onClick={addModule} className="btn-primary px-5 py-2.5 text-sm">
-              + Add First Module
-            </button>
-            <button onClick={() => setShowCSVImport(true)} className="btn-ghost px-5 py-2.5 text-sm">
-              CSV Import
-            </button>
+            {!canPublish && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Add content to at least one lesson before publishing
+              </div>
+            )}
           </div>
         </div>
-      ) : (
-        /* Module List */
-        <div className="space-y-3">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
-              {modules.map(mod => (
-                <SortableModuleCard
-                  key={mod.id}
-                  mod={mod}
-                  expanded={expandedModules.has(mod.id)}
-                  onToggle={() => toggleModule(mod.id)}
-                  onEditTitle={editModuleTitle}
-                  onDeleteModule={deleteModule}
-                  onAddLesson={addLesson}
-                  onEditLessonTitle={editLessonTitle}
-                  onDeleteLesson={deleteLesson}
-                  onEditLesson={editLesson}
-                  newLessonId={newLessonId}
-                />
-              ))}
-            </SortableContext>
-
-            <DragOverlay>
-              {activeId ? (
-                <div className="bg-white border-2 border-blue-300 rounded-lg px-4 py-3 shadow-xl">
-                  <span className="text-sm font-medium text-gray-900">Moving...</span>
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-
-          <div ref={bottomRef}>
-            <button
-              onClick={addModule}
-              className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
-            >
-              + Add Module
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100">
-        <button onClick={onBack} className="btn-ghost px-5 py-2.5 text-sm">Back</button>
-        <button
-          onClick={() => {
-            if (window.confirm('Publish this course? It will be visible to learners.')) {
-              onPublish()
-            }
-          }}
-          disabled={modules.length === 0 || totalLessons === 0}
-          className="px-6 py-2.5 text-sm font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 transition-colors"
-        >
-          Publish Course
-        </button>
       </div>
 
       {/* Modals */}
       {showCSVImport && (
-        <CSVImportModal
-          courseId={courseId}
-          onClose={() => setShowCSVImport(false)}
-          onImported={fetchData}
-        />
+        <CSVImportModal courseId={courseId} onClose={() => setShowCSVImport(false)} onImported={fetchData} />
       )}
 
-      {showQImport && (
-        <CSVImportQuestionsModal
+      {previewLesson && (
+        <LearnerPreviewModal
           courseId={courseId}
-          onClose={() => setShowQImport(false)}
-          onImported={fetchData}
+          lessonId={previewLesson.lesson.id}
+          lessonTitle={previewLesson.lesson.title}
+          moduleName={previewLesson.module.title}
+          lessonIndex={previewLesson.module.lessons.findIndex(l => l.id === previewLesson.lesson.id)}
+          totalLessons={previewLesson.module.lessons.length}
+          cardColor={accentColor}
+          onClose={() => { setPreviewLesson(null); setPreviewQuestions([]) }}
         />
       )}
-    </div>
+    </>
   )
 }

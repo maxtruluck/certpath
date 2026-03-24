@@ -17,6 +17,8 @@ export async function PATCH(
     if (body.body !== undefined) updates.body = body.body
     if (body.display_order !== undefined) updates.display_order = body.display_order
     if (body.is_active !== undefined) updates.is_active = body.is_active
+    if (body.video_url !== undefined) updates.video_url = body.video_url
+    if (body.module_id !== undefined) updates.module_id = body.module_id
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })

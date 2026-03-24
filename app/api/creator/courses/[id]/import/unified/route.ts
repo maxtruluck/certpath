@@ -117,8 +117,34 @@ export async function POST(
       lessonOrderByModule.set(l.module_id, Math.max(currentMax, (l.display_order || 0) + 1))
     }
 
-    const stats = { modules: 0, lessons: 0, content: 0, questions: 0 }
+    const stats = { modules: 0, lessons: 0, content: 0, questions: 0, steps: 0 }
     const importErrors: { row: number; message: string }[] = []
+
+    // Track step sort_order per lesson for sequential step creation
+    const stepOrderByLesson = new Map<string, number>()
+
+    // Load existing step counts
+    const lessonIdsForSteps = [...lessonMap.values()].map(l => l.id)
+    if (lessonIdsForSteps.length > 0) {
+      const { data: existingSteps } = await supabase
+        .from('lesson_steps')
+        .select('lesson_id, sort_order')
+        .in('lesson_id', lessonIdsForSteps)
+        .order('sort_order', { ascending: false })
+
+      for (const s of existingSteps || []) {
+        const current = stepOrderByLesson.get(s.lesson_id)
+        if (current == null || s.sort_order >= current) {
+          stepOrderByLesson.set(s.lesson_id, s.sort_order + 1)
+        }
+      }
+    }
+
+    function getNextStepOrder(lessonId: string): number {
+      const order = stepOrderByLesson.get(lessonId) || 0
+      stepOrderByLesson.set(lessonId, order + 1)
+      return order
+    }
 
     // Helper: resolve or create module/lesson from a row
     const resolveStructure = async (row: TaggedRow): Promise<{ moduleId: string; lessonId: string | null } | null> => {
@@ -228,16 +254,28 @@ export async function POST(
         // Replace \n with actual newlines
         const processedBody = body.replace(/\\n/g, '\n')
 
-        const { error: updateErr } = await supabase
+        // Update legacy body field
+        await supabase
           .from('lessons')
           .update({ body: processedBody })
           .eq('id', resolved.lessonId)
 
-        if (updateErr) {
-          importErrors.push({ row: row._origRow, message: `Failed to update lesson body: ${updateErr.message}` })
+        // Create a read step
+        const { error: stepErr } = await supabase
+          .from('lesson_steps')
+          .insert({
+            lesson_id: resolved.lessonId,
+            sort_order: getNextStepOrder(resolved.lessonId),
+            step_type: 'read',
+            content: { markdown: processedBody },
+          })
+
+        if (stepErr) {
+          importErrors.push({ row: row._origRow, message: `Failed to create read step: ${stepErr.message}` })
           continue
         }
         stats.content++
+        stats.steps++
         continue
       }
 
@@ -326,19 +364,113 @@ export async function POST(
           insertData.correct_option_ids = []
         }
 
-        const { error: insertError } = await supabase
+        const { data: newQuestion, error: insertError } = await supabase
           .from('questions')
           .insert(insertData)
+          .select('id')
+          .single()
 
-        if (insertError) {
-          importErrors.push({ row: row._origRow, message: `Failed to insert question: ${insertError.message}` })
+        if (insertError || !newQuestion) {
+          importErrors.push({ row: row._origRow, message: `Failed to insert question: ${insertError?.message}` })
           continue
+        }
+
+        // Create an answer step linked to this question
+        if (resolved.lessonId) {
+          await supabase
+            .from('lesson_steps')
+            .insert({
+              lesson_id: resolved.lessonId,
+              sort_order: getNextStepOrder(resolved.lessonId),
+              step_type: 'answer',
+              content: {
+                question_id: newQuestion.id,
+                question_text: questionText,
+                question_type: questionType,
+                options,
+                correct_ids: correctOptionIds,
+                explanation: str(row, 'explanation'),
+                option_explanations: {},
+              },
+            })
+          stats.steps++
         }
         stats.questions++
         continue
       }
 
-      importErrors.push({ row: row._origRow, message: `Unknown row_type: "${rowType}". Use structure, content, or question.` })
+      if (rowType === 'watch') {
+        const resolved = await resolveStructure(row)
+        if (!resolved?.lessonId) {
+          if (!importErrors.find(e => e.row === row._origRow)) {
+            importErrors.push({ row: row._origRow, message: 'watch row requires lesson_title' })
+          }
+          continue
+        }
+        const url = str(row, 'video_url') || str(row, 'url')
+        if (!url) {
+          importErrors.push({ row: row._origRow, message: 'watch row requires video_url' })
+          continue
+        }
+        await supabase.from('lesson_steps').insert({
+          lesson_id: resolved.lessonId,
+          sort_order: getNextStepOrder(resolved.lessonId),
+          step_type: 'watch',
+          content: { url },
+        })
+        stats.steps++
+        continue
+      }
+
+      if (rowType === 'callout') {
+        const resolved = await resolveStructure(row)
+        if (!resolved?.lessonId) {
+          if (!importErrors.find(e => e.row === row._origRow)) {
+            importErrors.push({ row: row._origRow, message: 'callout row requires lesson_title' })
+          }
+          continue
+        }
+        const calloutStyle = str(row, 'callout_style') || 'tip'
+        const title = str(row, 'callout_title') || str(row, 'title') || calloutStyle.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())
+        const markdown = (str(row, 'lesson_body') || str(row, 'callout_body') || '').replace(/\\n/g, '\n')
+        await supabase.from('lesson_steps').insert({
+          lesson_id: resolved.lessonId,
+          sort_order: getNextStepOrder(resolved.lessonId),
+          step_type: 'callout',
+          content: { callout_style: calloutStyle, title, markdown },
+        })
+        stats.steps++
+        continue
+      }
+
+      if (rowType === 'embed') {
+        const resolved = await resolveStructure(row)
+        if (!resolved?.lessonId) {
+          if (!importErrors.find(e => e.row === row._origRow)) {
+            importErrors.push({ row: row._origRow, message: 'embed row requires lesson_title' })
+          }
+          continue
+        }
+        const subType = str(row, 'embed_type') || str(row, 'sub_type') || 'image'
+        let content: Record<string, unknown> = { sub_type: subType }
+        if (subType === 'image') {
+          content.url = str(row, 'url') || str(row, 'image_url') || ''
+          content.caption = str(row, 'caption') || ''
+          content.alt = str(row, 'alt') || ''
+        } else if (subType === 'diagram') {
+          content.mermaid = (str(row, 'mermaid') || str(row, 'lesson_body') || '').replace(/\\n/g, '\n')
+        }
+        await supabase.from('lesson_steps').insert({
+          lesson_id: resolved.lessonId,
+          sort_order: getNextStepOrder(resolved.lessonId),
+          step_type: 'embed',
+          content,
+        })
+        stats.steps++
+        continue
+      }
+
+      importErrors.push({ row: row._origRow, message: `Unknown row_type: "${rowType}". Use structure, content, question, watch, callout, or embed.` })
     }
 
     const totalImported = stats.modules + stats.lessons + stats.content + stats.questions

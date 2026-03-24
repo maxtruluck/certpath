@@ -62,6 +62,17 @@ export async function GET(
       }
     }
 
+    // Count steps per lesson
+    const { data: steps } = await supabase
+      .from('lesson_steps')
+      .select('id, lesson_id')
+      .in('lesson_id', (lessons || []).map((l: any) => l.id))
+
+    const stepsByLesson = new Map<string, number>()
+    for (const s of steps || []) {
+      stepsByLesson.set(s.lesson_id, (stepsByLesson.get(s.lesson_id) || 0) + 1)
+    }
+
     const modulesWithLessons = (modules || []).map((mod: any) => ({
       ...mod,
       lessons: (lessons || [])
@@ -70,6 +81,7 @@ export async function GET(
           ...l,
           question_count: questionsByLesson.get(l.id) || 0,
           word_count: (l.body || '').split(/\s+/).filter(Boolean).length,
+          step_count: stepsByLesson.get(l.id) || 0,
         })),
       question_count: (questions || []).filter((q: any) => q.module_id === mod.id).length,
     }))

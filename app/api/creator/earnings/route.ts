@@ -21,9 +21,16 @@ export async function GET() {
 
     if (allTx.length === 0) {
       return NextResponse.json({
-        stats: { lifetime_earnings_cents: 0, this_month_cents: 0, total_sales: 0 },
+        stats: {
+          lifetime_earnings_cents: 0,
+          this_month_cents: 0,
+          total_sales: 0,
+          pending_payout_cents: 0,
+          total_paid_out_cents: 0,
+        },
         revenue_by_course: [],
         monthly_breakdown: [],
+        payout_history: [],
         payout_info: 'Payouts are processed monthly. Contact support for payout setup.',
       })
     }
@@ -81,9 +88,12 @@ export async function GET() {
         lifetime_earnings_cents: lifetimeEarnings,
         this_month_cents: thisMonthEarnings,
         total_sales: totalSales,
+        pending_payout_cents: 0,
+        total_paid_out_cents: 0,
       },
       revenue_by_course: revenueByCourse,
       monthly_breakdown: monthlyBreakdown,
+      payout_history: [],
       payout_info: 'Payouts are processed monthly. Contact support for payout setup.',
     })
   } catch (err) {

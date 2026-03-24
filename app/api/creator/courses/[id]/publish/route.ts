@@ -41,6 +41,40 @@ export async function POST(
       )
     }
 
+    // Minimum content validation
+    const { data: modules } = await supabase
+      .from('modules')
+      .select('id')
+      .eq('course_id', id)
+
+    const { data: lessons } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('course_id', id)
+
+    // Check for lessons with steps
+    const lessonIds = (lessons || []).map(l => l.id)
+    let hasLessonWithSteps = false
+    if (lessonIds.length > 0) {
+      const { data: stepsCheck } = await supabase
+        .from('lesson_steps')
+        .select('lesson_id')
+        .in('lesson_id', lessonIds)
+        .limit(1)
+      hasLessonWithSteps = !!(stepsCheck && stepsCheck.length > 0)
+    }
+
+    const missing: string[] = []
+    if (!modules || modules.length === 0) missing.push('at least 1 module')
+    if (!hasLessonWithSteps) missing.push('at least 1 lesson with steps')
+
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { error: `Cannot publish: course is missing ${missing.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
     const published_at = new Date().toISOString()
 
     const { error: updateError } = await supabase

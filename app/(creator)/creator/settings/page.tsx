@@ -104,7 +104,10 @@ function CreatorSettings() {
       <div className="bg-white rounded-xl border border-red-200 p-6">
         <h2 className="text-lg font-semibold text-red-600 mb-2">Danger Zone</h2>
         <p className="text-sm text-gray-500 mb-4">These actions are irreversible.</p>
-        <button className="px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">
+        <button
+          onClick={() => alert('Contact support to delete your account.')}
+          className="px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"
+        >
           Delete Creator Account
         </button>
       </div>

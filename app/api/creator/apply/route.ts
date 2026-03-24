@@ -46,6 +46,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to submit application' }, { status: 500 })
     }
 
+    // Auto-approve at MVP — no gatekeeping
+    await supabase
+      .from('creators')
+      .update({ status: 'approved' })
+      .eq('id', creator.id)
+
     // Update profile role to creator
     await supabase
       .from('profiles')
