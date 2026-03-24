@@ -1,0 +1,462 @@
+'use client'
+
+import { useState, useCallback } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { richMarkdownComponents } from '@/lib/markdown-components'
+import { MathText } from '@/lib/math-text'
+import { CoordinateDiagram } from '@/lib/coordinate-diagram'
+import type { Question, AnswerResult } from '@/lib/types/lesson-player'
+
+const MAX_WRONG_ATTEMPTS = 2
+
+interface AnswerStepProps {
+  question: Question
+  sessionId: string
+  /** Called when step is complete (after correct answer or max attempts) */
+  onComplete: (isCorrect: boolean) => void
+  /** Read-only mode for back-navigation to already-answered questions */
+  readOnly?: boolean
+  previousResult?: AnswerResult | null
+  previousSelectedIds?: string[]
+}
+
+export function AnswerStep({ question, sessionId, onComplete, readOnly, previousResult, previousSelectedIds }: AnswerStepProps) {
+  const [selectedIds, setSelectedIds] = useState<string[]>(previousSelectedIds || [])
+  const [answerResult, setAnswerResult] = useState<AnswerResult | null>(previousResult || null)
+  const [submitting, setSubmitting] = useState(false)
+  const [wrongAttempts, setWrongAttempts] = useState(0)
+  const [fillBlankAnswer, setFillBlankAnswer] = useState('')
+  const [orderItems, setOrderItems] = useState<{ id: string; text: string }[]>(() => {
+    if (question.question_type === 'ordering') {
+      const shuffled = [...question.options]
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      }
+      return shuffled
+    }
+    return []
+  })
+  const [matchSelections, setMatchSelections] = useState<Record<string, string>>(() => {
+    if (question.question_type === 'matching' && question.matching_items) {
+      const sel: Record<string, string> = {}
+      for (const left of question.matching_items.lefts) sel[left] = ''
+      return sel
+    }
+    return {}
+  })
+  const [plotPoint, setPlotPoint] = useState<{ x: number; y: number } | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F']
+
+  const canSubmit = (() => {
+    if (readOnly || answerResult) return false
+    if (question.question_type === 'plot_point') return plotPoint !== null
+    if (question.question_type === 'fill_blank') return fillBlankAnswer.trim().length > 0
+    if (question.question_type === 'ordering') return orderItems.length > 0
+    if (question.question_type === 'matching') return Object.values(matchSelections).every(v => v !== '')
+    return selectedIds.length > 0
+  })()
+
+  const handleSubmitAnswer = useCallback(async () => {
+    if (!canSubmit) return
+    setSubmitting(true)
+
+    try {
+      const body: Record<string, unknown> = {
+        session_id: sessionId,
+        question_id: question.id,
+        time_spent_ms: 0,
+      }
+
+      if (question.question_type === 'plot_point') {
+        body.user_point = plotPoint
+        body.selected_option_ids = []
+      } else if (question.question_type === 'fill_blank') {
+        body.answer_text = fillBlankAnswer
+      } else if (question.question_type === 'ordering') {
+        body.user_order = orderItems.map(i => i.id)
+        body.selected_option_ids = orderItems.map(i => i.id)
+      } else if (question.question_type === 'matching') {
+        body.user_pairs = Object.entries(matchSelections).map(([left, right]) => ({ left, right }))
+        body.selected_option_ids = []
+      } else {
+        body.selected_option_ids = selectedIds
+      }
+
+      const res = await fetch('/api/session/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) throw new Error('Failed to submit answer')
+      const result: AnswerResult = await res.json()
+      setAnswerResult(result)
+
+      if (!result.is_correct) {
+        const newAttempts = wrongAttempts + 1
+        setWrongAttempts(newAttempts)
+      }
+    } catch (err) {
+      console.error('Answer submission error:', err)
+    }
+    setSubmitting(false)
+  }, [canSubmit, sessionId, question, selectedIds, fillBlankAnswer, orderItems, matchSelections, plotPoint, wrongAttempts])
+
+  function handleContinueOrRetry() {
+    if (!answerResult) return
+
+    if (answerResult.is_correct || wrongAttempts >= MAX_WRONG_ATTEMPTS) {
+      // Step complete
+      onComplete(answerResult.is_correct)
+    } else {
+      // Reset for retry
+      setSelectedIds([])
+      setAnswerResult(null)
+      setFillBlankAnswer('')
+      setPlotPoint(null)
+      if (question.question_type === 'ordering') {
+        const shuffled = [...question.options]
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+        }
+        setOrderItems(shuffled)
+      }
+      if (question.question_type === 'matching' && question.matching_items) {
+        const sel: Record<string, string> = {}
+        for (const left of question.matching_items.lefts) sel[left] = ''
+        setMatchSelections(sel)
+      }
+    }
+  }
+
+  function toggleOption(optionId: string) {
+    if (answerResult || readOnly) return
+    if (question.question_type === 'multiple_select') {
+      setSelectedIds(prev => prev.includes(optionId) ? prev.filter(id => id !== optionId) : [...prev, optionId])
+    } else {
+      setSelectedIds([optionId])
+    }
+  }
+
+  // Whether we should reveal correct answers (only after retries exhausted or correct)
+  const retriesExhausted = wrongAttempts >= MAX_WRONG_ATTEMPTS
+  const shouldReveal = answerResult?.is_correct || retriesExhausted
+
+  function getOptionState(optionId: string): 'default' | 'selected' | 'correct' | 'incorrect' {
+    if (!answerResult) return selectedIds.includes(optionId) ? 'selected' : 'default'
+    if (shouldReveal) {
+      if (answerResult.correct_option_ids?.includes(optionId)) return 'correct'
+      if (selectedIds.includes(optionId) && !answerResult.correct_option_ids?.includes(optionId)) return 'incorrect'
+    } else {
+      // First wrong attempt: only mark selected options as incorrect, don't reveal correct
+      if (selectedIds.includes(optionId)) return 'incorrect'
+    }
+    return 'default'
+  }
+
+  function handleOrderDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = orderItems.findIndex(i => i.id === active.id)
+    const newIdx = orderItems.findIndex(i => i.id === over.id)
+    const items = [...orderItems]
+    const [moved] = items.splice(oldIdx, 1)
+    items.splice(newIdx, 0, moved)
+    setOrderItems(items)
+  }
+
+  function moveOrderItem(index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= orderItems.length) return
+    const items = [...orderItems]
+    ;[items[index], items[target]] = [items[target], items[index]]
+    setOrderItems(items)
+  }
+
+  // If read-only, show the previous answer state
+  const effectiveResult = readOnly ? (previousResult || answerResult) : answerResult
+
+  return (
+    <div className="pb-8">
+      {/* Question text */}
+      <div className="mb-6">
+        <p className="text-base font-medium text-[#2C2825] leading-relaxed">
+          {question.question_text.includes('$')
+            ? <MathText text={question.question_text} />
+            : question.question_text}
+        </p>
+        {question.question_type === 'multiple_select' && <p className="text-xs text-[#A39B90] mt-2">Select all that apply</p>}
+        {question.question_type === 'fill_blank' && <p className="text-xs text-[#A39B90] mt-2">Type your answer</p>}
+        {question.question_type === 'ordering' && <p className="text-xs text-[#A39B90] mt-2">Drag items into the correct order</p>}
+        {question.question_type === 'matching' && <p className="text-xs text-[#A39B90] mt-2">Match each item on the left with the correct item on the right</p>}
+        {question.question_type === 'diagram' && <p className="text-xs text-[#A39B90] mt-2">Study the diagram and select your answer</p>}
+      </div>
+
+      {/* Diagram display (non-interactive) */}
+      {question.diagram_data && question.question_type !== 'plot_point' && (
+        <CoordinateDiagram data={question.diagram_data} />
+      )}
+
+      {/* Interactive plot_point */}
+      {question.question_type === 'plot_point' && question.diagram_data && (
+        <CoordinateDiagram
+          data={question.diagram_data}
+          interactive
+          userPoint={plotPoint}
+          onPointPlaced={readOnly ? undefined : setPlotPoint}
+          disabled={!!effectiveResult || readOnly}
+          correctPoint={effectiveResult?.correct_point}
+          isCorrect={effectiveResult?.is_correct ?? null}
+        />
+      )}
+
+      {/* Fill Blank */}
+      {question.question_type === 'fill_blank' && !effectiveResult && (
+        <div className="mb-6">
+          <input
+            type="text"
+            value={fillBlankAnswer}
+            onChange={e => setFillBlankAnswer(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && canSubmit && handleSubmitAnswer()}
+            placeholder="Type your answer..."
+            className="w-full px-4 py-3 border border-[#E8E4DD] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2C2825]/20 focus:border-[#2C2825]"
+            disabled={readOnly}
+            autoFocus
+          />
+        </div>
+      )}
+      {question.question_type === 'fill_blank' && effectiveResult && (
+        <div className="mb-6">
+          <div className={`px-4 py-3 rounded-xl border-2 text-sm font-medium ${effectiveResult.is_correct ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
+            {fillBlankAnswer || '(empty)'}
+          </div>
+          {!effectiveResult.is_correct && shouldReveal && effectiveResult.acceptable_answers && (
+            <p className="text-xs text-[#6B635A] mt-2">Correct answer: <span className="font-semibold">{effectiveResult.acceptable_answers[0]}</span></p>
+          )}
+        </div>
+      )}
+
+      {/* Ordering */}
+      {question.question_type === 'ordering' && !effectiveResult && (
+        <div className="mb-6">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleOrderDragEnd}>
+            <SortableContext items={orderItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {orderItems.map((item, idx) => (
+                  <div key={item.id} className="flex items-center gap-1">
+                    <div className="flex-1">
+                      <SortableOrderItem id={item.id} text={item.text} index={idx} />
+                    </div>
+                    <div className="flex flex-col">
+                      <button onClick={() => moveOrderItem(idx, -1)} disabled={idx === 0} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">&#9650;</button>
+                      <button onClick={() => moveOrderItem(idx, 1)} disabled={idx === orderItems.length - 1} className="text-[#D4CFC7] hover:text-[#6B635A] disabled:opacity-30 text-xs px-1">&#9660;</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+      {question.question_type === 'ordering' && effectiveResult && (
+        <div className="mb-6 space-y-2">
+          {orderItems.map((item, idx) => {
+            const isCorrectPosition = effectiveResult.correct_order && effectiveResult.correct_order[idx] === item.id
+            const showPositionFeedback = shouldReveal
+            return (
+              <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
+                showPositionFeedback
+                  ? (isCorrectPosition ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
+                  : 'border-red-200 bg-red-50/50'
+              }`}>
+                <span className="text-sm font-medium text-[#6B635A] w-5">{idx + 1}.</span>
+                <span className="text-sm text-[#2C2825] flex-1">{item.text}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Matching */}
+      {question.question_type === 'matching' && question.matching_items && !effectiveResult && (
+        <div className="mb-6 space-y-3">
+          {question.matching_items.lefts.map(left => (
+            <div key={left} className="flex items-center gap-3">
+              <span className="text-sm font-medium text-[#2C2825] w-1/3 truncate">{left}</span>
+              <select
+                value={matchSelections[left] || ''}
+                onChange={e => setMatchSelections(prev => ({ ...prev, [left]: e.target.value }))}
+                disabled={readOnly}
+                className="flex-1 text-sm border border-[#E8E4DD] rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#2C2825]/20 focus:border-[#2C2825]"
+              >
+                <option value="">Select...</option>
+                {question.matching_items!.rights.map((right, idx) => (
+                  <option key={`${right}-${idx}`} value={right}>{right}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+      {question.question_type === 'matching' && effectiveResult && effectiveResult.matching_pairs && (
+        <div className="mb-6 space-y-2">
+          {Object.entries(matchSelections).map(([left, right]) => {
+            const correctRight = effectiveResult.matching_pairs!.find(p => p.left === left)?.right
+            const isCorrectPair = right.toLowerCase() === correctRight?.toLowerCase()
+            return (
+              <div key={left} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
+                shouldReveal
+                  ? (isCorrectPair ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
+                  : 'border-red-200 bg-red-50/50'
+              }`}>
+                <span className="text-sm font-medium text-[#2C2825] w-1/3">{left}</span>
+                <span className="text-xs text-[#A39B90]">&rarr;</span>
+                <span className="text-sm text-[#6B635A] flex-1">{right}</span>
+                {shouldReveal && !isCorrectPair && <span className="text-xs text-green-600">(correct: {correctRight})</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* MC / MS / TF / Diagram options */}
+      {['multiple_choice', 'multiple_select', 'true_false', 'diagram'].includes(question.question_type) && (
+        <div className="space-y-2.5 mb-6">
+          {question.options.map((option, idx) => {
+            const state = getOptionState(option.id)
+            let borderClass = 'border-[#E8E4DD] hover:border-[#D4CFC7]'
+            let bgClass = 'bg-white'
+            let textClass = 'text-[#2C2825]'
+            if (state === 'selected') { borderClass = 'border-[#2C2825] shadow-sm'; bgClass = 'bg-[#F5F3EF]' }
+            else if (state === 'correct') { borderClass = 'border-green-400'; bgClass = 'bg-green-50' }
+            else if (state === 'incorrect') { borderClass = 'border-red-400'; bgClass = 'bg-red-50' }
+            if (effectiveResult && state === 'default') textClass = 'text-[#A39B90]'
+
+            return (
+              <button
+                key={option.id}
+                onClick={() => toggleOption(option.id)}
+                disabled={!!effectiveResult || readOnly}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all ${borderClass} ${bgClass} disabled:cursor-default`}
+              >
+                <span className="text-sm font-medium text-[#6B635A] flex-shrink-0">{optionLabels[idx]}.</span>
+                <span className={`text-sm text-left ${textClass}`}>
+                  {option.text.includes('$') ? <MathText text={option.text} /> : option.text}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Check button */}
+      {!effectiveResult && !readOnly && (
+        <button
+          onClick={handleSubmitAnswer}
+          disabled={!canSubmit || submitting}
+          className={`w-full py-3.5 rounded-xl font-bold text-sm tracking-wide uppercase transition-all duration-200 ${
+            canSubmit
+              ? 'bg-[#2C2825] text-[#F5F3EF] hover:bg-[#1A1816] shadow-sm transform hover:scale-[1.01]'
+              : 'bg-[#EBE8E2] text-[#A39B90] cursor-not-allowed'
+          }`}
+        >
+          {submitting ? 'Checking...' : 'Check Answer'}
+        </button>
+      )}
+
+      {/* Feedback panel */}
+      {effectiveResult && (
+        <div className={`rounded-2xl p-5 space-y-3 animate-slide-up ${effectiveResult.is_correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <h3 className={`font-bold text-lg ${effectiveResult.is_correct ? 'text-green-700' : 'text-red-700'}`}>
+            {effectiveResult.is_correct ? 'Correct!' : shouldReveal ? 'Answer Revealed' : 'Not quite'}
+          </h3>
+
+          {/* Only show per-option explanation after retries exhausted */}
+          {!effectiveResult.is_correct && shouldReveal && effectiveResult.option_explanation && (
+            <div className="bg-red-100/50 rounded-lg p-3 text-sm text-red-800">
+              <p className="font-medium mb-1">Why your answer is wrong:</p>
+              <p>{effectiveResult.option_explanation}</p>
+            </div>
+          )}
+
+          {/* Show full explanation only on correct or retries exhausted */}
+          {shouldReveal && effectiveResult.explanation && (
+            <div className="text-sm text-[#6B635A] leading-relaxed">
+              <p>{effectiveResult.explanation.includes('$')
+                ? <MathText text={effectiveResult.explanation} />
+                : effectiveResult.explanation}</p>
+            </div>
+          )}
+
+          {/* First wrong: just a hint to try again */}
+          {!effectiveResult.is_correct && !shouldReveal && (
+            <p className="text-sm text-red-600">Give it another try.</p>
+          )}
+
+          {!readOnly && (
+            <button
+              onClick={handleContinueOrRetry}
+              className={`w-full py-3 rounded-xl font-semibold transition-colors ${
+                effectiveResult.is_correct
+                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                  : shouldReveal
+                    ? 'bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF]'
+                    : 'bg-white border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]'
+              }`}
+            >
+              {effectiveResult.is_correct || shouldReveal ? 'Continue' : 'Try Again'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sortable Order Item ──────────────────────────────────────
+function SortableOrderItem({ id, text, index }: { id: string; text: string; index: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-[#E8E4DD]">
+      <button {...attributes} {...listeners} className="text-[#D4CFC7] hover:text-[#6B635A] cursor-grab active:cursor-grabbing">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <circle cx="5" cy="3" r="1" /><circle cx="9" cy="3" r="1" />
+          <circle cx="5" cy="7" r="1" /><circle cx="9" cy="7" r="1" />
+          <circle cx="5" cy="11" r="1" /><circle cx="9" cy="11" r="1" />
+        </svg>
+      </button>
+      <span className="text-sm font-medium text-[#6B635A] w-5">{index + 1}.</span>
+      <span className="text-sm text-[#2C2825] flex-1">{text}</span>
+    </div>
+  )
+}
