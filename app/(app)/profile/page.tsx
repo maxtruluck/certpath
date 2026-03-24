@@ -21,6 +21,7 @@ interface DashboardCourse {
   readiness_score: number; questions_seen: number; questions_correct: number;
   questions_total: number; lessons_total: number; sessions_completed: number;
   last_session_at: string | null; enrolled_at?: string;
+  progress_percent?: number;
 }
 
 /* ─── Helpers (same as mobile) ─── */
@@ -117,8 +118,8 @@ export default function ProfilePage() {
           <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Questions</p>
         </div>
         <div className="flex-1 bg-[#f8fafc] rounded-lg py-3 text-center">
-          <p className="text-[22px] font-bold text-[#0f172a] mb-0.5">{stats?.courses_enrolled || 0}</p>
-          <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Courses</p>
+          <p className="text-[22px] font-bold text-[#0f172a] mb-0.5">{stats?.courses_completed || 0}</p>
+          <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Completed</p>
         </div>
       </div>
 
@@ -127,8 +128,13 @@ export default function ProfilePage() {
         <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">MY COURSES</p>
         {courses.length > 0 ? (
           <div className="space-y-1.5">
-            {courses.map((item) => {
-              const pct = item.questions_total > 0 ? Math.round((item.questions_seen / item.questions_total) * 100) : 0;
+            {[...courses].sort((a, b) => {
+              const aTime = a.last_session_at ? new Date(a.last_session_at).getTime() : 0;
+              const bTime = b.last_session_at ? new Date(b.last_session_at).getTime() : 0;
+              return bTime - aTime;
+            }).map((item) => {
+              const pct = Math.min(100, item.progress_percent ?? 0);
+              const isComplete = pct >= 100;
               return (
                 <Link key={item.id} href={`/course/${item.course.slug}/path`}
                   className="flex items-center gap-3 bg-[#f8fafc] rounded-lg p-3 hover:bg-[#f1f5f9] transition-colors"
@@ -136,11 +142,21 @@ export default function ProfilePage() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <p className="text-xs font-semibold text-[#0f172a] truncate">{item.course.title}</p>
                     <p className="text-[9px] text-[#94a3b8]">{item.lessons_total} lessons &middot; {formatRelativeDate(item.last_session_at)}</p>
-                    <div className="h-1 bg-[#e2e8f0] rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-[#3B82F6] rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
+                    {!isComplete && (
+                      <div className="h-1 bg-[#e2e8f0] rounded-full overflow-hidden mt-1">
+                        <div className="h-full bg-[#3B82F6] rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
                   </div>
-                  <span className="text-sm font-semibold text-[#94a3b8] min-w-[36px] text-right">{pct}%</span>
+                  {isComplete ? (
+                    <div className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <span className="text-sm font-semibold text-[#94a3b8] min-w-[36px] text-right">{pct}%</span>
+                  )}
                 </Link>
               );
             })}
@@ -164,7 +180,7 @@ export default function ProfilePage() {
             { label: 'Questions answered', value: stats?.total_questions_seen || 0 },
             { label: 'Correct answers', value: stats?.total_questions_correct || 0 },
             { label: 'Sessions completed', value: stats?.total_sessions || 0 },
-            { label: 'Courses enrolled', value: stats?.courses_enrolled || 0 },
+            { label: 'Courses completed', value: stats?.courses_completed || 0 },
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between px-[14px] py-3">
               <span className="text-xs text-[#94a3b8]">{row.label}</span>

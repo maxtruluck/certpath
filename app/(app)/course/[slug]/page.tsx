@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface CourseDetail {
@@ -54,15 +54,22 @@ const difficultyColors: Record<string, string> = {
 export default function CourseOverviewPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'true';
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const previewCourseId = searchParams.get('courseId');
+
   useEffect(() => {
     async function fetchCourse() {
       try {
-        const res = await fetch(`/api/courses/${params.slug}`);
+        const url = isPreview && previewCourseId
+          ? `/api/creator/preview/course?courseId=${previewCourseId}`
+          : `/api/courses/${params.slug}`;
+        const res = await fetch(url);
         if (res.status === 404) {
           setError('Course not found');
           setLoading(false);
@@ -78,7 +85,7 @@ export default function CourseOverviewPage() {
       setLoading(false);
     }
     fetchCourse();
-  }, [params.slug]);
+  }, [params.slug, isPreview, previewCourseId]);
 
   if (loading) {
     return (
@@ -124,8 +131,20 @@ export default function CourseOverviewPage() {
       .toUpperCase();
   }
 
+  const accentColor = (course as any).card_color || '#2C2825';
+
   return (
     <div className="space-y-5">
+      {/* Preview banner */}
+      {isPreview && (
+        <div className="bg-amber-100 text-amber-700 text-center text-sm font-medium py-2 -mx-4 -mt-4 rounded-t-lg">
+          Preview Mode — progress not saved
+        </div>
+      )}
+
+      {/* Accent color bar */}
+      <div className={`h-1 -mx-4 ${isPreview ? '' : '-mt-4 rounded-t-lg'}`} style={{ backgroundColor: accentColor }} />
+
       {/* Header bar */}
       <div className="flex items-center gap-3">
         <button
@@ -165,11 +184,11 @@ export default function CourseOverviewPage() {
         <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 capitalize">
           {course.category.replace('_', ' ')}
         </span>
-        {course.difficulty && (
-          <span className={`text-xs font-medium px-3 py-1 rounded-full border capitalize ${difficultyColors[course.difficulty] || 'bg-[#F5F3EF] text-[#6B635A] border-[#E8E4DD]'}`}>
-            {course.difficulty}
+        {(course as any).tags?.map((tag: string) => (
+          <span key={tag} className="text-xs font-medium px-3 py-1 rounded-full bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD]">
+            {tag}
           </span>
-        )}
+        ))}
       </div>
 
       {/* Description */}
@@ -213,13 +232,29 @@ export default function CourseOverviewPage() {
         </div>
       </div>
 
-      {/* What you'll learn - placeholder from stats */}
-      <div className="animate-fade-up">
-        <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
-        <p className="text-sm text-[#6B635A]">
-          {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.lesson_count} lesson{course.stats.lesson_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
-        </p>
-      </div>
+      {/* Learning objectives */}
+      {(course as any).learning_objectives?.length > 0 ? (
+        <div className="animate-fade-up">
+          <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
+          <ul className="space-y-1.5">
+            {(course as any).learning_objectives.map((obj: string, i: number) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#6B635A]">
+                <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                {obj}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="animate-fade-up">
+          <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
+          <p className="text-sm text-[#6B635A]">
+            {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.lesson_count} lesson{course.stats.lesson_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
+          </p>
+        </div>
+      )}
 
       {/* Enrolled: show progress */}
       {isEnrolled && course.user_progress && (
@@ -244,7 +279,14 @@ export default function CourseOverviewPage() {
       )}
 
       {/* Action button */}
-      {isEnrolled ? (
+      {isPreview ? (
+        <button
+          onClick={() => window.close()}
+          className="w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
+        >
+          Close Preview
+        </button>
+      ) : isEnrolled ? (
         <Link
           href={`/course/${course.slug}/path`}
           className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"

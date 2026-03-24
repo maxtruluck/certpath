@@ -9,7 +9,7 @@ interface Props {
 
 export function AppShellWrapper({ children }: Props) {
   const pathname = usePathname();
-  const hideBottomNav = pathname.startsWith('/practice');
+  const hideBottomNav = pathname.startsWith('/practice') || pathname.startsWith('/lesson');
 
   return (
     <AppShell hideBottomNav={hideBottomNav}>

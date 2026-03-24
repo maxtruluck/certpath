@@ -57,12 +57,14 @@ export async function GET(
       return NextResponse.json({ error: 'Not enrolled in this course' }, { status: 403 })
     }
 
-    // Parallel fetch: modules, lessons, questions, progress
+    // Parallel fetch: modules, lessons, questions, progress, tests, test attempts
     const [
       { data: modules },
       { data: lessons },
       { data: allQuestions },
       { data: progressRows },
+      { data: tests },
+      { data: testAttempts },
     ] = await Promise.all([
       supabase
         .from('modules')
@@ -85,6 +87,16 @@ export async function GET(
         .select('lesson_id, status, session_items_completed, session_items_total')
         .eq('user_id', userId)
         .eq('course_id', course.id),
+      supabase
+        .from('tests')
+        .select('id, module_id, title, test_type, question_count, time_limit_minutes, passing_score, max_attempts, sort_order')
+        .eq('course_id', course.id)
+        .eq('status', 'published')
+        .order('sort_order'),
+      supabase
+        .from('test_attempts')
+        .select('id, test_id, score_percent, passed, status')
+        .eq('user_id', userId),
     ])
 
     // ── Index data ───────────────────────────────────────────────
@@ -180,6 +192,47 @@ export async function GET(
 
     // ── Build module response ────────────────────────────────────
 
+    // ── Index test attempts by test_id ──────────────────────────────
+    const attemptsByTest: Record<string, { best_score: number | null; passed: boolean; count: number }> = {}
+    for (const a of testAttempts || []) {
+      if (a.status !== 'completed') continue
+      if (!attemptsByTest[a.test_id]) {
+        attemptsByTest[a.test_id] = { best_score: null, passed: false, count: 0 }
+      }
+      attemptsByTest[a.test_id].count++
+      if (a.score_percent != null) {
+        if (attemptsByTest[a.test_id].best_score === null || a.score_percent > attemptsByTest[a.test_id].best_score!) {
+          attemptsByTest[a.test_id].best_score = a.score_percent
+        }
+      }
+      if (a.passed) attemptsByTest[a.test_id].passed = true
+    }
+
+    // Group tests by module
+    const testsByModule: Record<string, any[]> = {}
+    const courseLevelTests: any[] = []
+    for (const t of tests || []) {
+      const testData = {
+        id: t.id,
+        title: t.title,
+        test_type: t.test_type,
+        question_count: t.question_count,
+        time_limit_minutes: t.time_limit_minutes,
+        passing_score: t.passing_score,
+        max_attempts: t.max_attempts,
+        sort_order: t.sort_order,
+        best_score: attemptsByTest[t.id]?.best_score ?? null,
+        passed: attemptsByTest[t.id]?.passed ?? false,
+        attempts_count: attemptsByTest[t.id]?.count ?? 0,
+      }
+      if (t.module_id) {
+        if (!testsByModule[t.module_id]) testsByModule[t.module_id] = []
+        testsByModule[t.module_id].push(testData)
+      } else {
+        courseLevelTests.push(testData)
+      }
+    }
+
     const modulesResponse = sortedModules.map((mod: any) => {
       const modLessons = (lessonsByModule[mod.id] || [])
         .sort((a: any, b: any) => a.display_order - b.display_order)
@@ -192,6 +245,7 @@ export async function GET(
         display_order: mod.display_order,
         weight_percent: mod.weight_percent,
         lessons: modLessons,
+        tests: testsByModule[mod.id] || [],
       }
     })
 
@@ -251,6 +305,7 @@ export async function GET(
         title: course.title,
       },
       modules: modulesResponse,
+      course_tests: courseLevelTests,
       primary_cta: primaryCta,
       progress: {
         completed: completedLessons,

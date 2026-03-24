@@ -26,6 +26,14 @@ interface DashboardCourse {
   sessions_completed: number;
   last_session_at: string | null;
   enrolled_at: string;
+  progress_percent?: number;
+  resume_point?: {
+    module_title: string;
+    lesson_title: string;
+    lesson_id: string;
+    step_index: number;
+    step_total: number;
+  } | null;
 }
 
 interface BrowseCourse {
@@ -172,7 +180,7 @@ export default function HomePage() {
   }, [enrolled, heroCourse]);
 
   const enrolledCourseIds = useMemo(() => new Set(enrolled.map((c) => c.course_id)), [enrolled]);
-  const discoveryCourses = useMemo(() => allCourses.filter((c) => !enrolledCourseIds.has(c.id)).slice(0, 6), [allCourses, enrolledCourseIds]);
+  const discoveryCourses = useMemo(() => allCourses.filter((c) => !enrolledCourseIds.has(c.id)).slice(0, 3), [allCourses, enrolledCourseIds]);
   const featuredCourses = useMemo(() => allCourses.slice(0, 6), [allCourses]);
 
   const categories = useMemo(() => {
@@ -196,10 +204,27 @@ export default function HomePage() {
   }
 
   if (isReturningUser) {
-    const heroProgress = (heroCourse! as any).lessons_total > 0
-      ? Math.min(100, Math.round(((heroCourse! as any).lessons_completed || 0) / (heroCourse! as any).lessons_total * 100)) : 0;
-    const heroSubtitle = heroCourse!.lessons_total > 0
-      ? `${heroProgress}% complete` : `${heroCourse!.sessions_completed} sessions completed`;
+    const heroProgress = heroCourse!.progress_percent ?? (
+      (heroCourse! as any).lessons_total > 0
+        ? Math.min(100, Math.round(((heroCourse! as any).lessons_completed || 0) / (heroCourse! as any).lessons_total * 100))
+        : 0
+    );
+
+    // Build subtitle with resume point
+    let heroSubtitle = `${heroProgress}% complete`;
+    const rp = heroCourse!.resume_point;
+    if (rp) {
+      const parts = [];
+      if (rp.module_title) parts.push(rp.module_title);
+      parts.push(rp.lesson_title);
+      if (rp.step_total > 0) parts.push(`Step ${rp.step_index} of ${rp.step_total}`);
+      heroSubtitle = parts.join(' · ');
+    }
+
+    // Link directly to lesson player if resume point available
+    const heroHref = rp
+      ? `/lesson/${heroCourse!.course.slug}/${rp.lesson_id}`
+      : `/course/${heroCourse!.course.slug}/path`;
 
     return (
       <div className="space-y-4">
@@ -209,7 +234,7 @@ export default function HomePage() {
           subtitle={heroSubtitle}
           progressPercent={heroProgress}
           buttonLabel="Continue learning"
-          href={`/course/${heroCourse!.course.slug}/path`}
+          href={heroHref}
         />
 
         {/* Section B: Your Courses (horizontal, matches CompactCourseCard) */}
@@ -218,7 +243,7 @@ export default function HomePage() {
             <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">YOUR COURSES</p>
             <div className="flex gap-[10px] overflow-x-auto pb-1 -mx-4 px-4">
               {otherEnrolled.map((item) => {
-                const pct = (item as any).lessons_total > 0 ? Math.min(100, Math.round(((item as any).lessons_completed || 0) / (item as any).lessons_total * 100)) : 0;
+                const pct = item.progress_percent ?? 0;
                 return (
                   <Link key={item.id} href={`/course/${item.course.slug}/path`}
                     className="flex-shrink-0 w-[150px] min-h-[100px] bg-[#f8fafc] rounded-lg border border-[#e2e8f0] p-3 flex flex-col justify-between hover:bg-[#f1f5f9] transition-colors"

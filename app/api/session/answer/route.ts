@@ -8,6 +8,19 @@ function validateAnswer(
 ): { isCorrect: boolean; rating: number; selectedOptionIds: string[] } {
   const questionType = question.question_type
 
+  if (questionType === 'plot_point') {
+    const userPoint = body.user_point
+    const correctPoint = question.correct_point
+    if (!userPoint || !correctPoint) {
+      return { isCorrect: false, rating: 1, selectedOptionIds: [] }
+    }
+    const tolerance = correctPoint.tolerance ?? 0.5
+    const dx = Math.abs(userPoint.x - correctPoint.x)
+    const dy = Math.abs(userPoint.y - correctPoint.y)
+    const isCorrect = dx <= tolerance && dy <= tolerance
+    return { isCorrect, rating: isCorrect ? 3 : 1, selectedOptionIds: [] }
+  }
+
   if (questionType === 'fill_blank') {
     const answerText = (body.answer_text || '').trim().toLowerCase()
     const acceptableAnswers: string[] = question.acceptable_answers || []
@@ -76,7 +89,7 @@ function validateAnswer(
     return { isCorrect, rating, selectedOptionIds: [] }
   }
 
-  // Default: MC, MS, TF -- existing array comparison
+  // Default: MC, MS, TF, diagram -- existing array comparison
   const correctIds = (question.correct_option_ids || []).sort()
   const selectedIds = [...(body.selected_option_ids || [])].sort()
   const isCorrect =
@@ -104,7 +117,7 @@ export async function POST(request: NextRequest) {
     // Look up the question
     const { data: question, error: qError } = await supabase
       .from('questions')
-      .select('id, topic_id, module_id, course_id, correct_option_ids, explanation, question_type, acceptable_answers, match_mode, correct_order, matching_pairs, option_explanations, lesson_id, attempt_count, pass_rate')
+      .select('id, topic_id, module_id, course_id, correct_option_ids, explanation, question_type, acceptable_answers, match_mode, correct_order, matching_pairs, option_explanations, lesson_id, attempt_count, pass_rate, correct_point')
       .eq('id', question_id)
       .single()
 
@@ -158,13 +171,25 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (userCourse) {
-      const updates: any = {
-        questions_seen: (userCourse.questions_seen || 0) + 1,
+      // Only count questions_seen for first-time answers (not repeat reviews)
+      const { count: priorAttempts } = await supabase
+        .from('review_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('question_id', question_id)
+
+      const isFirstAttempt = (priorAttempts ?? 0) <= 1 // 1 because we already inserted this attempt above
+
+      const updates: any = {}
+      if (isFirstAttempt) {
+        updates.questions_seen = (userCourse.questions_seen || 0) + 1
       }
       if (isCorrect) {
         updates.questions_correct = (userCourse.questions_correct || 0) + 1
       }
-      await supabase.from('user_courses').update(updates).eq('id', userCourse.id)
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('user_courses').update(updates).eq('id', userCourse.id)
+      }
     }
 
     // Build response
@@ -183,6 +208,9 @@ export async function POST(request: NextRequest) {
     }
     if (question.question_type === 'fill_blank') {
       response.acceptable_answers = question.acceptable_answers
+    }
+    if (question.question_type === 'plot_point' && question.correct_point) {
+      response.correct_point = { x: question.correct_point.x, y: question.correct_point.y }
     }
 
     if (!isCorrect) {

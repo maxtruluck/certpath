@@ -21,6 +21,19 @@ interface LessonData {
   items_total: number;
 }
 
+interface TestData {
+  id: string;
+  title: string;
+  test_type: string;
+  question_count: number;
+  time_limit_minutes: number | null;
+  passing_score: number;
+  max_attempts: number | null;
+  best_score: number | null;
+  passed: boolean;
+  attempts_count: number;
+}
+
 interface ModuleData {
   id: string;
   title: string;
@@ -28,28 +41,16 @@ interface ModuleData {
   display_order: number;
   weight_percent: number;
   lessons: LessonData[];
+  tests: TestData[];
   best_test_score: number | null;
   assessment_id: string | null;
-}
-
-interface PrimaryCta {
-  type: 'continue' | 'start' | 'caught_up';
-  lesson_id: string | null;
-  label: string;
-}
-
-interface PracticeExam {
-  id: string;
-  title: string;
-  best_score: number | null;
-  attempts_count: number;
 }
 
 interface PathResponse {
   course: { id: string; title: string };
   modules: ModuleData[];
-  primary_cta: PrimaryCta;
-  practice_exam: PracticeExam | null;
+  course_tests?: TestData[];
+  primary_cta?: { type: string; lesson_id: string | null; label: string };
   progress: { completed: number; total: number };
 }
 
@@ -88,12 +89,6 @@ const stateStyles: Record<LessonState, {
     badge: 'bg-green-100 text-green-700',
     dot: 'bg-green-500',
   },
-};
-
-const ctaColors: Record<PrimaryCta['type'], string> = {
-  continue: 'bg-blue-600 hover:bg-blue-700 text-white',
-  start: 'bg-green-600 hover:bg-green-700 text-white',
-  caught_up: 'bg-[#6B635A] text-white',
 };
 
 // ---------------------------------------------------------------------------
@@ -227,13 +222,98 @@ function LessonRow({
 
   return (
     <div className="relative">
-      <Link href={`/practice/${slug}?lesson=${lesson.id}`}>
+      <Link href={`/lesson/${slug}/${lesson.id}`}>
         {content}
       </Link>
       {!isLast && (
         <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-[#E8E4DD]" />
       )}
     </div>
+  );
+}
+
+function TestRow({
+  test,
+  slug,
+  allLessonsCompleted,
+}: {
+  test: TestData;
+  slug: string;
+  allLessonsCompleted: boolean;
+}) {
+  // Module quizzes lock until all module lessons completed
+  // Practice exams are always unlocked
+  // Final assessments lock until all module quizzes passed
+  const isLocked = test.test_type === 'module_quiz' && !allLessonsCompleted;
+  const hasPassed = test.passed;
+
+  const subtitle = [
+    `${test.question_count} questions`,
+    test.time_limit_minutes ? `${test.time_limit_minutes} min` : 'Untimed',
+  ].join(' \u00B7 ');
+
+  const content = (
+    <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+      isLocked
+        ? 'bg-[#F5F3EF] border-dashed border-[#D4CFC7] opacity-60 cursor-default'
+        : hasPassed
+          ? 'bg-green-50 border-green-300 hover:shadow-sm cursor-pointer'
+          : 'bg-white border-[#E8E4DD] hover:shadow-sm cursor-pointer'
+    }`}>
+      {/* Icon */}
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+        isLocked ? 'bg-[#D4CFC7]' : hasPassed ? 'bg-green-500' : 'bg-[#6B635A]'
+      }`}>
+        {hasPassed ? (
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+          </svg>
+        )}
+      </div>
+
+      {/* Title + subtitle */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold truncate ${isLocked ? 'text-[#A39B90]' : 'text-[#2C2825]'}`}>
+          {test.title}
+        </p>
+        <p className={`text-xs mt-0.5 ${isLocked ? 'text-[#A39B90]' : 'text-[#6B635A]'}`}>
+          {isLocked ? 'Complete lessons first' : subtitle}
+        </p>
+      </div>
+
+      {/* Score badge + arrow */}
+      <div className="flex items-center gap-2 shrink-0">
+        {test.best_score !== null && (
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+            hasPassed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
+            {test.best_score}%
+          </span>
+        )}
+        {test.attempts_count > 0 && (
+          <span className="text-xs text-[#A39B90]">
+            {test.attempts_count} attempt{test.attempts_count !== 1 ? 's' : ''}
+          </span>
+        )}
+        {!isLocked && (
+          <svg className="w-4 h-4 text-[#A39B90]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isLocked) return <div>{content}</div>;
+
+  return (
+    <Link href={`/test/${slug}/${test.id}`}>
+      {content}
+    </Link>
   );
 }
 
@@ -294,7 +374,7 @@ function CoursePathContent() {
     : 0;
 
   return (
-    <div className="pb-28 space-y-5">
+    <div className="pb-8 space-y-5">
       {/* -- Header --------------------------------------------------- */}
       <div className="flex items-center gap-3">
         <button
@@ -325,38 +405,6 @@ function CoursePathContent() {
           />
         </div>
 
-        {/* Practice exam button */}
-        {data.practice_exam && (
-          <Link
-            href={`/course/${slug}/assessment/${data.practice_exam.id}`}
-            className="mt-3 flex items-center justify-between w-full px-4 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm hover:bg-[#EBE8E2] transition-colors"
-          >
-            <span className="font-medium text-[#2C2825]">
-              {data.practice_exam.title}
-            </span>
-            <span className="text-xs text-[#6B635A]">
-              {data.practice_exam.best_score !== null
-                ? `Best: ${data.practice_exam.best_score}%`
-                : `${data.practice_exam.attempts_count} attempts`}
-            </span>
-          </Link>
-        )}
-
-        {/* Quick links */}
-        <div className="flex gap-3 mt-3">
-          <Link
-            href={`/practice/${slug}`}
-            className="flex-1 bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center text-sm transition-colors"
-          >
-            Quick Practice
-          </Link>
-          <Link
-            href={`/course/${slug}/guidebook${data.modules[0]?.lessons[0]?.id ? `?lesson=${data.modules[0].lessons[0].id}` : ''}`}
-            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] text-sm font-medium text-[#6B635A] hover:bg-[#EBE8E2] transition-colors"
-          >
-            Guidebook
-          </Link>
-        </div>
       </div>
 
       {/* -- Modules + Lessons ----------------------------------------- */}
@@ -374,18 +422,6 @@ function CoursePathContent() {
                 </span>
               )}
             </div>
-            {/* Module test indicator */}
-            {mod.assessment_id && (
-              <Link
-                href={`/course/${slug}/assessment/${mod.assessment_id}`}
-                className="flex items-center gap-1 text-xs text-[#6B635A] hover:text-[#2C2825]"
-              >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                {mod.best_test_score !== null ? `${mod.best_test_score}%` : 'Test'}
-              </Link>
-            )}
           </div>
 
           {/* Lesson rows */}
@@ -396,36 +432,44 @@ function CoursePathContent() {
                 lesson={lesson}
                 moduleIndex={modIdx}
                 lessonIndex={lessonIdx}
-                isLast={lessonIdx === mod.lessons.length - 1}
+                isLast={lessonIdx === mod.lessons.length - 1 && (!mod.tests || mod.tests.length === 0)}
                 slug={slug}
                 onLockedTap={showLockedToast}
               />
             ))}
+
+            {/* Module quizzes */}
+            {mod.tests && mod.tests.map(test => {
+              const allModuleLessonsCompleted = mod.lessons.every(l => l.state === 'completed')
+              return (
+                <TestRow
+                  key={test.id}
+                  test={test}
+                  slug={slug}
+                  allLessonsCompleted={allModuleLessonsCompleted}
+                />
+              )
+            })}
           </div>
         </div>
       ))}
 
-      {/* -- Sticky CTA ------------------------------------------------ */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 pb-4 z-40">
-        <div className="max-w-lg mx-auto">
-          {data.primary_cta.type === 'caught_up' ? (
-            <div className={`w-full py-3.5 rounded-xl text-center text-sm font-semibold shadow-lg ${ctaColors[data.primary_cta.type]}`}>
-              {data.primary_cta.label}
-            </div>
-          ) : (
-            <Link
-              href={
-                data.primary_cta.lesson_id
-                  ? `/practice/${slug}?lesson=${data.primary_cta.lesson_id}`
-                  : `/practice/${slug}`
-              }
-              className={`block w-full py-3.5 rounded-xl text-center text-sm font-semibold shadow-lg transition-colors ${ctaColors[data.primary_cta.type]}`}
-            >
-              {data.primary_cta.label}
-            </Link>
-          )}
+      {/* -- Course-level tests ------------------------------------------ */}
+      {data.course_tests && data.course_tests.length > 0 && (
+        <div className="animate-fade-up" style={{ animationDelay: `${(data.modules.length + 1) * 60}ms` }}>
+          <h3 className="text-sm font-bold text-[#2C2825] mb-3">Practice & Assessment</h3>
+          <div className="space-y-2">
+            {data.course_tests.map(test => (
+              <TestRow
+                key={test.id}
+                test={test}
+                slug={slug}
+                allLessonsCompleted={progressPct === 100}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* -- Toast ----------------------------------------------------- */}
       {toast && (

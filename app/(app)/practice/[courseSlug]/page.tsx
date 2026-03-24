@@ -22,6 +22,9 @@ import { CSS } from '@dnd-kit/utilities';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { richMarkdownComponents, VideoEmbed } from '@/lib/markdown-components';
+import { MathText } from '@/lib/math-text';
+import { CoordinateDiagram, type DiagramData } from '@/lib/coordinate-diagram';
+import { MermaidDiagram } from '@/lib/mermaid-diagram';
 
 // ─── Types ───────────────────────────────────────────────────────
 interface Question {
@@ -41,6 +44,7 @@ interface Question {
   matching_items?: { lefts: string[]; rights: string[] };
   difficulty_label?: 'easy' | 'medium' | 'challenging';
   lesson_id?: string | null;
+  diagram_data?: DiagramData | null;
 }
 
 interface AnswerResult {
@@ -53,6 +57,7 @@ interface AnswerResult {
   correct_order?: string[];
   matching_pairs?: { left: string; right: string }[];
   acceptable_answers?: string[];
+  correct_point?: { x: number; y: number } | null;
 }
 
 interface LessonSectionData {
@@ -75,10 +80,31 @@ interface ConceptData {
   module_title: string;
 }
 
+interface GraphCardData {
+  graph_data: DiagramData;
+  step_title: string;
+  lesson_id: string;
+}
+
+interface EmbedCardData {
+  content: Record<string, any>;
+  step_title: string;
+  lesson_id: string;
+}
+
+interface CalloutCardData {
+  content: { callout_style: string; title: string; markdown: string };
+  step_title: string;
+  lesson_id: string;
+}
+
 type QueueItem =
   | { type: 'lesson_section'; data: LessonSectionData }
   | { type: 'question'; data: Question }
-  | { type: 'concept'; data: ConceptData };
+  | { type: 'concept'; data: ConceptData }
+  | { type: 'graph'; data: GraphCardData }
+  | { type: 'embed'; data: EmbedCardData }
+  | { type: 'callout'; data: CalloutCardData };
 
 // ─── Lesson Section Card ────────────────────────────────────────
 function LessonSectionCard({ section, onNext }: { section: LessonSectionData; onNext: () => void }) {
@@ -150,6 +176,115 @@ function ConceptCard({ concept, onNext }: { concept: ConceptData; onNext: () => 
   );
 }
 
+// ─── Graph Card ─────────────────────────────────────────────────
+function GraphCard({ graph, onNext }: { graph: GraphCardData; onNext: () => void }) {
+  return (
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="py-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#0C447C]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          </svg>
+          <span className="text-xs font-medium text-[#0C447C]">{graph.step_title}</span>
+        </div>
+        <div className="border-t-2 border-[#E8E4DD] pt-5 mb-6">
+          <div className="flex justify-center">
+            <CoordinateDiagram data={graph.graph_data} />
+          </div>
+        </div>
+        <button
+          onClick={onNext}
+          className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          Continue
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Embed Card ─────────────────────────────────────────────────
+function EmbedCard({ embed, onNext }: { embed: EmbedCardData; onNext: () => void }) {
+  const sub = embed.content?.sub_type;
+  return (
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="py-4 flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#0C447C] bg-[#E6F1FB] px-2 py-0.5 rounded-full">
+            {sub === 'math_graph' ? 'Graph' : sub === 'image' ? 'Image' : 'Diagram'}
+          </span>
+        </div>
+        <div className="border-t-2 border-[#E8E4DD] pt-5 mb-6">
+          {sub === 'math_graph' && embed.content?.graph_data && (
+            <div className="flex justify-center">
+              <CoordinateDiagram data={embed.content.graph_data} />
+            </div>
+          )}
+          {sub === 'image' && embed.content?.url && (
+            <div>
+              <img src={embed.content.url} alt={embed.content.alt || ''} className="max-w-full rounded-lg mx-auto" />
+              {embed.content.caption && (
+                <p className="text-sm text-[#6B635A] text-center mt-2">{embed.content.caption}</p>
+              )}
+            </div>
+          )}
+          {sub === 'diagram' && embed.content?.mermaid && (
+            <MermaidDiagram chart={embed.content.mermaid} className="bg-white rounded-lg p-4 border border-gray-100" />
+          )}
+        </div>
+        <button
+          onClick={onNext}
+          className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          Continue
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Callout Card ───────────────────────────────────────────────
+const CALLOUT_COLORS: Record<string, { border: string; bg: string }> = {
+  tip: { border: 'border-teal-400', bg: 'bg-teal-50' },
+  warning: { border: 'border-amber-400', bg: 'bg-amber-50' },
+  key_concept: { border: 'border-purple-400', bg: 'bg-purple-50' },
+  exam_note: { border: 'border-red-400', bg: 'bg-red-50' },
+};
+
+function CalloutCard({ callout, onNext }: { callout: CalloutCardData; onNext: () => void }) {
+  const style = CALLOUT_COLORS[callout.content?.callout_style] || CALLOUT_COLORS.tip;
+  return (
+    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="py-4" />
+        <div className={`border-l-4 ${style.border} ${style.bg} rounded-r-lg p-5 mb-6`}>
+          <p className="text-base font-semibold text-[#2C2825] mb-3">{callout.content?.title}</p>
+          <div className="prose prose-sm max-w-none [&_p]:text-[15px] [&_p]:leading-[1.75] [&_p]:text-[#2C2825]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={richMarkdownComponents}>
+              {callout.content?.markdown || ''}
+            </ReactMarkdown>
+          </div>
+        </div>
+        <button
+          onClick={onNext}
+          className="w-full py-3.5 rounded-xl bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          Continue
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sortable Item for Ordering ──────────────────────────────────
 function SortableOrderItem({ id, text, index }: { id: string; text: string; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -203,6 +338,7 @@ function PracticeContent() {
   const [orderItems, setOrderItems] = useState<{ id: string; text: string }[]>([]);
   const [matchSelections, setMatchSelections] = useState<Record<string, string>>({});
   const [showLinkedBlock, setShowLinkedBlock] = useState(false);
+  const [plotPoint, setPlotPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Session queue
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -227,7 +363,11 @@ function PracticeContent() {
   const currentItem = queue[queueIndex];
   const isLessonSection = currentItem?.type === 'lesson_section';
   const isConcept = currentItem?.type === 'concept';
-  const currentQuestion = (!isLessonSection && !isConcept) ? (currentItem?.data as Question) : null;
+  const isGraph = currentItem?.type === 'graph';
+  const isEmbed = currentItem?.type === 'embed';
+  const isCallout = currentItem?.type === 'callout';
+  const isTeachingCard = isLessonSection || isConcept || isGraph || isEmbed || isCallout;
+  const currentQuestion = !isTeachingCard ? (currentItem?.data as Question) : null;
 
   // Progress counts ALL items
   const totalItems = queue.length + (inRequeue ? wrongQueue.length : 0);
@@ -285,6 +425,12 @@ function PracticeContent() {
             builtQueue.push({ type: 'concept', data: card.concept });
           } else if (card.card_type === 'question') {
             builtQueue.push({ type: 'question', data: card.question });
+          } else if (card.card_type === 'graph') {
+            builtQueue.push({ type: 'graph', data: card as any });
+          } else if (card.card_type === 'embed') {
+            builtQueue.push({ type: 'embed', data: card as any });
+          } else if (card.card_type === 'callout') {
+            builtQueue.push({ type: 'callout', data: card as any });
           }
         }
 
@@ -348,6 +494,7 @@ function PracticeContent() {
     setOrderItems([]);
     setMatchSelections({});
     setShowLinkedBlock(false);
+    setPlotPoint(null);
   }
 
   async function handleSubmitAnswer() {
@@ -361,7 +508,10 @@ function PracticeContent() {
         time_spent_ms: Date.now() - (questionStartTime ?? Date.now()),
       };
 
-      if (currentQuestion.question_type === 'fill_blank') {
+      if (currentQuestion.question_type === 'plot_point') {
+        body.user_point = plotPoint;
+        body.selected_option_ids = [];
+      } else if (currentQuestion.question_type === 'fill_blank') {
         body.answer_text = fillBlankAnswer;
       } else if (currentQuestion.question_type === 'ordering') {
         body.user_order = orderItems.map(i => i.id);
@@ -513,10 +663,11 @@ function PracticeContent() {
 
   const canSubmit = (() => {
     if (!currentQuestion || answerResult) return false;
+    if (currentQuestion.question_type === 'plot_point') return plotPoint !== null;
     if (currentQuestion.question_type === 'fill_blank') return fillBlankAnswer.trim().length > 0;
     if (currentQuestion.question_type === 'ordering') return orderItems.length > 0;
     if (currentQuestion.question_type === 'matching') return Object.values(matchSelections).every(v => v !== '');
-    return selectedIds.length > 0;
+    return selectedIds.length > 0; // MC, MS, TF, diagram all use selected options
   })();
 
   // ─── Session Start Screen ──────────────────────────────────
@@ -700,6 +851,95 @@ function PracticeContent() {
     );
   }
 
+  // ─── Graph Card Screen ────────────────────────────────────
+  if (isGraph && currentItem) {
+    const graphData = currentItem.data as GraphCardData;
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFAF8]">
+        <div className="max-w-lg mx-auto px-4">
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
+              <div className="h-full bg-[#0C447C] rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+        </div>
+        <GraphCard graph={graphData} onNext={handleSectionNext} />
+
+        {exitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
+            <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave session?</h3>
+              <p className="text-sm text-[#6B635A] text-center">Your progress will be saved. You can resume later.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
+                <button onClick={() => { resetSession(); router.push(`/course/${courseSlug}/path`); }} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Embed Card Screen ─────────────────────────────────────
+  if (isEmbed && currentItem) {
+    const embedData = currentItem.data as EmbedCardData;
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFAF8]">
+        <div className="max-w-lg mx-auto px-4">
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden">
+              <div className="h-full bg-[#0C447C] rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+        </div>
+        <EmbedCard embed={embedData} onNext={handleSectionNext} />
+      </div>
+    );
+  }
+
+  // ─── Callout Card Screen ──────────────────────────────────
+  if (isCallout && currentItem) {
+    const calloutData = currentItem.data as CalloutCardData;
+    const calloutStyle = CALLOUT_COLORS[calloutData.content?.callout_style] || CALLOUT_COLORS.tip;
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFAF8]">
+        <div className="max-w-lg mx-auto px-4">
+          <div className="flex items-center gap-3 py-4">
+            <button onClick={() => setExitConfirm(true)} className="p-1 text-[#A39B90] hover:text-[#6B635A] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className={`flex-1 h-2 bg-[#EBE8E2] rounded-full overflow-hidden`}>
+              <div className={`h-full rounded-full transition-all duration-300 ${calloutStyle.border.replace('border-', 'bg-')}`} style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-sm font-medium text-[#6B635A] font-mono min-w-[3rem] text-right">
+              {currentItemIdx + 1}/{totalItems}
+            </span>
+          </div>
+        </div>
+        <CalloutCard callout={calloutData} onNext={handleSectionNext} />
+      </div>
+    );
+  }
+
   if (!currentQuestion && !inRequeue) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -820,12 +1060,35 @@ function PracticeContent() {
 
         {/* Question text */}
         <div className="mb-6">
-          <p className="text-base font-medium text-[#2C2825] leading-relaxed">{activeQuestion.question_text}</p>
+          <p className="text-base font-medium text-[#2C2825] leading-relaxed">
+            {activeQuestion.question_text.includes('$')
+              ? <MathText text={activeQuestion.question_text} />
+              : activeQuestion.question_text}
+          </p>
           {activeQuestion.question_type === 'multiple_select' && <p className="text-xs text-[#A39B90] mt-2">Select all that apply</p>}
           {activeQuestion.question_type === 'fill_blank' && <p className="text-xs text-[#A39B90] mt-2">Type your answer</p>}
           {activeQuestion.question_type === 'ordering' && <p className="text-xs text-[#A39B90] mt-2">Drag items into the correct order</p>}
           {activeQuestion.question_type === 'matching' && <p className="text-xs text-[#A39B90] mt-2">Match each item on the left with the correct item on the right</p>}
+          {activeQuestion.question_type === 'diagram' && <p className="text-xs text-[#A39B90] mt-2">Study the diagram and select your answer</p>}
         </div>
+
+        {/* Diagram (rendered above options for diagram/plot_point questions) */}
+        {activeQuestion.diagram_data && activeQuestion.question_type !== 'plot_point' && (
+          <CoordinateDiagram data={activeQuestion.diagram_data} />
+        )}
+
+        {/* Interactive diagram for plot_point questions */}
+        {activeQuestion.question_type === 'plot_point' && activeQuestion.diagram_data && (
+          <CoordinateDiagram
+            data={activeQuestion.diagram_data}
+            interactive
+            userPoint={plotPoint}
+            onPointPlaced={setPlotPoint}
+            disabled={!!answerResult}
+            correctPoint={answerResult?.correct_point}
+            isCorrect={answerResult?.is_correct ?? null}
+          />
+        )}
 
         {/* ── Fill Blank Input ── */}
         {activeQuestion.question_type === 'fill_blank' && !answerResult && (
@@ -925,8 +1188,8 @@ function PracticeContent() {
           </div>
         )}
 
-        {/* ── MC / MS / TF options ── */}
-        {['multiple_choice', 'multiple_select', 'true_false'].includes(activeQuestion.question_type) && (
+        {/* ── MC / MS / TF / Diagram options ── */}
+        {['multiple_choice', 'multiple_select', 'true_false', 'diagram'].includes(activeQuestion.question_type) && (
           <div className="space-y-2.5 mb-6">
             {activeQuestion.options.map((option, idx) => {
               const state = getOptionState(option.id);
@@ -946,7 +1209,9 @@ function PracticeContent() {
                   className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all ${borderClass} ${bgClass} disabled:cursor-default`}
                 >
                   <span className="text-sm font-medium text-[#6B635A] flex-shrink-0">{optionLabels[idx]}.</span>
-                  <span className={`text-sm text-left ${textClass}`}>{option.text}</span>
+                  <span className={`text-sm text-left ${textClass}`}>
+                    {option.text.includes('$') ? <MathText text={option.text} /> : option.text}
+                  </span>
                 </button>
               );
             })}
@@ -985,7 +1250,9 @@ function PracticeContent() {
             )}
 
             <div className="text-sm text-[#6B635A] leading-relaxed">
-              <p>{answerResult.explanation}</p>
+              <p>{answerResult.explanation.includes('$')
+                ? <MathText text={answerResult.explanation} />
+                : answerResult.explanation}</p>
             </div>
 
             {!answerResult.is_correct && answerResult.linked_lesson && (

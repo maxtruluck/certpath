@@ -107,6 +107,7 @@ function BrowseContent() {
   const [category, setCategory] = useState(searchParams.get('category') || 'All');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [priceFilter, setPriceFilter] = useState<'all' | 'free' | 'paid'>('all');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -149,13 +150,16 @@ function BrowseContent() {
     } else if (category !== 'All') {
       result = result.filter((c) => c.category === category);
     }
+    // Price filter
+    if (priceFilter === 'free') result = result.filter((c) => !c.price_cents || c.price_cents === 0);
+    else if (priceFilter === 'paid') result = result.filter((c) => c.price_cents && c.price_cents > 0);
     return result;
-  }, [allCourses, debouncedSearch, category, isSearchActive]);
+  }, [allCourses, debouncedSearch, category, isSearchActive, priceFilter]);
 
   const courses = useMemo(() => {
     const sorted = [...filteredCourses];
     switch (sortBy) {
-      case 'popular': sorted.sort((a, b) => (b.stats.question_count || 0) - (a.stats.question_count || 0)); break;
+      case 'popular': sorted.sort((a, b) => ((b.stats as any).enrollment_count || b.stats.question_count || 0) - ((a.stats as any).enrollment_count || a.stats.question_count || 0)); break;
       case 'price_low': sorted.sort((a, b) => (a.price_cents ?? 0) - (b.price_cents ?? 0)); break;
       case 'price_high': sorted.sort((a, b) => (b.price_cents ?? 0) - (a.price_cents ?? 0)); break;
       case 'free_first': sorted.sort((a, b) => ((a.price_cents ?? 0) === 0 ? 0 : 1) - ((b.price_cents ?? 0) === 0 ? 0 : 1)); break;
@@ -210,6 +214,19 @@ function BrowseContent() {
           })}
         </div>
       )}
+
+      {/* Free / Paid toggle */}
+      <div className="flex gap-2">
+        {(['all', 'free', 'paid'] as const).map((opt) => (
+          <button key={opt} onClick={() => setPriceFilter(opt)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              priceFilter === opt ? 'bg-[#2C2825] text-[#F5F3EF]' : 'bg-[#f1f5f9] text-[#475569]'
+            }`}
+          >
+            {opt === 'all' ? 'All Prices' : opt === 'free' ? 'Free' : 'Paid'}
+          </button>
+        ))}
+      </div>
 
       {/* Results bar + sort (matches mobile resultsBar) */}
       {!loading && (
