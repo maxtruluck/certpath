@@ -12,14 +12,12 @@ export default function LessonEditorLayout({
   courseId,
   courseTitle,
   category,
-  onBack,
-  onContinue,
 }: {
   courseId: string
   courseTitle?: string
   category?: string
-  onBack: () => void
-  onContinue: () => void
+  onBack?: () => void
+  onContinue?: () => void
 }) {
   const [modules, setModules] = useState<Module[]>([])
   const [activeLesson, setActiveLesson] = useState<string | null>(null)
@@ -89,7 +87,7 @@ export default function LessonEditorLayout({
       {/* Center: Step Sequencer */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeLesson && activeLessonObj ? (
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex-1 overflow-y-auto" style={{ padding: '24px 32px' }}>
             <StepSequencer
               courseId={courseId}
               lesson={activeLessonObj}
@@ -129,18 +127,6 @@ export default function LessonEditorLayout({
           </div>
         )}
 
-        {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between">
-          <button onClick={onBack} className="text-xs text-gray-400 hover:text-gray-600">
-            &larr; Back
-          </button>
-          <button
-            onClick={onContinue}
-            className="btn-primary px-5 py-2 text-xs"
-          >
-            Settings &rarr;
-          </button>
-        </div>
       </div>
 
       {/* Import Modal */}

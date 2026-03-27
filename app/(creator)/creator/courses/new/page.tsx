@@ -9,7 +9,7 @@ import StepReview from './components/StepReview'
 import { useWizardStore, INITIAL_FORM } from '@/lib/store/creator-wizard'
 import type { CourseFormData } from '@/lib/store/creator-wizard'
 
-// ─── 4-Step Progress Bar ─────────────────────────────────────────
+// ─── Step Config ────────────────────────────────────────────────
 const STEPS = [
   { label: 'Define', number: 1 },
   { label: 'Build', number: 2 },
@@ -17,68 +17,119 @@ const STEPS = [
   { label: 'Review', number: 4 },
 ]
 
-function StepProgressBar({ current }: { current: number }) {
+// ─── Compact Top Bar ────────────────────────────────────────────
+function BuilderTopBar({
+  courseTitle,
+  currentStep,
+  saveStatus,
+  onNavigateStep,
+  onSettingsClick,
+}: {
+  courseTitle: string
+  currentStep: number
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error'
+  onNavigateStep: (step: 1 | 2 | 3 | 4) => void
+  onSettingsClick?: () => void
+}) {
+  const saveLabels: Record<string, string> = {
+    idle: '',
+    saving: 'Saving...',
+    saved: 'All changes saved',
+    error: 'Save failed',
+  }
+  const saveColors: Record<string, string> = {
+    idle: '',
+    saving: 'text-[#888]',
+    saved: 'text-[#1D9E75]',
+    error: 'text-red-500',
+  }
+
   return (
-    <div className="max-w-lg mx-auto">
-      <div className="flex items-center justify-between">
-        {STEPS.map((step, idx) => (
-          <div key={step.number} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
-                  current >= step.number
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-400'
-                }`}
+    <div
+      className="flex items-center justify-between px-5 border-b border-[#eee] bg-white flex-shrink-0"
+      style={{ height: 48 }}
+    >
+      {/* Left: Dashboard link + title */}
+      <div className="flex items-center min-w-0">
+        <button
+          onClick={() => onNavigateStep(1)}
+          className="text-[13px] text-[#888] hover:text-[#555] cursor-pointer whitespace-nowrap"
+        >
+          <a href="/creator" onClick={e => { e.preventDefault(); window.location.href = '/creator' }}>
+            ← Dashboard
+          </a>
+        </button>
+        <span className="text-[#ddd] mx-3 select-none">|</span>
+        <span className="text-[15px] font-semibold text-[#1a1a1a] truncate">
+          {courseTitle || 'Untitled Course'}
+        </span>
+      </div>
+
+      {/* Right: Step dots + save status + settings */}
+      <div className="flex items-center gap-[14px]">
+        {/* Step dots */}
+        <div className="flex items-center gap-1">
+          {STEPS.map(step => {
+            const isCompleted = currentStep > step.number
+            const isActive = currentStep === step.number
+            let bg = '#f0f0f0'
+            let color = '#bbb'
+            if (isCompleted) { bg = '#1D9E75'; color = '#fff' }
+            if (isActive) { bg = '#378ADD'; color = '#fff' }
+
+            return (
+              <button
+                key={step.number}
+                onClick={() => {
+                  if (step.number <= currentStep) onNavigateStep(step.number as 1 | 2 | 3 | 4)
+                }}
+                className="flex items-center justify-center rounded-full cursor-pointer"
+                style={{
+                  width: 26,
+                  height: 26,
+                  background: bg,
+                  color,
+                  fontSize: 11,
+                  fontWeight: 500,
+                }}
+                title={step.label}
               >
-                {current > step.number ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                {isCompleted ? (
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
                     <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
                   step.number
                 )}
-              </div>
-              <span className={`text-xs mt-1.5 whitespace-nowrap ${
-                current >= step.number ? 'text-blue-600 font-medium' : 'text-gray-400'
-              }`}>
-                {step.label}
-              </span>
-            </div>
-            {idx < STEPS.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-3 mt-[-18px] ${
-                current > step.number ? 'bg-blue-600' : 'bg-gray-200'
-              }`} />
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Save status */}
+        {saveStatus !== 'idle' && (
+          <span className={`text-[11px] whitespace-nowrap ${saveColors[saveStatus]}`}>
+            {saveStatus === 'saved' && (
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="inline mr-0.5 -mt-px">
+                <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             )}
-          </div>
-        ))}
+            {saveLabels[saveStatus]}
+          </span>
+        )}
+
+        {/* Settings button */}
+        {onSettingsClick && (
+          <button
+            onClick={onSettingsClick}
+            className="text-[12px] font-medium text-white px-4 py-1.5 rounded-md"
+            style={{ background: '#222', border: 'none' }}
+          >
+            Settings →
+          </button>
+        )}
       </div>
     </div>
-  )
-}
-
-// ─── Auto-Save Indicator ─────────────────────────────────────────
-function AutoSaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' }) {
-  if (status === 'idle') return null
-  const labels = {
-    saving: 'Saving...',
-    saved: 'Auto-saved',
-    error: 'Save failed -- retrying...',
-  }
-  const colors = {
-    saving: 'text-gray-400',
-    saved: 'text-gray-400',
-    error: 'text-red-500',
-  }
-  return (
-    <span className={`text-xs ${colors[status]} flex items-center gap-1`}>
-      {status === 'saved' && (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-      {labels[status]}
-    </span>
   )
 }
 
@@ -257,21 +308,25 @@ function CreateCourseContent() {
   // ─── Step 4: Review ──────────────────────────────────────────
   if (currentStep === 4 && courseId) {
     return (
-      <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
-        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
-          <StepProgressBar current={4} />
-          <AutoSaveIndicator status={saveStatus} />
-        </div>
+      <div className="flex flex-col h-screen overflow-hidden">
+        <BuilderTopBar
+          courseTitle={form.title}
+          currentStep={4}
+          saveStatus={saveStatus}
+          onNavigateStep={goToStep}
+        />
         <div className="flex-1 overflow-y-auto">
-          <StepReview
-            courseId={courseId}
-            form={form}
-            onBack={() => goToStep(3)}
-            onPublish={handlePublish}
-            onSaveDraft={handleSaveDraft}
-            revenueSharePercent={creatorProfile.revenue_share_percent}
-            isFoundingCreator={creatorProfile.is_founding_creator}
-          />
+          <div className="max-w-6xl mx-auto px-10 py-10">
+            <StepReview
+              courseId={courseId}
+              form={form}
+              onBack={() => goToStep(3)}
+              onPublish={handlePublish}
+              onSaveDraft={handleSaveDraft}
+              revenueSharePercent={creatorProfile.revenue_share_percent}
+              isFoundingCreator={creatorProfile.is_founding_creator}
+            />
+          </div>
         </div>
       </div>
     )
@@ -280,21 +335,26 @@ function CreateCourseContent() {
   // ─── Step 3: Settings ─────────────────────────────────────────
   if (currentStep === 3 && courseId) {
     return (
-      <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
-        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
-          <StepProgressBar current={3} />
-          <AutoSaveIndicator status={saveStatus} />
-        </div>
+      <div className="flex flex-col h-screen overflow-hidden">
+        <BuilderTopBar
+          courseTitle={form.title}
+          currentStep={3}
+          saveStatus={saveStatus}
+          onNavigateStep={goToStep}
+          onSettingsClick={undefined}
+        />
         <div className="flex-1 overflow-y-auto">
-          <StepSettings
-            form={form}
-            onChange={updateForm}
-            onBack={() => goToStep(2)}
-            onContinue={() => goToStep(4)}
-            courseId={courseId}
-            revenueSharePercent={creatorProfile.revenue_share_percent}
-            isFoundingCreator={creatorProfile.is_founding_creator}
-          />
+          <div className="max-w-6xl mx-auto px-10 py-10">
+            <StepSettings
+              form={form}
+              onChange={updateForm}
+              onBack={() => goToStep(2)}
+              onContinue={() => goToStep(4)}
+              courseId={courseId}
+              revenueSharePercent={creatorProfile.revenue_share_percent}
+              isFoundingCreator={creatorProfile.is_founding_creator}
+            />
+          </div>
         </div>
       </div>
     )
@@ -303,11 +363,14 @@ function CreateCourseContent() {
   // ─── Step 2: Build (full-pane layout) ─────────────────────────
   if (currentStep === 2 && courseId) {
     return (
-      <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
-        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
-          <StepProgressBar current={2} />
-          <AutoSaveIndicator status={saveStatus} />
-        </div>
+      <div className="flex flex-col h-screen overflow-hidden">
+        <BuilderTopBar
+          courseTitle={form.title}
+          currentStep={2}
+          saveStatus={saveStatus}
+          onNavigateStep={goToStep}
+          onSettingsClick={() => goToStep(3)}
+        />
         <StepBuildCourse
           courseId={courseId}
           cardColor={form.card_color}
@@ -322,25 +385,31 @@ function CreateCourseContent() {
 
   // ─── Step 1: Define ───────────────────────────────────────────
   return (
-    <div>
-      <div className="mb-8 flex items-center justify-between">
-        <StepProgressBar current={1} />
-        <AutoSaveIndicator status={saveStatus} />
-      </div>
-      <StepCourseInfo
-        form={form}
-        onChange={updateForm}
-        onContinue={() => goToStep(2)}
-        onSaveDraft={() => saveDraft()}
-        saving={saving}
+    <div className="flex flex-col h-screen overflow-hidden">
+      <BuilderTopBar
+        courseTitle={form.title}
+        currentStep={1}
+        saveStatus={saveStatus}
+        onNavigateStep={goToStep}
       />
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-10 py-10">
+          <StepCourseInfo
+            form={form}
+            onChange={updateForm}
+            onContinue={() => goToStep(2)}
+            onSaveDraft={() => saveDraft()}
+            saving={saving}
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
 export default function CreateCoursePage() {
   return (
-    <Suspense fallback={<div className="animate-pulse"><div className="h-8 bg-gray-100 rounded w-64 mb-6" /><div className="h-64 bg-gray-100 rounded-xl" /></div>}>
+    <Suspense fallback={<div className="animate-pulse p-10"><div className="h-8 bg-gray-100 rounded w-64 mb-6" /><div className="h-64 bg-gray-100 rounded-xl" /></div>}>
       <CreateCourseContent />
     </Suspense>
   )

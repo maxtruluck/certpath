@@ -30,6 +30,16 @@ import EmbedStepEditor from './step-editors/EmbedStepEditor'
 import CalloutStepEditor from './step-editors/CalloutStepEditor'
 import type { AnswerStepContent } from './QuestionForm'
 
+// ─── Step Type Accent Colors ────────────────────────────────────
+const STEP_TYPE_COLORS: Record<string, string> = {
+  read: '#0F6E56',
+  watch: '#534AB7',
+  answer: '#D85A30',
+  graph: '#0C447C',
+  embed: '#0C447C',
+  callout: '#856404',
+}
+
 // ─── Step Type Config ───────────────────────────────────────────
 const STEP_TYPE_CONFIG: Record<string, { label: string; badgeBg: string; badgeText: string; description: string }> = {
   read: { label: 'Read', badgeBg: 'bg-[#E1F5EE]', badgeText: 'text-[#085041]', description: 'Text content in Markdown' },
@@ -120,23 +130,32 @@ function SortableStepCard({
     onToggle()
   }, [stepSave, step.content, onToggle])
 
+  const accentColor = STEP_TYPE_COLORS[step.step_type] || '#ccc'
+
   return (
-    <div ref={setNodeRef} style={style} className="mb-3">
-      <div className={`border rounded-lg transition-colors ${
-        isExpanded ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-white hover:border-gray-300'
-      }`}>
-        {/* Collapsed header */}
+    <div ref={setNodeRef} style={style}>
+      <div
+        className="rounded-lg transition-colors bg-white"
+        style={{
+          border: isExpanded ? `2px solid ${accentColor}` : '1px solid #e5e5e5',
+          padding: isExpanded ? '0' : '0',
+        }}
+        onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.borderColor = '#ccc' }}
+        onMouseLeave={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.borderColor = '#e5e5e5' }}
+      >
+        {/* Header */}
         <div
-          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
+          className="flex items-center gap-2 cursor-pointer"
+          style={{ padding: '10px 14px' }}
           onClick={onToggle}
         >
-          {/* Drag handle + step number */}
+          {/* Drag handle */}
           <div
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex-shrink-0 cursor-grab"
             {...attributes}
             {...listeners}
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-gray-300 cursor-grab">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-gray-300">
               <circle cx="4" cy="2" r="1" fill="currentColor" />
               <circle cx="8" cy="2" r="1" fill="currentColor" />
               <circle cx="4" cy="6" r="1" fill="currentColor" />
@@ -144,37 +163,44 @@ function SortableStepCard({
               <circle cx="4" cy="10" r="1" fill="currentColor" />
               <circle cx="8" cy="10" r="1" fill="currentColor" />
             </svg>
-            <div className="w-6 h-6 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-gray-500">{index + 1}</span>
-            </div>
           </div>
 
           {/* Type badge */}
-          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${config?.badgeBg || 'bg-gray-100'} ${config?.badgeText || 'text-gray-600'}`}>
+          <span
+            className={`flex-shrink-0 ${config?.badgeBg || 'bg-gray-100'} ${config?.badgeText || 'text-gray-600'}`}
+            style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4 }}
+          >
             {config?.label || step.step_type}
           </span>
 
           {/* Preview */}
-          <span className="text-sm text-gray-500 truncate flex-1">{getStepPreview(step)}</span>
+          <span
+            className="truncate flex-1"
+            style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            {getStepPreview(step)}
+          </span>
 
           {/* Save status (when expanded) */}
           {isExpanded && <SaveStatusIndicator status={stepSaveStatus} />}
 
           {/* Context menu */}
-          <ContextMenu items={[
-            { label: 'Edit', onClick: onToggle },
-            { label: 'Move up', onClick: onMoveUp },
-            { label: 'Move down', onClick: onMoveDown },
-            { divider: true } as any,
-            { label: 'Duplicate', onClick: onDuplicate },
-            { divider: true } as any,
-            { label: 'Delete', onClick: onDelete, destructive: true },
-          ]} />
+          <div style={{ color: '#ccc', fontSize: 16, cursor: 'pointer' }}>
+            <ContextMenu items={[
+              { label: 'Edit', onClick: onToggle },
+              { label: 'Move up', onClick: onMoveUp },
+              { label: 'Move down', onClick: onMoveDown },
+              { divider: true } as any,
+              { label: 'Duplicate', onClick: onDuplicate },
+              { divider: true } as any,
+              { label: 'Delete', onClick: onDelete, destructive: true },
+            ]} />
+          </div>
         </div>
 
         {/* Expanded editor */}
         {isExpanded && (
-          <div className="px-3 pb-3 border-t border-gray-100 pt-3">
+          <div style={{ padding: '0 16px 16px' }}>
             {step.step_type === 'read' && (
               <ReadStepEditor content={step.content as any} onChange={handleContentChange} />
             )}
@@ -198,7 +224,15 @@ function SortableStepCard({
             <div className="flex justify-end mt-3">
               <button
                 onClick={(e) => { e.stopPropagation(); handleDone() }}
-                className="border border-gray-200 text-gray-600 px-4 py-1.5 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                className="hover:bg-gray-50 transition-colors"
+                style={{
+                  padding: '5px 16px',
+                  border: '1px solid #ddd',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  background: 'white',
+                  color: '#555',
+                }}
               >
                 Done
               </button>
@@ -562,12 +596,12 @@ export default function StepSequencer({
     <div>
       {/* Breadcrumb + actions */}
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-gray-400">
+        <p style={{ fontSize: 12, color: '#aaa' }}>
           {lessonModule?.title} &middot; Lesson {lessonIndex + 1} of {lessonModule?.lessons.length || 0}
         </p>
         <div className="flex items-center gap-3">
           <SaveStatusIndicator status={titleSaveStatus} />
-          <span className="text-xs text-gray-400">{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 12, color: '#aaa' }}>{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
@@ -577,7 +611,8 @@ export default function StepSequencer({
         value={lessonTitle}
         onChange={e => { setLessonTitle(e.target.value); titleSave('title', e.target.value.trim()) }}
         onBlur={() => { if (lessonTitle.trim() !== lesson.title) titleSaveImmediate('title', lessonTitle.trim()) }}
-        className="text-xl font-bold text-gray-900 bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none w-full mb-5"
+        className="bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none w-full"
+        style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a', marginBottom: 24 }}
         placeholder="Lesson title..."
       />
 
@@ -589,36 +624,77 @@ export default function StepSequencer({
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-0">
+            <div>
               {steps.map((step, idx) => (
-                <div key={step.id}>
-                  {/* Insert point between steps */}
-                  {idx > 0 && (
-                    <div className="flex justify-center group">
-                      <button
-                        onClick={() => { setInsertAtIndex(idx); setShowPicker(true) }}
-                        className="w-5 h-5 rounded-full border border-dashed border-transparent group-hover:border-gray-300 flex items-center justify-center transition-colors"
-                        title="Insert step here"
+                <div key={step.id} className="flex gap-3">
+                  {/* Timeline column */}
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: 28 }}>
+                    {/* Step number circle */}
+                    {expandedId === step.id ? (
+                      <div
+                        className="flex items-center justify-center rounded-full flex-shrink-0"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          background: STEP_TYPE_COLORS[step.step_type] || '#ccc',
+                          color: 'white',
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
                       >
-                        <span className="text-xs text-transparent group-hover:text-gray-400 leading-none">+</span>
-                      </button>
-                    </div>
-                  )}
+                        {idx + 1}
+                      </div>
+                    ) : (
+                      <div
+                        className="flex items-center justify-center rounded-full flex-shrink-0"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          border: '1.5px solid #ccc',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: '#888',
+                        }}
+                      >
+                        {idx + 1}
+                      </div>
+                    )}
+                    {/* Connector line */}
+                    {idx < steps.length - 1 && (
+                      <div className="flex-1" style={{ width: 1, background: '#e5e5e5', minHeight: 8 }} />
+                    )}
+                  </div>
 
-                  <SortableStepCard
-                    step={step}
-                    index={idx}
-                    isExpanded={expandedId === step.id}
-                    isOnly={steps.length === 1}
-                    onToggle={() => setExpandedId(expandedId === step.id ? null : step.id)}
-                    onDelete={() => deleteStep(step.id)}
-                    onDuplicate={() => duplicateStep(step)}
-                    onMoveUp={() => moveStep(idx, -1)}
-                    onMoveDown={() => moveStep(idx, 1)}
-                    courseId={courseId}
-                    lessonId={lesson.id}
-                    onStepUpdated={handleStepUpdated}
-                  />
+                  {/* Card */}
+                  <div className="flex-1 mb-2">
+                    {/* Insert point between steps */}
+                    {idx > 0 && (
+                      <div className="flex justify-center group -mt-1 mb-1">
+                        <button
+                          onClick={() => { setInsertAtIndex(idx); setShowPicker(true) }}
+                          className="w-5 h-5 rounded-full border border-dashed border-transparent group-hover:border-gray-300 flex items-center justify-center transition-colors"
+                          title="Insert step here"
+                        >
+                          <span className="text-xs text-transparent group-hover:text-gray-400 leading-none">+</span>
+                        </button>
+                      </div>
+                    )}
+
+                    <SortableStepCard
+                      step={step}
+                      index={idx}
+                      isExpanded={expandedId === step.id}
+                      isOnly={steps.length === 1}
+                      onToggle={() => setExpandedId(expandedId === step.id ? null : step.id)}
+                      onDelete={() => deleteStep(step.id)}
+                      onDuplicate={() => duplicateStep(step)}
+                      onMoveUp={() => moveStep(idx, -1)}
+                      onMoveDown={() => moveStep(idx, 1)}
+                      courseId={courseId}
+                      lessonId={lesson.id}
+                      onStepUpdated={handleStepUpdated}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -627,21 +703,43 @@ export default function StepSequencer({
       )}
 
       {/* Add step button / picker */}
-      <div className="mt-4">
-        {showPicker ? (
-          <StepTypePicker
-            onSelect={addStep}
-            onSelectEmbed={addEmbedStep}
-            onCancel={() => { setShowPicker(false); setInsertAtIndex(null) }}
-          />
-        ) : (
-          <button
-            onClick={() => { setInsertAtIndex(null); setShowPicker(true) }}
-            className="w-full py-3 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
-          >
-            + Add step
-          </button>
-        )}
+      <div className="mt-4 flex gap-3">
+        {/* Dashed circle */}
+        <div
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            width: 28,
+            height: 28,
+            border: '1.5px dashed #ccc',
+            borderRadius: '50%',
+            color: '#ccc',
+            fontSize: 16,
+          }}
+        >
+          +
+        </div>
+        <div className="flex-1">
+          {showPicker ? (
+            <StepTypePicker
+              onSelect={addStep}
+              onSelectEmbed={addEmbedStep}
+              onCancel={() => { setShowPicker(false); setInsertAtIndex(null) }}
+            />
+          ) : (
+            <button
+              onClick={() => { setInsertAtIndex(null); setShowPicker(true) }}
+              className="w-full py-3 rounded-lg hover:border-gray-300 transition-colors"
+              style={{
+                border: '1.5px dashed #ccc',
+                fontSize: 13,
+                color: '#aaa',
+                textAlign: 'center',
+              }}
+            >
+              + Add step
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

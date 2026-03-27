@@ -1,6 +1,20 @@
+'use client'
+
+import { usePathname } from 'next/navigation'
 import CreatorSidebar from './components/CreatorSidebar'
 
 export default function CreatorLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const isWizard = pathname === '/creator/courses/new' || pathname.startsWith('/creator/courses/new?')
+
+  if (isWizard) {
+    return (
+      <div className="min-h-screen bg-white">
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen min-w-[960px] bg-[#FAFAF8]">
       <CreatorSidebar />
