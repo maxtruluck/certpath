@@ -265,8 +265,8 @@ export default async function LandingPage() {
                   desc: 'Upload your material and our tools turn it into interactive, structured lessons. No tech skills needed.',
                 },
                 {
-                  title: 'You keep 70%',
-                  desc: 'Earn 70% of every sale. Founding creators keep 80%. Get paid monthly via Stripe.',
+                  title: 'You keep 80%',
+                  desc: 'Earn 80% of every sale. Get paid monthly via Stripe.',
                 },
               ].map(vp => (
                 <div key={vp.title}>

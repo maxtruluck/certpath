@@ -184,7 +184,7 @@ export default function CourseOverviewPage() {
         <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 capitalize">
           {course.category.replace('_', ' ')}
         </span>
-        {(course as any).tags?.map((tag: string) => (
+        {[...new Set<string>((course as any).tags || [])].filter((tag: string) => tag.toLowerCase().replace(/[\s_]+/g, '_') !== course.category.toLowerCase().replace(/[\s_]+/g, '_')).map((tag: string) => (
           <span key={tag} className="text-xs font-medium px-3 py-1 rounded-full bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD]">
             {tag}
           </span>

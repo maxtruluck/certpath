@@ -295,7 +295,7 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
                   : 'border-red-200 bg-red-50/50'
               }`}>
                 <span className="text-sm font-medium text-[#6B635A] w-5">{idx + 1}.</span>
-                <span className="text-sm text-[#2C2825] flex-1">{item.text}</span>
+                <span className="text-sm text-[#2C2825] flex-1">{item.text.includes('$') ? <MathText text={item.text} /> : item.text}</span>
               </div>
             )
           })}
@@ -325,19 +325,27 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
       )}
       {question.question_type === 'matching' && effectiveResult && effectiveResult.matching_pairs && (
         <div className="mb-6 space-y-2">
-          {Object.entries(matchSelections).map(([left, right]) => {
+          {question.matching_items!.lefts.map(left => {
+            const userRight = matchSelections[left] || ''
             const correctRight = effectiveResult.matching_pairs!.find(p => p.left === left)?.right
-            const isCorrectPair = right.toLowerCase() === correctRight?.toLowerCase()
+            const isCorrectPair = userRight.toLowerCase() === correctRight?.toLowerCase()
             return (
-              <div key={left} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
+              <div key={left} className={`p-3 rounded-xl border-2 ${
                 shouldReveal
                   ? (isCorrectPair ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
                   : 'border-red-200 bg-red-50/50'
               }`}>
-                <span className="text-sm font-medium text-[#2C2825] w-1/3">{left}</span>
-                <span className="text-xs text-[#A39B90]">&rarr;</span>
-                <span className="text-sm text-[#6B635A] flex-1">{right}</span>
-                {shouldReveal && !isCorrectPair && <span className="text-xs text-green-600">(correct: {correctRight})</span>}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-[#2C2825]">{left}</span>
+                  <span className="text-xs text-[#A39B90]">&rarr;</span>
+                  <span className={`text-sm ${isCorrectPair ? 'text-[#2C2825]' : 'text-red-600 line-through'}`}>{userRight || '(no answer)'}</span>
+                </div>
+                {shouldReveal && !isCorrectPair && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="text-xs text-[#A39B90]">Correct:</span>
+                    <span className="text-xs font-medium text-green-700">{correctRight}</span>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -456,7 +464,7 @@ function SortableOrderItem({ id, text, index }: { id: string; text: string; inde
         </svg>
       </button>
       <span className="text-sm font-medium text-[#6B635A] w-5">{index + 1}.</span>
-      <span className="text-sm text-[#2C2825] flex-1">{text}</span>
+      <span className="text-sm text-[#2C2825] flex-1">{text.includes('$') ? <MathText text={text} /> : text}</span>
     </div>
   )
 }

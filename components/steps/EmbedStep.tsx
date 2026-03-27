@@ -18,7 +18,9 @@ export function EmbedStep({ title, content }: EmbedStepProps) {
         <span className="text-[10px] font-bold uppercase tracking-wider text-[#0C447C] bg-[#E6F1FB] px-2 py-0.5 rounded-full">
           {sub === 'math_graph' ? 'Graph' : sub === 'image' ? 'Image' : 'Diagram'}
         </span>
-        {title && <span className="text-xs font-medium text-[#6B635A]">{title}</span>}
+        {title && !['embed', 'diagram', 'graph', 'image'].includes(title.toLowerCase()) && (
+          <span className="text-xs font-medium text-[#6B635A]">{title}</span>
+        )}
       </div>
 
       <div>
