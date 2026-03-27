@@ -109,6 +109,11 @@ export async function POST(
       blooms_level,
     }
 
+    // Section index for grouping questions by ## heading
+    if (body.section_index !== undefined) {
+      insertData.section_index = body.section_index
+    }
+
     // Add type-specific fields if provided
     if (option_explanations) insertData.option_explanations = option_explanations
     if (acceptable_answers) insertData.acceptable_answers = acceptable_answers

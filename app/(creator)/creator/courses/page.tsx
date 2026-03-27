@@ -137,7 +137,7 @@ export default function MyCoursesPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Link
-                    href={`/creator/courses/new?edit=${course.id}`}
+                    href={`/creator/courses/${course.id}/edit`}
                     className="text-sm text-blue-500 hover:text-blue-700 font-medium"
                   >
                     Edit

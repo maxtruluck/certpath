@@ -20,24 +20,41 @@ export async function PATCH(
     if (body.video_url !== undefined) updates.video_url = body.video_url
     if (body.module_id !== undefined) updates.module_id = body.module_id
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && !body.question_section_updates) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    const { data: lesson, error: updateError } = await supabase
-      .from('lessons')
-      .update(updates)
-      .eq('id', lessonId)
-      .eq('course_id', id)
-      .select('*')
-      .single()
+    let lesson = null
+    if (Object.keys(updates).length > 0) {
+      const { data, error: updateError } = await supabase
+        .from('lessons')
+        .update(updates)
+        .eq('id', lessonId)
+        .eq('course_id', id)
+        .select('*')
+        .single()
 
-    if (updateError) {
-      console.error('Update lesson error:', updateError)
-      return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 })
+      if (updateError) {
+        console.error('Update lesson error:', updateError)
+        return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 })
+      }
+      lesson = data
     }
 
-    return NextResponse.json(lesson)
+    // Update question section_index values if provided (from useAutoSave recompute)
+    if (body.question_section_updates && Array.isArray(body.question_section_updates)) {
+      for (const update of body.question_section_updates) {
+        if (update.question_id && update.section_index !== undefined) {
+          await supabase
+            .from('questions')
+            .update({ section_index: update.section_index })
+            .eq('id', update.question_id)
+            .eq('course_id', id)
+        }
+      }
+    }
+
+    return NextResponse.json(lesson || { success: true })
   } catch (err) {
     console.error('PATCH lesson error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,21 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import StepCourseInfo, { type CourseFormData, INITIAL_FORM } from './components/StepCourseInfo'
+import StepCourseInfo from './components/StepCourseInfo'
 import StepBuildCourse from './components/StepBuildCourse'
-import StepReviewPublish from './components/StepReviewPublish'
+import StepSettings from './components/StepSettings'
+import StepReview from './components/StepReview'
+import { useWizardStore, INITIAL_FORM } from '@/lib/store/creator-wizard'
+import type { CourseFormData } from '@/lib/store/creator-wizard'
 
-// ─── 3-Step Progress Bar ─────────────────────────────────────────
+// ─── 4-Step Progress Bar ─────────────────────────────────────────
 const STEPS = [
-  { label: 'Course Info', number: 1 },
-  { label: 'Modules & Lessons', number: 2 },
-  { label: 'Review & Publish', number: 3 },
+  { label: 'Define', number: 1 },
+  { label: 'Build', number: 2 },
+  { label: 'Settings', number: 3 },
+  { label: 'Review', number: 4 },
 ]
 
-function StepProgressBar({ current, compact }: { current: number; compact?: boolean }) {
+function StepProgressBar({ current }: { current: number }) {
   return (
-    <div className={compact ? 'max-w-lg mx-auto' : 'max-w-lg mx-auto'}>
+    <div className="max-w-lg mx-auto">
       <div className="flex items-center justify-between">
         {STEPS.map((step, idx) => (
           <div key={step.number} className="flex items-center flex-1 last:flex-none">
@@ -53,66 +57,73 @@ function StepProgressBar({ current, compact }: { current: number; compact?: bool
   )
 }
 
+// ─── Auto-Save Indicator ─────────────────────────────────────────
+function AutoSaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' }) {
+  if (status === 'idle') return null
+  const labels = {
+    saving: 'Saving...',
+    saved: 'Auto-saved',
+    error: 'Save failed -- retrying...',
+  }
+  const colors = {
+    saving: 'text-gray-400',
+    saved: 'text-gray-400',
+    error: 'text-red-500',
+  }
+  return (
+    <span className={`text-xs ${colors[status]} flex items-center gap-1`}>
+      {status === 'saved' && (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {labels[status]}
+    </span>
+  )
+}
+
 // ─── Main Page ───────────────────────────────────────────────────
 function CreateCourseContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
 
-  const [step, setStep] = useState(1)
-  const [form, setForm] = useState<CourseFormData>(INITIAL_FORM)
-  const [courseId, setCourseId] = useState<string | null>(editId)
-  const [saving, setSaving] = useState(false)
+  const {
+    courseId, currentStep, form, saveStatus,
+    setCourseId, setStep, updateForm, setSaveStatus, reset,
+  } = useWizardStore()
 
-  // ─── Session persistence ─────────────────────────────────────
-  const storageKey = `createCourse_${editId || 'new'}`
+  const [saving, setSaving] = useState(false)
+  const [creatorProfile, setCreatorProfile] = useState<{
+    revenue_share_percent: number
+    is_founding_creator: boolean
+  }>({ revenue_share_percent: 70, is_founding_creator: false })
+
   const isInitialized = useRef(false)
 
+  // Load creator profile for revenue calculations
   useEffect(() => {
-    if (editId) {
-      isInitialized.current = true
-      return
-    }
-    try {
-      const saved = sessionStorage.getItem(storageKey)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.form) setForm(prev => ({ ...prev, ...parsed.form }))
-        if (parsed.courseId) {
-          setCourseId(parsed.courseId)
-          const restoredStep = parsed.step && parsed.step <= 3 ? parsed.step : parsed.step > 3 ? 3 : 1
-          setStep(restoredStep)
-          if (restoredStep > 1) {
-            window.history.pushState({ step: restoredStep }, '', '')
-          }
+    fetch('/api/creator/dashboard')
+      .then(r => r.json())
+      .then(d => {
+        if (d.creator) {
+          setCreatorProfile({
+            revenue_share_percent: d.creator.revenue_share_percent || 70,
+            is_founding_creator: d.creator.is_founding_creator || false,
+          })
         }
-      }
-    } catch { /* ignore */ }
-    // Seed browser history so popstate has a step-1 entry to land on
-    window.history.replaceState({ step: 1 }, '', '')
-    isInitialized.current = true
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      })
+      .catch(() => {})
   }, [])
 
-  const formJson = JSON.stringify(form)
+  // Load existing course data if editing
   useEffect(() => {
-    if (!isInitialized.current || editId) return
-    try {
-      sessionStorage.setItem(storageKey, JSON.stringify({
-        form: JSON.parse(formJson),
-        step,
-        courseId,
-      }))
-    } catch { /* ignore */ }
-  }, [formJson, step, courseId, editId, storageKey])
-
-  useEffect(() => {
-    if (editId) {
+    if (editId && editId !== courseId) {
       fetch(`/api/creator/courses/${editId}`)
         .then(r => r.json())
         .then(d => {
           if (!d.error) {
-            setForm({
+            updateForm({
               title: d.title || '',
               description: d.description || '',
               category: d.category || 'Cybersecurity',
@@ -120,31 +131,46 @@ function CreateCourseContent() {
               is_free: d.is_free ?? true,
               price_cents: d.price_cents || 0,
               tags: d.tags || [],
-              estimated_duration: d.estimated_duration || '',
               prerequisites: d.prerequisites || '',
               learning_objectives: d.learning_objectives || ['', ''],
               card_color: d.card_color || '#3b82f6',
+              cover_image_url: d.cover_image_url || '',
+              progression_type: d.progression_type || 'linear',
             })
             setCourseId(editId)
-            if (d.modules && d.modules.length > 0) {
-              setStep(2)
-            }
+            // Resume at last wizard step
+            const resumeStep = d.last_wizard_step || 1
+            setStep(Math.min(resumeStep, 4) as 1 | 2 | 3 | 4)
           }
         })
         .catch(() => {})
     }
+    isInitialized.current = true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId])
 
-  const updateForm = (updates: Partial<CourseFormData>) => {
-    setForm(prev => ({ ...prev, ...updates }))
-  }
+  // Browser back/swipe support
+  useEffect(() => {
+    window.history.replaceState({ step: currentStep }, '', '')
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.step) {
+        setStep(e.state.step)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const saveDraft = async (): Promise<string | null> => {
+  // Auto-save course form on step transitions
+  const saveDraft = useCallback(async (): Promise<string | null> => {
     setSaving(true)
+    setSaveStatus('saving')
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...form,
         learning_objectives: form.learning_objectives.filter(o => o.trim()),
+        last_wizard_step: currentStep,
       }
 
       if (courseId) {
@@ -154,6 +180,7 @@ function CreateCourseContent() {
           body: JSON.stringify(payload),
         })
         setSaving(false)
+        setSaveStatus('saved')
         return courseId
       } else {
         const res = await fetch('/api/creator/courses', {
@@ -165,112 +192,148 @@ function CreateCourseContent() {
         if (data.id) {
           setCourseId(data.id)
           setSaving(false)
+          setSaveStatus('saved')
           return data.id
         }
         setSaving(false)
+        setSaveStatus('error')
         return null
       }
     } catch {
       setSaving(false)
+      setSaveStatus('error')
       return null
     }
-  }
+  }, [form, courseId, currentStep, setCourseId, setSaveStatus])
 
-  // ─── Browser back/swipe support ─────────────────────────────
+  // beforeunload flush
   useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (e.state?.step === 1) {
-        setStep(1)
+    const handler = () => {
+      if (courseId) {
+        navigator.sendBeacon(
+          `/api/creator/courses/${courseId}`,
+          new Blob([JSON.stringify({ last_wizard_step: currentStep })], { type: 'application/json' })
+        )
       }
     }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [courseId, currentStep])
 
-  const handleContinueToStructure = async () => {
-    const id = await saveDraft()
-    if (id) {
-      window.history.pushState({ step: 2 }, '', '')
-      setStep(2)
+  const goToStep = async (step: 1 | 2 | 3 | 4) => {
+    // Save before transitioning
+    if (step > currentStep) {
+      const id = await saveDraft()
+      if (!id && step > 1) return // Block forward navigation if save failed and no courseId
     }
+    window.history.pushState({ step }, '', '')
+    setStep(step)
   }
 
   const handlePublish = async () => {
     if (!courseId) return
     try {
+      // Save final state first
+      await saveDraft()
       const res = await fetch(`/api/creator/courses/${courseId}/publish`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) {
         alert(data.error || 'Failed to publish')
         return
       }
-      sessionStorage.removeItem(storageKey)
+      reset()
       router.push('/creator/courses')
     } catch {
       alert('Failed to publish. Please try again.')
     }
   }
 
-  const handleReview = () => {
-    window.history.pushState({ step: 3 }, '', '')
-    setStep(3)
+  const handleSaveDraft = async () => {
+    await saveDraft()
+    reset()
+    router.push('/creator')
   }
 
-  // ─── Step 3: Review & Publish ──────────────────────────────────
-  if (step === 3 && courseId) {
+  // ─── Step 4: Review ──────────────────────────────────────────
+  if (currentStep === 4 && courseId) {
     return (
       <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
-        <div className="border-b border-gray-200 py-3 px-6">
-          <StepProgressBar current={3} compact />
+        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
+          <StepProgressBar current={4} />
+          <AutoSaveIndicator status={saveStatus} />
         </div>
         <div className="flex-1 overflow-y-auto">
-          <StepReviewPublish
+          <StepReview
             courseId={courseId}
-            cardColor={form.card_color}
-            onBack={() => setStep(2)}
+            form={form}
+            onBack={() => goToStep(3)}
             onPublish={handlePublish}
+            onSaveDraft={handleSaveDraft}
+            revenueSharePercent={creatorProfile.revenue_share_percent}
+            isFoundingCreator={creatorProfile.is_founding_creator}
           />
         </div>
       </div>
     )
   }
 
-  // ─── Step 2: full-pane layout ──────────────────────────────────
-  if (step === 2 && courseId) {
+  // ─── Step 3: Settings ─────────────────────────────────────────
+  if (currentStep === 3 && courseId) {
     return (
       <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
-        {/* Progress bar strip */}
-        <div className="border-b border-gray-200 py-3 px-6">
-          <StepProgressBar current={2} compact />
+        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
+          <StepProgressBar current={3} />
+          <AutoSaveIndicator status={saveStatus} />
         </div>
+        <div className="flex-1 overflow-y-auto">
+          <StepSettings
+            form={form}
+            onChange={updateForm}
+            onBack={() => goToStep(2)}
+            onContinue={() => goToStep(4)}
+            courseId={courseId}
+            revenueSharePercent={creatorProfile.revenue_share_percent}
+            isFoundingCreator={creatorProfile.is_founding_creator}
+          />
+        </div>
+      </div>
+    )
+  }
 
-        {/* Content — fills remaining space */}
+  // ─── Step 2: Build (full-pane layout) ─────────────────────────
+  if (currentStep === 2 && courseId) {
+    return (
+      <div className="-mx-10 -my-10 flex flex-col h-screen overflow-hidden">
+        <div className="border-b border-gray-200 py-3 px-6 flex items-center justify-between">
+          <StepProgressBar current={2} />
+          <AutoSaveIndicator status={saveStatus} />
+        </div>
         <StepBuildCourse
           courseId={courseId}
           cardColor={form.card_color}
-          onBack={() => setStep(1)}
-          onPublish={handleReview}
+          courseTitle={form.title}
+          category={form.category}
+          onBack={() => goToStep(1)}
+          onPublish={() => goToStep(3)}
         />
       </div>
     )
   }
 
-  // ─── Step 1: normal padded layout ──────────────────────────────
+  // ─── Step 1: Define ───────────────────────────────────────────
   return (
     <div>
-      <div className="mb-8">
-        <StepProgressBar current={step} />
+      <div className="mb-8 flex items-center justify-between">
+        <StepProgressBar current={1} />
+        <AutoSaveIndicator status={saveStatus} />
       </div>
-
-      {step === 1 && (
-        <StepCourseInfo
-          form={form}
-          onChange={updateForm}
-          onContinue={handleContinueToStructure}
-          onSaveDraft={() => saveDraft()}
-          saving={saving}
-        />
-      )}
+      <StepCourseInfo
+        form={form}
+        onChange={updateForm}
+        onContinue={() => goToStep(2)}
+        onSaveDraft={() => saveDraft()}
+        saving={saving}
+      />
     </div>
   )
 }

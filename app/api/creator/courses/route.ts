@@ -43,11 +43,13 @@ export async function POST(request: NextRequest) {
       total_questions_on_exam,
       max_score,
       provider_url,
-      estimated_duration,
       prerequisites,
       learning_objectives,
       card_color,
       tags,
+      cover_image_url,
+      last_wizard_step,
+      progression_type,
     } = body
 
     if (!title) {
@@ -83,7 +85,6 @@ export async function POST(request: NextRequest) {
         total_questions_on_exam: total_questions_on_exam || null,
         max_score: max_score || null,
         provider_url: provider_url || null,
-        estimated_duration: estimated_duration || null,
         prerequisites: prerequisites || null,
         learning_objectives: learning_objectives || [],
         card_color: card_color || '#3b82f6',

@@ -74,7 +74,7 @@ export default function CreatorSidebar() {
   }, [])
 
   return (
-    <aside className="w-[240px] bg-[#F5F3EF] border-r border-[#E8E4DD] flex flex-col fixed h-full z-10">
+    <aside className="w-[240px] min-w-[240px] bg-[#F5F3EF] border-r border-[#E8E4DD] flex flex-col fixed h-full z-10 overflow-hidden">
       {/* Logo */}
       <div className="px-5 py-6 border-b border-[#E8E4DD]">
         <Link href="/creator" className="flex items-baseline gap-0.5">
@@ -86,10 +86,13 @@ export default function CreatorSidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-0.5">
         {navItems.map(item => {
+          const isEditingCourse = pathname.match(/^\/creator\/courses\/[^/]+\/edit/)
+          const isCreatingCourse = pathname === '/creator/courses/new' || pathname.startsWith('/creator/courses/new?')
           const isActive =
             (item.href === '/creator' && pathname === '/creator') ||
             (item.href === '/creator/courses' && pathname === '/creator/courses') ||
-            (item.href !== '/creator' && item.href !== '/creator/courses' && pathname.startsWith(item.href))
+            (item.href === '/creator/courses/new' && (isCreatingCourse || isEditingCourse)) ||
+            (item.href !== '/creator' && item.href !== '/creator/courses' && item.href !== '/creator/courses/new' && pathname.startsWith(item.href))
           return (
             <Link
               key={item.href}
