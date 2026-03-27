@@ -10,6 +10,7 @@ interface Lesson {
   module_id: string
   question_count: number
   word_count: number
+  step_count: number
 }
 
 interface Module {
@@ -21,7 +22,7 @@ interface Module {
 }
 
 function isLessonReady(lesson: Lesson): boolean {
-  return (lesson.body || '').length >= 50 && lesson.question_count > 0
+  return (lesson.step_count || 0) > 0
 }
 
 export default function OutlinePanel({
@@ -154,11 +155,13 @@ export default function OutlinePanel({
                           ready ? 'bg-emerald-400' : 'bg-gray-300'
                         }`} />
                         <span className="text-[11px] truncate flex-1">{lesson.title}</span>
-                        {lesson.question_count > 0 && (
-                          <span className="text-[9px] font-medium text-gray-400 bg-gray-100 px-1 rounded">
-                            {lesson.question_count}q
-                          </span>
-                        )}
+                        <span className={`text-[9px] font-medium px-1 rounded ${
+                          (lesson.step_count || 0) > 0
+                            ? 'text-gray-400 bg-gray-100'
+                            : 'text-amber-600 bg-amber-50'
+                        }`}>
+                          {lesson.step_count || 0}
+                        </span>
                       </button>
                     )
                   })}
