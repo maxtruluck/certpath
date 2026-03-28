@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
+import { getCategoryColor } from '@/lib/category-colors'
 
 export async function GET(
   _request: NextRequest,
@@ -131,6 +132,11 @@ export async function PATCH(
     const updates: Record<string, unknown> = {}
     for (const key of SAFE_FIELDS) {
       if (body[key] !== undefined) updates[key] = body[key]
+    }
+
+    // Auto-set card_color from category if category changed and no explicit card_color
+    if (updates.category && !updates.card_color) {
+      updates.card_color = getCategoryColor(updates.category as string)
     }
 
     if (Object.keys(updates).length === 0) {

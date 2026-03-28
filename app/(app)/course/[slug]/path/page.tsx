@@ -294,6 +294,13 @@ function CoursePathContent() {
 
       {/* Header */}
       <div style={{ backgroundColor: '#fafafa', padding: '16px 20px', borderBottom: '1px solid #eee', margin: '-16px -16px 0' }}>
+        <Link
+          href={`/course/${slug}`}
+          style={{ fontSize: 13, color: '#888', marginBottom: 8, display: 'inline-block' }}
+          className="hover:text-[#555]"
+        >
+          &larr; Back
+        </Link>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>
           {data.course.title}
         </h1>

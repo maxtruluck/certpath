@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
+import { getCategoryColor } from '@/lib/category-colors'
 
 function generateSlug(title: string): string {
   const base = title
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
         currency: currency || 'usd',
         tags: tags || [],
         learning_objectives: learning_objectives || [],
-        card_color: card_color || '#3b82f6',
+        card_color: card_color || getCategoryColor(category || 'General'),
         estimated_duration_minutes: estimated_duration_minutes || null,
         last_wizard_step: last_wizard_step || null,
         status: 'draft',

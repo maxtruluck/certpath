@@ -88,26 +88,17 @@ function BuilderTopBar({
                 onClick={() => {
                   if (step.number <= currentStep) onNavigateStep(step.number as 1 | 2 | 3)
                 }}
-                className="flex items-center justify-center rounded-full"
+                className="rounded-full"
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 8,
+                  height: 8,
                   background: dotBg,
-                  color: dotColor,
-                  fontSize: 10,
-                  fontWeight: 500,
                   cursor: isFuture ? 'default' : 'pointer',
+                  border: 'none',
+                  padding: 0,
                 }}
                 title={step.label}
-              >
-                {isCompleted ? (
-                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                    <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : (
-                  step.number
-                )}
-              </button>
+              />
             </div>
           )
         })}

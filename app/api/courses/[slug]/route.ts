@@ -40,16 +40,27 @@ export async function GET(
         .order('display_order', { ascending: true }),
     ])
 
-    // Count answer-type lesson_steps (lesson_steps has no course_id, join via lesson_ids)
+    // Fetch all lesson_steps for duration calculation and question counting
     const lessonIds = (lessonsRes.data || []).map((l: any) => l.id)
     let questionCount = 0
+    let estimatedDurationMinutes: number | null = null
     if (lessonIds.length > 0) {
-      const { data: answerSteps } = await supabase
+      const { data: allSteps } = await supabase
         .from('lesson_steps')
-        .select('id')
+        .select('id, step_type')
         .in('lesson_id', lessonIds)
-        .eq('step_type', 'answer')
-      questionCount = answerSteps?.length || 0
+
+      const steps = allSteps || []
+      questionCount = steps.filter((s: any) => s.step_type === 'answer').length
+
+      // Calculate duration: read=1min, watch=3min, answer=1min, embed=1min, callout=0.5min
+      const STEP_MINUTES: Record<string, number> = {
+        read: 1, watch: 3, answer: 1, embed: 1, callout: 0.5,
+      }
+      const totalMinutes = steps.reduce(
+        (sum: number, s: any) => sum + (STEP_MINUTES[s.step_type] || 1), 0
+      )
+      estimatedDurationMinutes = Math.ceil(totalMinutes)
     }
 
     const stats = {
@@ -81,6 +92,7 @@ export async function GET(
 
     return NextResponse.json({
       ...course,
+      estimated_duration_minutes: estimatedDurationMinutes ?? course.estimated_duration_minutes,
       stats,
       modules,
       user_progress: userProgress || null,
