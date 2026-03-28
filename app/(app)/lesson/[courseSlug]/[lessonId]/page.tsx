@@ -222,10 +222,8 @@ export default function LessonPlayerPage() {
   }
 
   function handleNext() {
-    // Answer steps are already marked complete by handleAnswerComplete — skip double-marking
-    if (currentStep?.type !== 'answer') {
-      markStepComplete(currentStepIndex)
-    }
+    // Always mark step complete. Server deduplicates via alreadyCompleted check.
+    markStepComplete(currentStepIndex)
     if (isLastStep) {
       // Calculate completed count including the current step (which was just marked)
       const allCompleted = new Set(completedSteps)
@@ -371,7 +369,7 @@ export default function LessonPlayerPage() {
 
         {currentStep?.type === 'answer' && currentStep.question && (
           <AnswerStep
-            key={`${currentStepIndex}-${answerSubmitted ? 'answered' : 'fresh'}`}
+            key={currentStepIndex}
             question={currentStep.question}
             onComplete={handleAnswerComplete}
             readOnly={false}
