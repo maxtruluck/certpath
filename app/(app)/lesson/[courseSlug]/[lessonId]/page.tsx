@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ReadStep, WatchStep, AnswerStep, EmbedStep, CalloutStep } from '@/components/steps'
-import { getReadingTime } from '@/lib/markdown-components'
 import { createClient } from '@/lib/supabase/client'
-import type { Question, AnswerResult, EmbedContent, CalloutContent } from '@/lib/types/lesson-player'
+import type { Question, EmbedContent, CalloutContent } from '@/lib/types/lesson-player'
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -17,12 +16,6 @@ interface StepData {
   question?: Question
   embedContent?: EmbedContent
   calloutContent?: CalloutContent
-}
-
-interface StepAnswer {
-  isCorrect: boolean
-  result: AnswerResult
-  selectedIds: string[]
 }
 
 // ─── Step type badge config ─────────────────────────────────────
@@ -53,7 +46,6 @@ export default function LessonPlayerPage() {
   const [steps, setSteps] = useState<StepData[]>([])
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
-  const [stepAnswers, setStepAnswers] = useState<Record<number, StepAnswer>>({})
   const [exitConfirm, setExitConfirm] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -230,7 +222,10 @@ export default function LessonPlayerPage() {
   }
 
   function handleNext() {
-    markStepComplete(currentStepIndex)
+    // Answer steps are already marked complete by handleAnswerComplete — skip double-marking
+    if (currentStep?.type !== 'answer') {
+      markStepComplete(currentStepIndex)
+    }
     if (isLastStep) {
       // Calculate completed count including the current step (which was just marked)
       const allCompleted = new Set(completedSteps)
@@ -376,12 +371,10 @@ export default function LessonPlayerPage() {
 
         {currentStep?.type === 'answer' && currentStep.question && (
           <AnswerStep
-            key={`${currentStepIndex}-${isViewingCompleted ? 'ro' : 'rw'}`}
+            key={`${currentStepIndex}-${answerSubmitted ? 'answered' : 'fresh'}`}
             question={currentStep.question}
             onComplete={handleAnswerComplete}
-            readOnly={isViewingCompleted}
-            previousResult={stepAnswers[currentStepIndex]?.result}
-            previousSelectedIds={stepAnswers[currentStepIndex]?.selectedIds}
+            readOnly={false}
           />
         )}
 
