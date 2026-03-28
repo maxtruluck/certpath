@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
     const courses = allUserCourses || []
     const completedCourses = courses.filter((c: any) => c.status === 'completed')
 
+    // Count completed lessons
+    const { count: lessonsCompleted } = await supabase
+      .from('user_lesson_progress')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+
     // Aggregate stats
     const totalQuestionsSeen = courses.reduce((sum: number, c: any) => sum + (c.questions_seen || 0), 0)
     const totalQuestionsCorrect = courses.reduce((sum: number, c: any) => sum + (c.questions_correct || 0), 0)
@@ -55,6 +62,7 @@ export async function GET(request: NextRequest) {
       stats: {
         courses_enrolled: courses.length,
         courses_completed: completedCourses.length,
+        lessons_completed: lessonsCompleted || 0,
         total_questions_seen: totalQuestionsSeen,
         total_questions_correct: totalQuestionsCorrect,
         accuracy_percent: totalQuestionsSeen > 0

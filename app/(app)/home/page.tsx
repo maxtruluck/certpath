@@ -82,8 +82,8 @@ export default function HomePage() {
   // Sort enrolled by last_session_at desc
   const sortedEnrolled = useMemo(() => {
     return [...enrolled].sort((a, b) => {
-      const aTime = a.last_session_at ? new Date(a.last_session_at).getTime() : 0;
-      const bTime = b.last_session_at ? new Date(b.last_session_at).getTime() : 0;
+      const aTime = new Date(a.last_session_at || a.enrolled_at || 0).getTime();
+      const bTime = new Date(b.last_session_at || b.enrolled_at || 0).getTime();
       return bTime - aTime;
     });
   }, [enrolled]);

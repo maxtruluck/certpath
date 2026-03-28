@@ -69,8 +69,7 @@ export default function ProfilePage() {
   const stats = profile?.stats;
   const initial = user?.display_name?.charAt(0)?.toUpperCase() || '?';
 
-  // Count lessons done from courses
-  const lessonsDone = stats?.total_questions_correct || 0; // Using questions as proxy; ideally from separate endpoint
+  const lessonsDone = (stats as any)?.lessons_completed || 0;
 
   return (
     <div className="space-y-5">
@@ -103,7 +102,7 @@ export default function ProfilePage() {
             <p style={{ fontSize: 11, color: '#999' }}>Courses</p>
           </div>
           <div className="text-center">
-            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{stats?.courses_completed || 0}</p>
+            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{lessonsDone}</p>
             <p style={{ fontSize: 11, color: '#999' }}>Lessons done</p>
           </div>
           <div className="text-center">

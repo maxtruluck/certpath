@@ -232,10 +232,13 @@ export default function LessonPlayerPage() {
   function handleNext() {
     markStepComplete(currentStepIndex)
     if (isLastStep) {
+      // Calculate completed count including the current step (which was just marked)
+      const allCompleted = new Set(completedSteps)
+      allCompleted.add(currentStepIndex)
       const stats = {
         questionsCorrect,
         questionsTotal,
-        stepsCompleted: completedSteps.size + 1,
+        stepsCompleted: Math.min(allCompleted.size, steps.length),
         stepsTotal: steps.length,
         lessonTitle,
         moduleTitle,
@@ -426,9 +429,9 @@ export default function LessonPlayerPage() {
           disabled={!nextEnabled}
           style={{
             fontSize: 14, padding: '10px 20px',
-            backgroundColor: '#1a1a1a', color: '#fff',
+            backgroundColor: nextEnabled ? '#1a1a1a' : '#ccc',
+            color: '#fff',
             borderRadius: 10, border: 'none', cursor: nextEnabled ? 'pointer' : 'default',
-            opacity: nextEnabled ? 1 : 0.4,
           }}
         >
           {isLastStep ? 'Complete lesson \u2713' : 'Next \u2192'}
