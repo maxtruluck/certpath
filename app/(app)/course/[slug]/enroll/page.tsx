@@ -13,7 +13,6 @@ interface CourseInfo {
   creator: {
     creator_name: string;
   } | null;
-  provider_name: string | null;
   stats: {
     question_count: number;
     module_count: number;
@@ -142,7 +141,6 @@ export default function EnrollPage() {
     `${course.stats.question_count} practice questions across ${course.stats.module_count} domains`,
     'Adaptive spaced repetition engine',
     'Detailed explanations for every question',
-    'Readiness score tracking per module',
     `${course.stats.lesson_count} lessons with guided content`,
   ];
 
@@ -172,7 +170,7 @@ export default function EnrollPage() {
         </div>
         <h2 className="text-lg font-bold text-gray-900">{course.title}</h2>
         <p className="text-sm text-gray-500 mt-1">
-          By {course.creator?.creator_name || course.provider_name || 'openED'}
+          By {course.creator?.creator_name || 'openED'}
         </p>
       </div>
 

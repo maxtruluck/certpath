@@ -34,13 +34,13 @@ export async function POST(
 ) {
   try {
     const { id, lessonId } = await params
-    const { supabase, creatorId, error } = await getCreatorCourse(id)
+    const { supabase, error } = await getCreatorCourse(id)
     if (error) return error
 
     const body = await request.json()
     const { step_type, title, content, sort_order } = body
 
-    if (!step_type || !['read', 'watch', 'answer', 'graph', 'embed', 'callout'].includes(step_type)) {
+    if (!step_type || !['read', 'watch', 'answer', 'embed', 'callout'].includes(step_type)) {
       return NextResponse.json({ error: 'Valid step_type is required' }, { status: 400 })
     }
 
@@ -74,49 +74,6 @@ export async function POST(
       }
     }
 
-    let stepContent = content || {}
-
-    // For answer steps, create a linked question row
-    if (step_type === 'answer' && !stepContent.question_id) {
-      const { data: lesson } = await supabase
-        .from('lessons')
-        .select('module_id, topic_id')
-        .eq('id', lessonId)
-        .eq('course_id', id)
-        .single()
-
-      if (lesson) {
-        const { data: question } = await supabase
-          .from('questions')
-          .insert({
-            lesson_id: lessonId,
-            module_id: lesson.module_id,
-            topic_id: lesson.topic_id || null,
-            course_id: id,
-            creator_id: creatorId,
-            question_text: stepContent.question_text || '',
-            question_type: stepContent.question_type || 'multiple_choice',
-            options: stepContent.options || [],
-            correct_option_ids: stepContent.correct_ids || [],
-            explanation: stepContent.explanation || '',
-            difficulty: stepContent.difficulty || 3,
-            tags: stepContent.tags || [],
-            source: 'creator_original',
-            option_explanations: stepContent.option_explanations || null,
-            acceptable_answers: stepContent.acceptable_answers || null,
-            match_mode: stepContent.match_mode || 'exact',
-            correct_order: stepContent.correct_order || null,
-            matching_pairs: stepContent.matching_pairs || null,
-          })
-          .select('id')
-          .single()
-
-        if (question) {
-          stepContent = { ...stepContent, question_id: question.id }
-        }
-      }
-    }
-
     const { data: step, error: insertError } = await supabase
       .from('lesson_steps')
       .insert({
@@ -124,7 +81,7 @@ export async function POST(
         sort_order: finalOrder,
         step_type,
         title: title || null,
-        content: stepContent,
+        content: content || {},
       })
       .select('*')
       .single()

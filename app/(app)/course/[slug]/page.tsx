@@ -11,9 +11,7 @@ interface CourseDetail {
   description: string;
   category: string;
   difficulty: string;
-  thumbnail_url: string | null;
   price_cents: number;
-  provider_name: string | null;
   creator: {
     id: string;
     creator_name: string;
@@ -26,19 +24,9 @@ interface CourseDetail {
     lesson_count: number;
     question_count: number;
   };
-  cert_info: {
-    passing_score: number | null;
-    max_score: number | null;
-    exam_duration_minutes: number | null;
-    total_questions_on_exam: number | null;
-    exam_fee_cents: number | null;
-    provider_name: string | null;
-    provider_url: string | null;
-  };
   user_progress: {
     id: string;
     status: string;
-    readiness_score: number;
     questions_seen: number;
     questions_correct: number;
     sessions_completed: number;
@@ -61,14 +49,10 @@ export default function CourseOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const previewCourseId = searchParams.get('courseId');
-
   useEffect(() => {
     async function fetchCourse() {
       try {
-        const url = isPreview && previewCourseId
-          ? `/api/creator/preview/course?courseId=${previewCourseId}`
-          : `/api/courses/${params.slug}`;
+        const url = `/api/courses/${params.slug}`;
         const res = await fetch(url);
         if (res.status === 404) {
           setError('Course not found');
@@ -85,7 +69,7 @@ export default function CourseOverviewPage() {
       setLoading(false);
     }
     fetchCourse();
-  }, [params.slug, isPreview, previewCourseId]);
+  }, [params.slug, isPreview]);
 
   if (loading) {
     return (
@@ -117,10 +101,6 @@ export default function CourseOverviewPage() {
   const priceFormatted = course.price_cents
     ? `$${(course.price_cents / 100).toFixed(2)}`
     : 'Free';
-  const examFee = course.cert_info.exam_fee_cents
-    ? `$${(course.cert_info.exam_fee_cents / 100).toFixed(0)}`
-    : null;
-
   function getAbbreviation(title: string): string {
     return title
       .split(/[\s-]+/)
@@ -162,20 +142,16 @@ export default function CourseOverviewPage() {
 
       {/* Thumbnail/icon */}
       <div className="w-full h-36 rounded-2xl bg-[#F5F3EF] flex items-center justify-center animate-fade-up">
-        {course.thumbnail_url ? (
-          <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover rounded-2xl" />
-        ) : (
-          <span className="text-4xl font-bold text-[#D4CFC7]">
-            {getAbbreviation(course.title)}
-          </span>
-        )}
+        <span className="text-4xl font-bold text-[#D4CFC7]">
+          {getAbbreviation(course.title)}
+        </span>
       </div>
 
       {/* Title and creator */}
       <div className="animate-fade-up">
         <h2 className="text-xl font-bold text-[#2C2825]">{course.title}</h2>
         <p className="text-sm text-[#6B635A] mt-1">
-          By {course.creator?.creator_name || course.provider_name || 'openED'}
+          By {course.creator?.creator_name || 'openED'}
         </p>
       </div>
 
@@ -205,26 +181,6 @@ export default function CourseOverviewPage() {
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
           <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.module_count}</p>
           <p className="text-[10px] text-[#6B635A] font-medium">Modules</p>
-        </div>
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">{examFee || `$${0}`}</p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Exam fee</p>
-        </div>
-      </div>
-
-      {/* Stats row 2: Pass score, Exam time, Lessons */}
-      <div className="grid grid-cols-3 gap-3 animate-fade-up">
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">
-            {course.cert_info.passing_score || '---'}
-          </p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Pass score</p>
-        </div>
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">
-            {course.cert_info.exam_duration_minutes ? `${course.cert_info.exam_duration_minutes}m` : '---'}
-          </p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Exam time</p>
         </div>
         <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
           <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.lesson_count}</p>
@@ -259,18 +215,6 @@ export default function CourseOverviewPage() {
       {/* Enrolled: show progress */}
       {isEnrolled && course.user_progress && (
         <div className="rounded-2xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 space-y-3 animate-fade-up">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-[#2C2825]">Your progress</span>
-            <span className="text-sm font-bold text-[#6B635A] font-mono">
-              {Math.round((course.user_progress.readiness_score || 0) * 100)}% readiness
-            </span>
-          </div>
-          <div className="w-full h-1.5 bg-[#EBE8E2] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 rounded-full"
-              style={{ width: `${Math.round((course.user_progress.readiness_score || 0) * 100)}%` }}
-            />
-          </div>
           <div className="flex justify-between text-xs text-[#6B635A]">
             <span>{course.user_progress.questions_seen} questions seen</span>
             <span>{course.user_progress.sessions_completed} sessions</span>

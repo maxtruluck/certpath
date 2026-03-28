@@ -147,8 +147,7 @@ function CreateCourseContent() {
   const [saving, setSaving] = useState(false)
   const [creatorProfile, setCreatorProfile] = useState<{
     revenue_share_percent: number
-    is_founding_creator: boolean
-  }>({ revenue_share_percent: 70, is_founding_creator: false })
+  }>({ revenue_share_percent: 70 })
 
   const isInitialized = useRef(false)
 
@@ -160,7 +159,6 @@ function CreateCourseContent() {
         if (d.creator) {
           setCreatorProfile({
             revenue_share_percent: d.creator.revenue_share_percent || 70,
-            is_founding_creator: d.creator.is_founding_creator || false,
           })
         }
       })
@@ -185,8 +183,6 @@ function CreateCourseContent() {
               prerequisites: d.prerequisites || '',
               learning_objectives: d.learning_objectives || ['', ''],
               card_color: d.card_color || '#3b82f6',
-              cover_image_url: d.cover_image_url || '',
-              progression_type: d.progression_type || 'linear',
             })
             setCourseId(editId)
             // Resume at last wizard step
@@ -324,7 +320,6 @@ function CreateCourseContent() {
               onPublish={handlePublish}
               onSaveDraft={handleSaveDraft}
               revenueSharePercent={creatorProfile.revenue_share_percent}
-              isFoundingCreator={creatorProfile.is_founding_creator}
             />
           </div>
         </div>
@@ -352,7 +347,6 @@ function CreateCourseContent() {
               onContinue={() => goToStep(4)}
               courseId={courseId}
               revenueSharePercent={creatorProfile.revenue_share_percent}
-              isFoundingCreator={creatorProfile.is_founding_creator}
             />
           </div>
         </div>

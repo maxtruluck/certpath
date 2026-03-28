@@ -13,13 +13,12 @@ export async function GET(request: NextRequest) {
         id,
         course_id,
         status,
-        readiness_score,
         questions_seen,
         questions_correct,
         sessions_completed,
         last_session_at,
         enrolled_at,
-        course:courses(id, title, slug, description, category, difficulty, thumbnail_url, provider_name, tags)
+        course:courses(id, title, slug, description, category, difficulty, tags)
       `)
       .eq('user_id', userId)
       .eq('status', 'active')
@@ -30,28 +29,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
     }
 
-    // Get question counts and lesson counts for each course
+    // Get question counts (from lesson_steps answer type) and lesson counts for each course
     const courseIds = (userCourses || []).map((uc: any) => uc.course_id)
     let questionCounts: Record<string, number> = {}
     let lessonCounts: Record<string, number> = {}
     let lessonsCompletedCounts: Record<string, number> = {}
 
     // Step-based progress data and resume points
-    let stepProgressByCoourse: Record<string, { completed: number; total: number }> = {}
+    let stepProgressByCourse: Record<string, { completed: number; total: number }> = {}
     let resumePoints: Record<string, { module_title: string; lesson_title: string; lesson_id: string; step_index: number; step_total: number } | null> = {}
 
     if (courseIds.length > 0) {
-      const [questionsRes, lessonsRes, lessonProgressRes, allProgressRes] = await Promise.all([
-        supabase
-          .from('questions')
-          .select('course_id')
-          .in('course_id', courseIds)
-          .eq('is_active', true),
+      const [lessonsRes, lessonProgressRes, allProgressRes] = await Promise.all([
         supabase
           .from('lessons')
           .select('id, course_id, title, module_id, display_order')
-          .in('course_id', courseIds)
-          .eq('is_active', true),
+          .in('course_id', courseIds),
         supabase
           .from('user_lesson_progress')
           .select('course_id')
@@ -65,6 +58,24 @@ export async function GET(request: NextRequest) {
           .eq('user_id', userId)
           .in('course_id', courseIds),
       ])
+
+      // Get all lesson IDs to fetch answer-type steps for question counts
+      const allLessonIds = (lessonsRes.data || []).map((l: any) => l.id)
+      let answerSteps: any[] = []
+      if (allLessonIds.length > 0) {
+        const { data: steps } = await supabase
+          .from('lesson_steps')
+          .select('id, lesson_id')
+          .in('lesson_id', allLessonIds)
+          .eq('step_type', 'answer')
+        answerSteps = steps || []
+      }
+
+      // Build a map of lesson_id -> course_id for answer step counting
+      const lessonToCourse: Record<string, string> = {}
+      for (const l of lessonsRes.data || []) {
+        lessonToCourse[l.id] = l.course_id
+      }
 
       // Build module title lookup
       const lessonModuleIds = [...new Set((lessonsRes.data || []).map((l: any) => l.module_id).filter(Boolean))]
@@ -86,7 +97,8 @@ export async function GET(request: NextRequest) {
       }
 
       for (const id of courseIds) {
-        questionCounts[id] = (questionsRes.data || []).filter((q: any) => q.course_id === id).length
+        // Count answer-type lesson_steps for this course
+        questionCounts[id] = answerSteps.filter((s: any) => lessonToCourse[s.lesson_id] === id).length
         lessonCounts[id] = (lessonsRes.data || []).filter((l: any) => l.course_id === id).length
         lessonsCompletedCounts[id] = (lessonProgressRes.data || []).filter((lp: any) => lp.course_id === id).length
 
@@ -104,7 +116,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        stepProgressByCoourse[id] = { completed: stepsCompleted, total: stepsTotal }
+        stepProgressByCourse[id] = { completed: stepsCompleted, total: stepsTotal }
 
         // Build resume point from in-progress lesson
         if (inProgressLesson) {
@@ -146,7 +158,7 @@ export async function GET(request: NextRequest) {
     }
 
     const activeCourses = (userCourses || []).map((uc: any) => {
-      const stepProgress = stepProgressByCoourse[uc.course_id]
+      const stepProgress = stepProgressByCourse[uc.course_id]
       const progressPercent = stepProgress && stepProgress.total > 0
         ? Math.min(100, Math.round((stepProgress.completed / stepProgress.total) * 100))
         : 0
@@ -156,7 +168,6 @@ export async function GET(request: NextRequest) {
         course_id: uc.course_id,
         course: uc.course,
         status: uc.status,
-        readiness_score: uc.readiness_score,
         questions_seen: uc.questions_seen,
         questions_correct: uc.questions_correct,
         questions_total: questionCounts[uc.course_id] || 0,

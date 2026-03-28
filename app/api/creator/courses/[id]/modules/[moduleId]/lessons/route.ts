@@ -12,34 +12,33 @@ export async function GET(
 
     const { data: lessons, error: fetchError } = await supabase
       .from('lessons')
-      .select('id, title, body, display_order, is_active, video_url, concept_cards')
+      .select('id, title, display_order, created_at, updated_at')
       .eq('module_id', moduleId)
       .eq('course_id', id)
-      .eq('is_active', true)
       .order('display_order')
 
     if (fetchError) {
       return NextResponse.json({ error: 'Failed to fetch lessons' }, { status: 500 })
     }
 
-    // Count questions per lesson
-    const { data: questions } = await supabase
-      .from('questions')
-      .select('id, lesson_id')
-      .eq('course_id', id)
-      .eq('is_active', true)
+    // Count steps per lesson
+    const lessonIds = (lessons || []).map((l: any) => l.id)
+    const stepsByLesson = new Map<string, number>()
 
-    const questionsByLesson = new Map<string, number>()
-    for (const q of questions || []) {
-      if (q.lesson_id) {
-        questionsByLesson.set(q.lesson_id, (questionsByLesson.get(q.lesson_id) || 0) + 1)
+    if (lessonIds.length > 0) {
+      const { data: steps } = await supabase
+        .from('lesson_steps')
+        .select('id, lesson_id')
+        .in('lesson_id', lessonIds)
+
+      for (const s of steps || []) {
+        stepsByLesson.set(s.lesson_id, (stepsByLesson.get(s.lesson_id) || 0) + 1)
       }
     }
 
     const enriched = (lessons || []).map((l: any) => ({
       ...l,
-      question_count: questionsByLesson.get(l.id) || 0,
-      word_count: (l.body || '').split(/\s+/).filter(Boolean).length,
+      step_count: stepsByLesson.get(l.id) || 0,
     }))
 
     return NextResponse.json(enriched)
@@ -89,7 +88,6 @@ export async function POST(
         module_id: moduleId,
         course_id: id,
         title: body.title || 'Untitled Lesson',
-        body: '',
         display_order: nextOrder,
       })
       .select('*')

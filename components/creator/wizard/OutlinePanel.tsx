@@ -5,7 +5,6 @@ import { useState, useRef, useEffect } from 'react'
 interface Lesson {
   id: string
   title: string
-  body: string | null
   display_order: number
   module_id: string
   question_count: number

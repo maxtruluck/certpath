@@ -7,20 +7,13 @@ interface TestData {
   course_id: string
   module_id: string | null
   title: string
-  test_type: string
-  question_count: number
   time_limit_minutes: number | null
   passing_score: number
-  max_attempts: number | null
-  shuffle_questions: boolean
-  shuffle_options: boolean
-  show_results: string
   sort_order: number
   status: string
-  pool?: { total: number; from_lessons: number; from_pool: number }
 }
 
-interface PoolQuestion {
+interface TestQuestion {
   id: string
   content: any
   sort_order: number
@@ -40,7 +33,7 @@ export default function TestEditor({
   const [test, setTest] = useState<TestData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [poolQuestions, setPoolQuestions] = useState<PoolQuestion[]>([])
+  const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([])
   const [showAddQuestion, setShowAddQuestion] = useState(false)
 
   // ── Fetch test ──────────────────────────────────────────────────
@@ -53,15 +46,15 @@ export default function TestEditor({
     setLoading(false)
   }, [courseId, testId])
 
-  const fetchPoolQuestions = useCallback(async () => {
+  const fetchTestQuestions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/creator/courses/${courseId}/tests/${testId}/pool-questions`)
+      const res = await fetch(`/api/creator/courses/${courseId}/tests/${testId}/questions`)
       const data = await res.json()
-      setPoolQuestions(Array.isArray(data) ? data : [])
+      setTestQuestions(Array.isArray(data) ? data : [])
     } catch { /* ignore */ }
   }, [courseId, testId])
 
-  useEffect(() => { fetchTest(); fetchPoolQuestions() }, [fetchTest, fetchPoolQuestions])
+  useEffect(() => { fetchTest(); fetchTestQuestions() }, [fetchTest, fetchTestQuestions])
 
   // ── Update field ────────────────────────────────────────────────
   async function updateField(field: string, value: any) {
@@ -74,30 +67,29 @@ export default function TestEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value }),
       })
-      if (field === 'question_count') fetchTest() // refresh pool info
     } catch { /* ignore */ }
     setSaving(false)
     onTestUpdated()
   }
 
-  // ── Add pool question ───────────────────────────────────────────
-  async function addPoolQuestion(content: any) {
+  // ── Add test question ───────────────────────────────────────────
+  async function addTestQuestion(content: any) {
     try {
-      await fetch(`/api/creator/courses/${courseId}/tests/${testId}/pool-questions`, {
+      await fetch(`/api/creator/courses/${courseId}/tests/${testId}/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       })
-      fetchPoolQuestions()
+      fetchTestQuestions()
       fetchTest()
       setShowAddQuestion(false)
     } catch { /* ignore */ }
   }
 
-  async function deletePoolQuestion(qId: string) {
-    setPoolQuestions(prev => prev.filter(q => q.id !== qId))
+  async function deleteTestQuestion(qId: string) {
+    setTestQuestions(prev => prev.filter(q => q.id !== qId))
     try {
-      await fetch(`/api/creator/courses/${courseId}/tests/${testId}/pool-questions/${qId}`, {
+      await fetch(`/api/creator/courses/${courseId}/tests/${testId}/questions/${qId}`, {
         method: 'DELETE',
       })
       fetchTest()
@@ -119,15 +111,6 @@ export default function TestEditor({
         <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
       </div>
     )
-  }
-
-  const pool = test.pool || { total: 0, from_lessons: 0, from_pool: 0 }
-  const poolStatus = pool.total >= test.question_count ? 'ok' : pool.total === 0 ? 'empty' : 'low'
-
-  const TYPE_LABELS: Record<string, string> = {
-    module_quiz: 'Module Quiz',
-    practice_exam: 'Practice Exam',
-    final_assessment: 'Final Assessment',
   }
 
   return (
@@ -156,51 +139,12 @@ export default function TestEditor({
         value={test.title}
         onChange={e => setTest(prev => prev ? { ...prev, title: e.target.value } : prev)}
         onBlur={e => updateField('title', e.target.value)}
-        className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-1 mb-1"
+        className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-1 mb-4"
       />
-      <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-4 ${
-        test.test_type === 'module_quiz' ? 'bg-blue-100 text-blue-700' :
-        test.test_type === 'practice_exam' ? 'bg-purple-100 text-purple-700' :
-        'bg-amber-100 text-amber-700'
-      }`}>
-        {TYPE_LABELS[test.test_type] || test.test_type}
-      </span>
 
       {/* Settings */}
       <div className="space-y-4 mb-6">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Settings</h3>
-
-        {/* Question count + pool indicator */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Questions per attempt</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              value={test.question_count}
-              onChange={e => setTest(prev => prev ? { ...prev, question_count: parseInt(e.target.value) || 1 } : prev)}
-              onBlur={e => updateField('question_count', parseInt(e.target.value) || 1)}
-              className="w-20 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
-            <span className={`text-xs font-medium px-2 py-1 rounded-lg ${
-              poolStatus === 'ok' ? 'bg-green-50 text-green-700' :
-              poolStatus === 'low' ? 'bg-amber-50 text-amber-700' :
-              'bg-red-50 text-red-700'
-            }`}>
-              {pool.total} in pool ({pool.from_lessons} from lessons + {pool.from_pool} standalone)
-            </span>
-          </div>
-          {poolStatus === 'low' && (
-            <p className="text-xs text-amber-600 mt-1">
-              Pool has fewer questions than requested. Add more answer steps to lessons or add standalone pool questions below.
-            </p>
-          )}
-          {poolStatus === 'empty' && (
-            <p className="text-xs text-red-600 mt-1">
-              No questions in pool. Add Answer steps to lessons or add standalone pool questions below.
-            </p>
-          )}
-        </div>
 
         {/* Time limit */}
         <div>
@@ -233,53 +177,6 @@ export default function TestEditor({
           />
         </div>
 
-        {/* Max attempts (for final assessment) */}
-        {test.test_type === 'final_assessment' && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Max attempts</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                value={test.max_attempts || ''}
-                placeholder="Unlimited"
-                onChange={e => setTest(prev => prev ? { ...prev, max_attempts: e.target.value ? parseInt(e.target.value) : null } : prev)}
-                onBlur={e => updateField('max_attempts', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              <span className="text-xs text-gray-400">Leave empty for unlimited</span>
-            </div>
-          </div>
-        )}
-
-        {/* Toggles row */}
-        <div className="grid grid-cols-2 gap-3">
-          <ToggleField
-            label="Shuffle questions"
-            value={test.shuffle_questions}
-            onChange={v => updateField('shuffle_questions', v)}
-          />
-          <ToggleField
-            label="Shuffle options"
-            value={test.shuffle_options}
-            onChange={v => updateField('shuffle_options', v)}
-          />
-        </div>
-
-        {/* Show results */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Show results</label>
-          <select
-            value={test.show_results}
-            onChange={e => updateField('show_results', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-          >
-            <option value="after_submit">After each attempt</option>
-            <option value="after_all_attempts">After all attempts used</option>
-            <option value="never">Never (pass/fail only)</option>
-          </select>
-        </div>
-
         {/* Publish toggle */}
         <div className="pt-2 border-t border-gray-100">
           <ToggleField
@@ -290,10 +187,10 @@ export default function TestEditor({
         </div>
       </div>
 
-      {/* Standalone pool questions */}
+      {/* Test questions */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Standalone Pool Questions</h3>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Test Questions</h3>
           <button
             onClick={() => setShowAddQuestion(true)}
             className="text-xs text-blue-500 hover:text-blue-700 font-medium"
@@ -302,18 +199,18 @@ export default function TestEditor({
           </button>
         </div>
 
-        {poolQuestions.length === 0 && !showAddQuestion && (
+        {testQuestions.length === 0 && !showAddQuestion && (
           <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-lg">
-            No standalone questions. These are extra questions that only appear in tests, not in lessons.
+            No questions yet. Add questions to this test.
           </p>
         )}
 
-        {poolQuestions.map((q, idx) => (
+        {testQuestions.map((q, idx) => (
           <div key={q.id} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg mb-2">
             <span className="text-xs font-bold text-gray-400 mt-0.5">{idx + 1}</span>
             <p className="text-sm text-gray-700 flex-1">{q.content?.question_text || 'No question text'}</p>
             <button
-              onClick={() => deletePoolQuestion(q.id)}
+              onClick={() => deleteTestQuestion(q.id)}
               className="text-gray-300 hover:text-red-500 flex-shrink-0"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -325,7 +222,7 @@ export default function TestEditor({
 
         {showAddQuestion && (
           <AddPoolQuestionForm
-            onSubmit={addPoolQuestion}
+            onSubmit={addTestQuestion}
             onCancel={() => setShowAddQuestion(false)}
           />
         )}

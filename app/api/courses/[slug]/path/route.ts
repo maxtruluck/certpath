@@ -14,7 +14,6 @@ interface LessonData {
   display_order: number
   state: LessonState
   question_count: number
-  word_count: number
   items_completed: number
   items_total: number
 }
@@ -57,31 +56,24 @@ export async function GET(
       return NextResponse.json({ error: 'Not enrolled in this course' }, { status: 403 })
     }
 
-    // Parallel fetch: modules, lessons, questions, progress, tests, test attempts
+    // Parallel fetch: modules, lessons, progress, tests, test attempts
     const [
       { data: modules },
       { data: lessons },
-      { data: allQuestions },
       { data: progressRows },
       { data: tests },
       { data: testAttempts },
     ] = await Promise.all([
       supabase
         .from('modules')
-        .select('id, title, description, weight_percent, display_order')
+        .select('id, title, description, display_order')
         .eq('course_id', course.id)
         .order('display_order', { ascending: true }),
       supabase
         .from('lessons')
-        .select('id, module_id, title, display_order, body')
+        .select('id, module_id, title, display_order')
         .eq('course_id', course.id)
-        .eq('is_active', true)
         .order('display_order', { ascending: true }),
-      supabase
-        .from('questions')
-        .select('id, lesson_id')
-        .eq('course_id', course.id)
-        .eq('is_active', true),
       supabase
         .from('user_lesson_progress')
         .select('lesson_id, status, session_items_completed, session_items_total')
@@ -89,29 +81,43 @@ export async function GET(
         .eq('course_id', course.id),
       supabase
         .from('tests')
-        .select('id, module_id, title, test_type, question_count, time_limit_minutes, passing_score, max_attempts, sort_order')
-        .eq('course_id', course.id)
-        .eq('status', 'published')
-        .order('sort_order'),
+        .select('id, title, course_id, passing_score, time_limit_minutes')
+        .eq('course_id', course.id),
       supabase
         .from('test_attempts')
         .select('id, test_id, score_percent, passed, status')
         .eq('user_id', userId),
     ])
 
-    // ── Index data ───────────────────────────────────────────────
-
-    // Questions per lesson
-    const questionCountByLesson: Record<string, number> = {}
-    for (const q of allQuestions || []) {
-      questionCountByLesson[q.lesson_id] = (questionCountByLesson[q.lesson_id] || 0) + 1
+    // Fetch answer-type lesson_steps per lesson (lesson_steps has no course_id)
+    const lessonIds = (lessons || []).map((l: any) => l.id)
+    let answerStepRows: any[] = []
+    if (lessonIds.length > 0) {
+      const { data } = await supabase
+        .from('lesson_steps')
+        .select('id, lesson_id')
+        .in('lesson_id', lessonIds)
+        .eq('step_type', 'answer')
+      answerStepRows = data || []
     }
 
-    // Word count per lesson (from body)
-    const wordCountByLesson: Record<string, number> = {}
-    for (const l of lessons || []) {
-      const text = typeof l.body === 'string' ? l.body : JSON.stringify(l.body || '')
-      wordCountByLesson[l.id] = text.split(/\s+/).filter(Boolean).length
+    // Fetch test question counts from test_questions table
+    const testIds = (tests || []).map((t: any) => t.id)
+    let testQuestionRows: any[] = []
+    if (testIds.length > 0) {
+      const { data } = await supabase
+        .from('test_questions')
+        .select('id, test_id')
+        .in('test_id', testIds)
+      testQuestionRows = data || []
+    }
+
+    // ── Index data ───────────────────────────────────────────────
+
+    // Answer-step count per lesson
+    const questionCountByLesson: Record<string, number> = {}
+    for (const s of answerStepRows) {
+      questionCountByLesson[s.lesson_id] = (questionCountByLesson[s.lesson_id] || 0) + 1
     }
 
     // Progress by lesson
@@ -183,7 +189,6 @@ export async function GET(
           display_order: l.display_order,
           state,
           question_count: questionCountByLesson[l.id] || 0,
-          word_count: wordCountByLesson[l.id] || 0,
           items_completed: progress?.items_completed || 0,
           items_total: progress?.items_total || 0,
         }
@@ -208,30 +213,23 @@ export async function GET(
       if (a.passed) attemptsByTest[a.test_id].passed = true
     }
 
-    // Group tests by module
-    const testsByModule: Record<string, any[]> = {}
-    const courseLevelTests: any[] = []
-    for (const t of tests || []) {
-      const testData = {
-        id: t.id,
-        title: t.title,
-        test_type: t.test_type,
-        question_count: t.question_count,
-        time_limit_minutes: t.time_limit_minutes,
-        passing_score: t.passing_score,
-        max_attempts: t.max_attempts,
-        sort_order: t.sort_order,
-        best_score: attemptsByTest[t.id]?.best_score ?? null,
-        passed: attemptsByTest[t.id]?.passed ?? false,
-        attempts_count: attemptsByTest[t.id]?.count ?? 0,
-      }
-      if (t.module_id) {
-        if (!testsByModule[t.module_id]) testsByModule[t.module_id] = []
-        testsByModule[t.module_id].push(testData)
-      } else {
-        courseLevelTests.push(testData)
-      }
+    // Test question count by test_id
+    const questionCountByTest: Record<string, number> = {}
+    for (const tq of testQuestionRows) {
+      questionCountByTest[tq.test_id] = (questionCountByTest[tq.test_id] || 0) + 1
     }
+
+    // All tests are course-level (tests table has no module_id)
+    const courseLevelTests = (tests || []).map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      passing_score: t.passing_score,
+      time_limit_minutes: t.time_limit_minutes,
+      question_count: questionCountByTest[t.id] || 0,
+      best_score: attemptsByTest[t.id]?.best_score ?? null,
+      passed: attemptsByTest[t.id]?.passed ?? false,
+      attempts_count: attemptsByTest[t.id]?.count ?? 0,
+    }))
 
     const modulesResponse = sortedModules.map((mod: any) => {
       const modLessons = (lessonsByModule[mod.id] || [])
@@ -243,9 +241,7 @@ export async function GET(
         title: mod.title,
         description: mod.description,
         display_order: mod.display_order,
-        weight_percent: mod.weight_percent,
         lessons: modLessons,
-        tests: testsByModule[mod.id] || [],
       }
     })
 

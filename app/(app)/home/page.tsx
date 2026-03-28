@@ -15,11 +15,8 @@ interface DashboardCourse {
     description: string;
     category: string;
     difficulty: string;
-    thumbnail_url: string | null;
-    provider_name: string | null;
   };
   status: string;
-  readiness_score: number;
   questions_seen: number;
   questions_total: number;
   lessons_total: number;
@@ -43,18 +40,15 @@ interface BrowseCourse {
   description: string;
   category: string;
   difficulty: string;
-  thumbnail_url: string | null;
-  provider_name: string | null;
   price_cents: number | null;
   tags?: string[];
   stats: {
     module_count: number;
-    topic_count: number;
+    lesson_count: number;
     question_count: number;
   };
   user_progress: {
     status: string;
-    readiness_score: number;
     sessions_completed: number;
   } | null;
 }
@@ -331,8 +325,8 @@ export default function HomePage() {
                   <div className="p-2 space-y-0.5">
                     <p className="text-xs font-bold text-[#1e293b] leading-4 line-clamp-2">{course.title}</p>
                     <p className="text-[9px] text-[#94a3b8]">
-                      {course.provider_name || 'Unknown'}
-                      {course.stats.topic_count > 0 ? ` \u00B7 ${course.stats.topic_count} lessons` : ''}
+                      {'openED'}
+                      {course.stats.lesson_count > 0 ? ` \u00B7 ${course.stats.lesson_count} lessons` : ''}
                     </p>
                     {(course.tags || []).length > 0 && (
                       <div className="flex gap-[3px] flex-wrap mt-[3px]">
@@ -426,9 +420,6 @@ function DiscoveryCard({ course }: { course: BrowseCourse }) {
           </span>
         </div>
 
-        {course.provider_name && (
-          <p className="text-[10px] text-[#94a3b8] mt-[3px] truncate">by {course.provider_name}</p>
-        )}
         {course.description && (
           <p className="text-[10px] text-[#b0abb5] mt-0.5 leading-[13px] line-clamp-1">{course.description}</p>
         )}
@@ -438,9 +429,9 @@ function DiscoveryCard({ course }: { course: BrowseCourse }) {
 
         {/* Meta row */}
         <div className="flex items-center gap-1 flex-wrap">
-          {course.stats.topic_count > 0 && (
+          {course.stats.lesson_count > 0 && (
             <span className="text-[9px] text-[#94a3b8]">
-              {course.stats.topic_count} {course.stats.topic_count === 1 ? 'lesson' : 'lessons'}
+              {course.stats.lesson_count} {course.stats.lesson_count === 1 ? 'lesson' : 'lessons'}
             </span>
           )}
           {course.category && (

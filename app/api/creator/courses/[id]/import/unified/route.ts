@@ -7,8 +7,11 @@ import Papa from 'papaparse'
  *
  * Each row has a `row_type` column:
  *   - "structure"  -> creates module/lesson (deduped by title)
- *   - "content"    -> sets the markdown body for a lesson
- *   - "question"   -> adds a question linked to a lesson
+ *   - "content"    -> creates a read step for a lesson
+ *   - "question"   -> creates an answer step with question data in content JSONB
+ *   - "watch"      -> creates a watch step (video URL)
+ *   - "callout"    -> creates a callout step
+ *   - "embed"      -> creates an embed step (image/diagram)
  *
  * All rows use module_title + lesson_title to locate the target.
  * Structure rows are processed first (sorted to front) so content/question rows
@@ -23,7 +26,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const { supabase, creatorId, error } = await getCreatorCourse(id)
+    const { supabase, error } = await getCreatorCourse(id)
     if (error) return error
 
     const formData = await request.formData()
@@ -117,7 +120,7 @@ export async function POST(
       lessonOrderByModule.set(l.module_id, Math.max(currentMax, (l.display_order || 0) + 1))
     }
 
-    const stats = { modules: 0, lessons: 0, content: 0, questions: 0, steps: 0 }
+    const stats = { modules: 0, lessons: 0, steps: 0 }
     const importErrors: { row: number; message: string }[] = []
 
     // Track step sort_order per lesson for sequential step creation
@@ -192,7 +195,7 @@ export async function POST(
 
       if (!moduleId) return null
 
-      // Get or create lesson (directly under module, no topic)
+      // Get or create lesson (directly under module)
       let lessonId: string | null = null
       if (lessonTitle) {
         const lessonKey = `${moduleId}|${lessonTitle.toLowerCase()}`
@@ -207,7 +210,6 @@ export async function POST(
               module_id: moduleId,
               course_id: id,
               title: lessonTitle,
-              body: '',
               display_order: currentOrder,
             })
             .select('id')
@@ -254,12 +256,6 @@ export async function POST(
         // Replace \n with actual newlines
         const processedBody = body.replace(/\\n/g, '\n')
 
-        // Update legacy body field
-        await supabase
-          .from('lessons')
-          .update({ body: processedBody })
-          .eq('id', resolved.lessonId)
-
         // Create a read step
         const { error: stepErr } = await supabase
           .from('lesson_steps')
@@ -274,14 +270,18 @@ export async function POST(
           importErrors.push({ row: row._origRow, message: `Failed to create read step: ${stepErr.message}` })
           continue
         }
-        stats.content++
         stats.steps++
         continue
       }
 
       if (rowType === 'question') {
         const resolved = await resolveStructure(row)
-        if (!resolved) continue
+        if (!resolved?.lessonId) {
+          if (!importErrors.find(e => e.row === row._origRow)) {
+            importErrors.push({ row: row._origRow, message: 'question row requires lesson_title to target a lesson' })
+          }
+          continue
+        }
 
         const questionText = str(row, 'question_text')
         if (!questionText) {
@@ -297,7 +297,7 @@ export async function POST(
         }
 
         const correctStr = str(row, 'correct_answers') || str(row, 'correct')
-        const correctOptionIds = correctStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+        const correctIds = correctStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
         let questionType = str(row, 'question_type') || 'multiple_choice'
         if (questionType === 'tf') questionType = 'true_false'
@@ -306,25 +306,14 @@ export async function POST(
           questionType = 'multiple_choice'
         }
 
-        const difficulty = Math.min(5, Math.max(1, parseInt(str(row, 'difficulty') || '3') || 3))
-        const tagsStr = str(row, 'tags')
-        const tags = tagsStr ? tagsStr.split(';').map(t => t.trim()).filter(Boolean) : []
-
-        const insertData: Record<string, unknown> = {
-          topic_id: null,
-          module_id: resolved.moduleId,
-          course_id: id,
-          creator_id: creatorId,
+        // Build the answer step content JSONB
+        const stepContent: Record<string, unknown> = {
           question_text: questionText,
           question_type: questionType,
           options,
-          correct_option_ids: correctOptionIds,
+          correct_ids: correctIds,
           explanation: str(row, 'explanation'),
-          difficulty,
-          tags,
-          source: 'creator_original',
-          blooms_level: str(row, 'blooms_level') || 'remember',
-          lesson_id: resolved.lessonId,
+          option_explanations: {},
         }
 
         // Fill blank
@@ -335,10 +324,10 @@ export async function POST(
             importErrors.push({ row: row._origRow, message: 'fill_blank requires acceptable_answers (pipe-separated)' })
             continue
           }
-          insertData.acceptable_answers = acceptableAnswers
-          insertData.match_mode = str(row, 'match_mode') || 'exact'
-          insertData.options = []
-          insertData.correct_option_ids = []
+          stepContent.acceptable_answers = acceptableAnswers
+          stepContent.match_mode = str(row, 'match_mode') || 'exact'
+          stepContent.options = []
+          stepContent.correct_ids = []
         }
 
         // Ordering
@@ -348,7 +337,7 @@ export async function POST(
             importErrors.push({ row: row._origRow, message: 'ordering requires 3+ items in correct_order' })
             continue
           }
-          insertData.correct_order = correctOrder
+          stepContent.correct_order = correctOrder
         }
 
         // Matching
@@ -359,43 +348,26 @@ export async function POST(
             importErrors.push({ row: row._origRow, message: 'matching requires 3+ pairs with equal left/right counts' })
             continue
           }
-          insertData.matching_pairs = lefts.map((l, idx) => ({ left: l, right: rights[idx] }))
-          insertData.options = []
-          insertData.correct_option_ids = []
+          stepContent.matching_pairs = lefts.map((l, idx) => ({ left: l, right: rights[idx] }))
+          stepContent.options = []
+          stepContent.correct_ids = []
         }
 
-        const { data: newQuestion, error: insertError } = await supabase
-          .from('questions')
-          .insert(insertData)
-          .select('id')
-          .single()
+        // Create an answer step with all question data in content JSONB
+        const { error: stepErr } = await supabase
+          .from('lesson_steps')
+          .insert({
+            lesson_id: resolved.lessonId,
+            sort_order: getNextStepOrder(resolved.lessonId),
+            step_type: 'answer',
+            content: stepContent,
+          })
 
-        if (insertError || !newQuestion) {
-          importErrors.push({ row: row._origRow, message: `Failed to insert question: ${insertError?.message}` })
+        if (stepErr) {
+          importErrors.push({ row: row._origRow, message: `Failed to create answer step: ${stepErr.message}` })
           continue
         }
-
-        // Create an answer step linked to this question
-        if (resolved.lessonId) {
-          await supabase
-            .from('lesson_steps')
-            .insert({
-              lesson_id: resolved.lessonId,
-              sort_order: getNextStepOrder(resolved.lessonId),
-              step_type: 'answer',
-              content: {
-                question_id: newQuestion.id,
-                question_text: questionText,
-                question_type: questionType,
-                options,
-                correct_ids: correctOptionIds,
-                explanation: str(row, 'explanation'),
-                option_explanations: {},
-              },
-            })
-          stats.steps++
-        }
-        stats.questions++
+        stats.steps++
         continue
       }
 
@@ -473,7 +445,7 @@ export async function POST(
       importErrors.push({ row: row._origRow, message: `Unknown row_type: "${rowType}". Use structure, content, question, watch, callout, or embed.` })
     }
 
-    const totalImported = stats.modules + stats.lessons + stats.content + stats.questions
+    const totalImported = stats.modules + stats.lessons + stats.steps
 
     return NextResponse.json({
       imported: totalImported,

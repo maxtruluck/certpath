@@ -6,7 +6,7 @@ export async function GET(_request: NextRequest) {
     const { supabase, userId, error } = await getApiUser()
     if (error) return error
 
-    // Get creator record with new founding/onboarding fields
+    // Get creator record
     const { data: creator, error: creatorError } = await supabase
       .from('creators')
       .select('*')
@@ -39,12 +39,46 @@ export async function GET(_request: NextRequest) {
     }))
 
     if (courseIds.length > 0) {
-      const [modulesRes, lessonsRes, questionsRes, enrollmentsRes] = await Promise.all([
+      const [modulesRes, lessonsRes, enrollmentsRes] = await Promise.all([
         supabase.from('modules').select('id, course_id').in('course_id', courseIds),
-        supabase.from('lessons').select('id, course_id, body').in('course_id', courseIds).eq('is_active', true),
-        supabase.from('questions').select('id, course_id').in('course_id', courseIds).eq('is_active', true),
+        supabase.from('lessons').select('id, course_id').in('course_id', courseIds),
         supabase.from('user_courses').select('id, course_id, status, enrolled_at').in('course_id', courseIds),
       ])
+
+      // Get all lesson IDs to count answer steps
+      const allLessons = lessonsRes.data || []
+      const allLessonIds = allLessons.map((l: any) => l.id)
+
+      // Count answer steps (questions) per lesson
+      let answerStepsByLesson: Record<string, number> = {}
+      if (allLessonIds.length > 0) {
+        const { data: answerSteps } = await supabase
+          .from('lesson_steps')
+          .select('lesson_id')
+          .in('lesson_id', allLessonIds)
+          .eq('step_type', 'answer')
+
+        if (answerSteps) {
+          for (const step of answerSteps) {
+            answerStepsByLesson[step.lesson_id] = (answerStepsByLesson[step.lesson_id] || 0) + 1
+          }
+        }
+      }
+
+      // Count lessons that have at least 1 step (for ready_lessons)
+      let lessonsWithSteps: Set<string> = new Set()
+      if (allLessonIds.length > 0) {
+        const { data: stepLessons } = await supabase
+          .from('lesson_steps')
+          .select('lesson_id')
+          .in('lesson_id', allLessonIds)
+
+        if (stepLessons) {
+          for (const s of stepLessons) {
+            lessonsWithSteps.add(s.lesson_id)
+          }
+        }
+      }
 
       const allEnrollments = enrollmentsRes.data || []
       const revenueShare = creator.revenue_share_percent || 70
@@ -57,15 +91,18 @@ export async function GET(_request: NextRequest) {
           : 0
         const revenueCents = c.is_free ? 0 : courseEnrollments.length * Math.round((c.price_cents || 0) * revenueShare / 100)
 
-        // Count lessons with body content >= 50 chars (ready lessons)
-        const courseLessons = (lessonsRes.data || []).filter((l: any) => l.course_id === c.id)
-        const readyLessons = courseLessons.filter((l: any) => (l.body || '').length >= 50).length
+        const courseLessons = allLessons.filter((l: any) => l.course_id === c.id)
+        const readyLessons = courseLessons.filter((l: any) => lessonsWithSteps.has(l.id)).length
+
+        // Count questions (answer steps) for this course's lessons
+        const courseLessonIds = courseLessons.map((l: any) => l.id)
+        const questionCount = courseLessonIds.reduce((sum: number, lid: string) => sum + (answerStepsByLesson[lid] || 0), 0)
 
         return {
           ...c,
           module_count: (modulesRes.data || []).filter((m: any) => m.course_id === c.id).length,
           lesson_count: courseLessons.length,
-          question_count: (questionsRes.data || []).filter((q: any) => q.course_id === c.id).length,
+          question_count: questionCount,
           student_count: courseEnrollments.length,
           completion_rate: completionRate,
           revenue_cents: revenueCents,
@@ -89,7 +126,6 @@ export async function GET(_request: NextRequest) {
         ? Math.round(publishedWithStudents.reduce((s: number, c: any) => s + c.completion_rate, 0) / publishedWithStudents.length)
         : 0
 
-      // Average rating (using readiness_score of completed as proxy)
       const completedEnrollments = allEnrollments.filter((e: any) => e.status === 'completed')
 
       // Trend: enrollments this week vs last week

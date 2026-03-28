@@ -62,15 +62,14 @@ function PriceInput({ value, onChange }: { value: number; onChange: (cents: numb
 }
 
 // ─── Revenue Calculator ─────────────────────────────────────────
-function RevenueCalculator({ priceCents, revenueSharePercent, isFoundingCreator }: {
+function RevenueCalculator({ priceCents, revenueSharePercent }: {
   priceCents: number
   revenueSharePercent: number
-  isFoundingCreator: boolean
 }) {
   const earnings = Math.round(priceCents * revenueSharePercent / 100)
   const earningsDisplay = (earnings / 100).toFixed(2)
   const priceDisplay = (priceCents / 100).toFixed(2)
-  const rateLabel = isFoundingCreator ? `${revenueSharePercent}/${100 - revenueSharePercent} founding rate` : `${revenueSharePercent}/${100 - revenueSharePercent} standard rate`
+  const rateLabel = `${revenueSharePercent}/${100 - revenueSharePercent} standard rate`
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 mt-3">
@@ -84,11 +83,6 @@ function RevenueCalculator({ priceCents, revenueSharePercent, isFoundingCreator 
         <span className="text-gray-200">|</span>
         <span>100 sales = ${(earnings * 100 / 100).toFixed(2)}</span>
       </div>
-      {isFoundingCreator && (
-        <p className="text-xs text-blue-500 mt-3 font-medium">
-          Founding creator rate: {revenueSharePercent}% share, locked 12 months.
-        </p>
-      )}
     </div>
   )
 }
@@ -101,7 +95,6 @@ export default function StepSettings({
   onContinue,
   courseId,
   revenueSharePercent,
-  isFoundingCreator,
 }: {
   form: CourseFormData
   onChange: (updates: Partial<CourseFormData>) => void
@@ -109,7 +102,6 @@ export default function StepSettings({
   onContinue: () => void
   courseId: string
   revenueSharePercent: number
-  isFoundingCreator: boolean
 }) {
   const [customTagInput, setCustomTagInput] = useState('')
   const [showCustomTag, setShowCustomTag] = useState(false)
@@ -201,7 +193,6 @@ export default function StepSettings({
             <RevenueCalculator
               priceCents={form.price_cents}
               revenueSharePercent={revenueSharePercent}
-              isFoundingCreator={isFoundingCreator}
             />
           </div>
         )}
@@ -219,40 +210,6 @@ export default function StepSettings({
             <option key={d.value} value={d.value}>{d.label} -- {d.desc}</option>
           ))}
         </select>
-      </div>
-
-      {/* Progression */}
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-[#2C2825] mb-3">Progression</h3>
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => onChange({ progression_type: 'linear' })}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              form.progression_type === 'linear'
-                ? 'bg-blue-50 text-blue-700 border-r border-blue-200'
-                : 'bg-white text-gray-500 hover:bg-gray-50 border-r border-gray-200'
-            }`}
-          >
-            Linear
-          </button>
-          <button
-            type="button"
-            onClick={() => onChange({ progression_type: 'open' })}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              form.progression_type === 'open'
-                ? 'bg-blue-50 text-blue-700'
-                : 'bg-white text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            Open
-          </button>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">
-          {form.progression_type === 'linear'
-            ? 'Learners complete lessons in order'
-            : 'Learners choose any lesson in any order'}
-        </p>
       </div>
 
       {/* Tags */}

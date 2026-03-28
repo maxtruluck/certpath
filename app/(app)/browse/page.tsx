@@ -13,13 +13,11 @@ interface Course {
   description: string;
   category: string;
   difficulty: string;
-  thumbnail_url: string | null;
   price_cents: number;
-  provider_name: string | null;
   creator: { id: string; creator_name: string } | null;
   tags?: string[];
   stats: { module_count: number; lesson_count: number; question_count: number };
-  user_progress: { status: string; readiness_score: number; questions_seen: number } | null;
+  user_progress: { status: string; questions_seen: number } | null;
 }
 
 /* ─── Category styles (same as mobile category-styles.ts) ─── */
@@ -144,7 +142,6 @@ function BrowseContent() {
       const q = debouncedSearch.trim().toLowerCase();
       result = result.filter((c) =>
         c.title.toLowerCase().includes(q) ||
-        (c.provider_name || '').toLowerCase().includes(q) ||
         (c.creator?.creator_name || '').toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q));
     } else if (category !== 'All') {
@@ -296,8 +293,8 @@ function BrowseContent() {
                       isFree ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#f1f5f9] text-[#1e293b]'
                     }`}>{isFree ? 'Free' : `$${(course.price_cents / 100).toFixed(2)}`}</span>
                   </div>
-                  {(course.creator?.creator_name || course.provider_name) && (
-                    <p className="text-[10px] text-[#94a3b8] mt-[3px] truncate">by {course.creator?.creator_name || course.provider_name}</p>
+                  {course.creator?.creator_name && (
+                    <p className="text-[10px] text-[#94a3b8] mt-[3px] truncate">by {course.creator.creator_name}</p>
                   )}
                   {course.description && (
                     <p className="text-[10px] text-[#b0abb5] mt-0.5 leading-[13px] line-clamp-1">{course.description}</p>

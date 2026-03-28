@@ -6,22 +6,21 @@ export type EmbedSubType = 'math_graph' | 'image' | 'diagram'
 
 export interface Question {
   id: string
-  domain_id: string
-  topic_id: string
-  certification_id: string
-  course_id: string
+  domain_id?: string
+  topic_id?: string
+  certification_id?: string
+  course_id?: string
   question_text: string
   question_type: string
   options: { id: string; text: string }[]
   correct_option_ids: string[]
   explanation: string
-  difficulty: number
-  tags: string[]
+  difficulty?: number
+  tags?: string[]
   module_title?: string
   matching_items?: { lefts: string[]; rights: string[] }
   difficulty_label?: 'easy' | 'medium' | 'challenging'
   lesson_id?: string | null
-  diagram_data?: import('@/lib/coordinate-diagram').DiagramData | null
 }
 
 export interface AnswerResult {
@@ -33,7 +32,6 @@ export interface AnswerResult {
   correct_order?: string[]
   matching_pairs?: { left: string; right: string }[]
   acceptable_answers?: string[]
-  correct_point?: { x: number; y: number } | null
 }
 
 export interface LessonStep {

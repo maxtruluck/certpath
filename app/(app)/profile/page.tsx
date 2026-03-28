@@ -17,8 +17,8 @@ interface ProfileData {
 
 interface DashboardCourse {
   id: string; course_id: string;
-  course: { id: string; title: string; slug: string; description: string; category: string; difficulty: string; thumbnail_url: string | null; provider_name: string };
-  readiness_score: number; questions_seen: number; questions_correct: number;
+  course: { id: string; title: string; slug: string; description: string; category: string; difficulty: string };
+  questions_seen: number; questions_correct: number;
   questions_total: number; lessons_total: number; sessions_completed: number;
   last_session_at: string | null; enrolled_at?: string;
   progress_percent?: number;

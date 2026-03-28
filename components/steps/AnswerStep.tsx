@@ -21,14 +21,12 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { richMarkdownComponents } from '@/lib/markdown-components'
 import { MathText } from '@/lib/math-text'
-import { CoordinateDiagram } from '@/lib/coordinate-diagram'
 import type { Question, AnswerResult } from '@/lib/types/lesson-player'
 
 const MAX_WRONG_ATTEMPTS = 2
 
 interface AnswerStepProps {
   question: Question
-  sessionId: string
   /** Called when step is complete (after correct answer or max attempts) */
   onComplete: (isCorrect: boolean) => void
   /** Read-only mode for back-navigation to already-answered questions */
@@ -37,7 +35,7 @@ interface AnswerStepProps {
   previousSelectedIds?: string[]
 }
 
-export function AnswerStep({ question, sessionId, onComplete, readOnly, previousResult, previousSelectedIds }: AnswerStepProps) {
+export function AnswerStep({ question, onComplete, readOnly, previousResult, previousSelectedIds }: AnswerStepProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>(previousSelectedIds || [])
   const [answerResult, setAnswerResult] = useState<AnswerResult | null>(previousResult || null)
   const [submitting, setSubmitting] = useState(false)
@@ -62,8 +60,6 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
     }
     return {}
   })
-  const [plotPoint, setPlotPoint] = useState<{ x: number; y: number } | null>(null)
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -73,7 +69,6 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
 
   const canSubmit = (() => {
     if (readOnly || answerResult) return false
-    if (question.question_type === 'plot_point') return plotPoint !== null
     if (question.question_type === 'fill_blank') return fillBlankAnswer.trim().length > 0
     if (question.question_type === 'ordering') return orderItems.length > 0
     if (question.question_type === 'matching') return Object.values(matchSelections).every(v => v !== '')
@@ -85,46 +80,41 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
     setSubmitting(true)
 
     try {
-      const body: Record<string, unknown> = {
-        session_id: sessionId,
-        question_id: question.id,
-        time_spent_ms: 0,
-      }
+      let isCorrect = false
 
-      if (question.question_type === 'plot_point') {
-        body.user_point = plotPoint
-        body.selected_option_ids = []
-      } else if (question.question_type === 'fill_blank') {
-        body.answer_text = fillBlankAnswer
+      if (question.question_type === 'fill_blank') {
+        const acceptable = (question as any).acceptable_answers || question.correct_option_ids || []
+        isCorrect = acceptable.some((a: string) => a.toLowerCase().trim() === fillBlankAnswer.toLowerCase().trim())
       } else if (question.question_type === 'ordering') {
-        body.user_order = orderItems.map(i => i.id)
-        body.selected_option_ids = orderItems.map(i => i.id)
+        const correctOrder = (question as any).correct_order || question.correct_option_ids || []
+        const userOrder = orderItems.map(i => i.id)
+        isCorrect = correctOrder.length === userOrder.length && correctOrder.every((id: string, idx: number) => id === userOrder[idx])
       } else if (question.question_type === 'matching') {
-        body.user_pairs = Object.entries(matchSelections).map(([left, right]) => ({ left, right }))
-        body.selected_option_ids = []
+        const pairs = (question as any).matching_pairs || []
+        isCorrect = pairs.length > 0 && pairs.every((p: any) => (matchSelections[p.left] || '').toLowerCase() === p.right.toLowerCase())
       } else {
-        body.selected_option_ids = selectedIds
+        // MC, MS, TF
+        const correctIds = question.correct_option_ids || []
+        isCorrect = correctIds.length === selectedIds.length && correctIds.every((id: string) => selectedIds.includes(id))
       }
 
-      const res = await fetch('/api/session/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const result: AnswerResult = {
+        is_correct: isCorrect,
+        correct_option_ids: question.correct_option_ids || [],
+        explanation: (question as any).explanation || '',
+        option_explanation: isCorrect ? undefined : (question as any).option_explanations?.[selectedIds[0]] || undefined,
+        acceptable_answers: (question as any).acceptable_answers,
+        correct_order: (question as any).correct_order,
+        matching_pairs: (question as any).matching_pairs,
+      }
 
-      if (!res.ok) throw new Error('Failed to submit answer')
-      const result: AnswerResult = await res.json()
       setAnswerResult(result)
-
-      if (!result.is_correct) {
-        const newAttempts = wrongAttempts + 1
-        setWrongAttempts(newAttempts)
-      }
+      if (!isCorrect) setWrongAttempts(prev => prev + 1)
     } catch (err) {
-      console.error('Answer submission error:', err)
+      console.error('Answer grading error:', err)
     }
     setSubmitting(false)
-  }, [canSubmit, sessionId, question, selectedIds, fillBlankAnswer, orderItems, matchSelections, plotPoint, wrongAttempts])
+  }, [canSubmit, question, selectedIds, fillBlankAnswer, orderItems, matchSelections])
 
   function handleContinueOrRetry() {
     if (!answerResult) return
@@ -137,7 +127,6 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
       setSelectedIds([])
       setAnswerResult(null)
       setFillBlankAnswer('')
-      setPlotPoint(null)
       if (question.question_type === 'ordering') {
         const shuffled = [...question.options]
         for (let i = shuffled.length - 1; i > 0; i--) {
@@ -214,26 +203,7 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
         {question.question_type === 'fill_blank' && <p className="text-xs text-[#A39B90] mt-2">Type your answer</p>}
         {question.question_type === 'ordering' && <p className="text-xs text-[#A39B90] mt-2">Drag items into the correct order</p>}
         {question.question_type === 'matching' && <p className="text-xs text-[#A39B90] mt-2">Match each item on the left with the correct item on the right</p>}
-        {question.question_type === 'diagram' && <p className="text-xs text-[#A39B90] mt-2">Study the diagram and select your answer</p>}
       </div>
-
-      {/* Diagram display (non-interactive) */}
-      {question.diagram_data && question.question_type !== 'plot_point' && (
-        <CoordinateDiagram data={question.diagram_data} />
-      )}
-
-      {/* Interactive plot_point */}
-      {question.question_type === 'plot_point' && question.diagram_data && (
-        <CoordinateDiagram
-          data={question.diagram_data}
-          interactive
-          userPoint={plotPoint}
-          onPointPlaced={readOnly ? undefined : setPlotPoint}
-          disabled={!!effectiveResult || readOnly}
-          correctPoint={effectiveResult?.correct_point}
-          isCorrect={effectiveResult?.is_correct ?? null}
-        />
-      )}
 
       {/* Fill Blank */}
       {question.question_type === 'fill_blank' && !effectiveResult && (
@@ -352,8 +322,8 @@ export function AnswerStep({ question, sessionId, onComplete, readOnly, previous
         </div>
       )}
 
-      {/* MC / MS / TF / Diagram options */}
-      {['multiple_choice', 'multiple_select', 'true_false', 'diagram'].includes(question.question_type) && (
+      {/* MC / MS / TF options */}
+      {['multiple_choice', 'multiple_select', 'true_false'].includes(question.question_type) && (
         <div className="space-y-2.5 mb-6">
           {question.options.map((option, idx) => {
             const state = getOptionState(option.id)

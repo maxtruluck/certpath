@@ -8,7 +8,6 @@ interface CourseData {
   description: string
   category: string
   difficulty: string
-  cover_image_url: string | null
   is_free: boolean
   price_cents: number
   tags: string[]
@@ -64,13 +63,6 @@ function computeAudit(data: CourseData): AuditCheck[] {
       status: 'warn',
       message: `${lessonsWithoutQuestions.length} lessons missing questions -- Lessons without questions won't have review cards`,
     })
-  }
-
-  // Cover image
-  if (data.cover_image_url) {
-    checks.push({ label: 'Cover image uploaded', status: 'pass', message: 'Cover image set' })
-  } else {
-    checks.push({ label: 'No cover image', status: 'info', message: 'No cover image uploaded' })
   }
 
   // Description
@@ -131,7 +123,6 @@ export default function StepReview({
   onPublish,
   onSaveDraft,
   revenueSharePercent,
-  isFoundingCreator,
 }: {
   courseId: string
   form: CourseFormData
@@ -139,7 +130,6 @@ export default function StepReview({
   onPublish: () => void
   onSaveDraft: () => void
   revenueSharePercent: number
-  isFoundingCreator: boolean
 }) {
   const [courseData, setCourseData] = useState<CourseData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -180,12 +170,9 @@ export default function StepReview({
     <div className="max-w-2xl mx-auto py-8">
       {/* Marketplace Preview Card */}
       <div className="rounded-2xl border border-[#E8E4DD] overflow-hidden bg-white mb-4">
-        {/* Cover image / gradient */}
-        <div className="h-32 bg-gradient-to-br from-blue-500 to-blue-700 relative">
-          {form.cover_image_url && (
-            <img src={form.cover_image_url} alt="" className="w-full h-full object-cover" />
-          )}
-        </div>
+        {/* Gradient header */}
+        <div className="h-32 bg-gradient-to-br from-blue-500 to-blue-700" />
+
         <div className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex-1 mr-4">
@@ -234,7 +221,7 @@ export default function StepReview({
           <div>
             <p className="text-sm font-medium text-[#2C2825]">Pricing: {formatCents(form.price_cents)}</p>
             <p className="text-xs text-gray-400">
-              You earn {formatCents(earningsCents)} per sale ({revenueSharePercent}% {isFoundingCreator ? 'founding' : 'standard'} rate)
+              You earn {formatCents(earningsCents)} per sale ({revenueSharePercent}% standard rate)
             </p>
           </div>
           <button onClick={onBack} className="text-xs font-medium text-blue-600 hover:text-blue-800">

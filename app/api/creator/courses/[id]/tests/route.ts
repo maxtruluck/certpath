@@ -14,9 +14,23 @@ export async function GET(
       .from('tests')
       .select('*')
       .eq('course_id', id)
-      .order('sort_order')
+      .order('created_at')
 
-    return NextResponse.json(tests || [])
+    const testList = tests || []
+
+    // Count questions for each test from test_questions table
+    const testsWithCounts = await Promise.all(
+      testList.map(async (test: any) => {
+        const { count } = await supabase
+          .from('test_questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('test_id', test.id)
+
+        return { ...test, question_count: count || 0 }
+      })
+    )
+
+    return NextResponse.json(testsWithCounts)
   } catch (err) {
     console.error('GET creator/tests error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -33,57 +47,19 @@ export async function POST(
     if (error) return error
 
     const body = await request.json()
-    const {
-      title,
-      test_type,
-      module_id,
-      question_count = 10,
-      time_limit_minutes,
-      passing_score = 70,
-      max_attempts,
-      shuffle_questions = true,
-      shuffle_options = true,
-      show_results = 'after_submit',
-    } = body
+    const { title, passing_score = 70, time_limit_minutes } = body
 
-    if (!title || !test_type) {
-      return NextResponse.json({ error: 'title and test_type are required' }, { status: 400 })
+    if (!title) {
+      return NextResponse.json({ error: 'title is required' }, { status: 400 })
     }
-
-    if (!['module_quiz', 'practice_exam', 'final_assessment'].includes(test_type)) {
-      return NextResponse.json({ error: 'Invalid test_type' }, { status: 400 })
-    }
-
-    // If module_quiz, module_id is required
-    if (test_type === 'module_quiz' && !module_id) {
-      return NextResponse.json({ error: 'module_id is required for module_quiz' }, { status: 400 })
-    }
-
-    // Get next sort_order
-    const { data: existing } = await supabase
-      .from('tests')
-      .select('sort_order')
-      .eq('course_id', id)
-      .order('sort_order', { ascending: false })
-      .limit(1)
-
-    const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
 
     const insertData: Record<string, any> = {
       course_id: id,
       title,
-      test_type,
-      question_count,
       passing_score,
-      shuffle_questions,
-      shuffle_options,
-      show_results,
-      sort_order: nextOrder,
     }
 
-    if (module_id) insertData.module_id = module_id
     if (time_limit_minutes != null) insertData.time_limit_minutes = time_limit_minutes
-    if (max_attempts != null) insertData.max_attempts = max_attempts
 
     const { data: test, error: insertError } = await supabase
       .from('tests')

@@ -26,28 +26,28 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
-    // Fetch stats
-    const [modulesRes, lessonsRes, questionsRes] = await Promise.all([
+    // Fetch modules and lessons
+    const [modulesRes, lessonsRes] = await Promise.all([
       supabase.from('modules').select('id').eq('course_id', course.id),
-      supabase.from('lessons').select('id').eq('course_id', course.id).eq('is_active', true),
-      supabase.from('questions').select('id').eq('course_id', course.id).eq('is_active', true),
+      supabase.from('lessons').select('id').eq('course_id', course.id),
     ])
+
+    // Count answer-type lesson_steps (lesson_steps has no course_id, join via lesson_ids)
+    const lessonIds = (lessonsRes.data || []).map((l: any) => l.id)
+    let questionCount = 0
+    if (lessonIds.length > 0) {
+      const { data: answerSteps } = await supabase
+        .from('lesson_steps')
+        .select('id')
+        .in('lesson_id', lessonIds)
+        .eq('step_type', 'answer')
+      questionCount = answerSteps?.length || 0
+    }
 
     const stats = {
       module_count: modulesRes.data?.length || 0,
       lesson_count: lessonsRes.data?.length || 0,
-      question_count: questionsRes.data?.length || 0,
-    }
-
-    // Cert info
-    const certInfo = {
-      passing_score: course.passing_score,
-      max_score: course.max_score,
-      exam_duration_minutes: course.exam_duration_minutes,
-      total_questions_on_exam: course.total_questions_on_exam,
-      exam_fee_cents: course.exam_fee_cents,
-      provider_name: course.provider_name,
-      provider_url: course.provider_url,
+      question_count: questionCount,
     }
 
     // User progress
@@ -61,7 +61,6 @@ export async function GET(
     return NextResponse.json({
       ...course,
       stats,
-      cert_info: certInfo,
       user_progress: userProgress || null,
     })
   } catch (err) {

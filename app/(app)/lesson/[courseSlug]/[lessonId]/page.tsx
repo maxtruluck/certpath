@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ReadStep, WatchStep, AnswerStep, EmbedStep, CalloutStep } from '@/components/steps'
 import { getReadingTime } from '@/lib/markdown-components'
+import { createClient } from '@/lib/supabase/client'
 import type { Question, AnswerResult, EmbedContent, CalloutContent } from '@/lib/types/lesson-player'
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -13,7 +14,6 @@ interface StepData {
   title: string
   // read
   markdown?: string
-  videoUrl?: string | null
   // watch
   watchUrl?: string
   // answer
@@ -50,7 +50,6 @@ export default function LessonPlayerPage() {
   const [toast, setToast] = useState<string | null>(null)
 
   // Session metadata
-  const [sessionId, setSessionId] = useState('')
   const [courseId, setCourseId] = useState('')
   const [lessonTitle, setLessonTitle] = useState('')
   const [moduleTitle, setModuleTitle] = useState('')
@@ -106,6 +105,8 @@ export default function LessonPlayerPage() {
   const loadSession = useCallback(async () => {
     setLoading(true)
     try {
+      const supabase = createClient()
+
       // Get course info
       let resolvedCourseId: string
 
@@ -126,129 +127,108 @@ export default function LessonPlayerPage() {
 
       setCourseId(resolvedCourseId)
 
-      // Generate session
-      let url = `/api/session/generate?course_id=${resolvedCourseId}&lesson_id=${lessonId}`
-      if (isPreview) url += '&preview=true'
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to load lesson')
-      const data = await res.json()
+      // Fetch lesson info
+      const { data: lesson } = await supabase
+        .from('lessons')
+        .select('id, title, module_id, modules(title)')
+        .eq('id', lessonId)
+        .single()
 
-      setSessionId(data.session_id || '')
-      setLessonTitle(data.lesson_title || '')
-      setModuleTitle(data.module_title || '')
+      if (!lesson) throw new Error('Lesson not found')
+      setLessonTitle(lesson.title)
+      setModuleTitle((lesson as any).modules?.title || '')
 
-      // Convert API cards to StepData
-      const stepsData: StepData[] = []
-      for (const card of (data.cards || [])) {
-        switch (card.card_type) {
-          case 'lesson_section':
-            if (card.section?.video_url && !card.section?.content) {
-              stepsData.push({
-                type: 'watch',
-                title: card.section.title || '',
-                watchUrl: card.section.video_url,
-              })
-            } else {
-              stepsData.push({
-                type: 'read',
-                title: card.section?.title || '',
-                markdown: card.section?.content || '',
-                videoUrl: card.section?.video_url || null,
-              })
-            }
-            break
-          case 'question':
-            stepsData.push({
-              type: 'answer',
-              title: '',
-              question: card.question,
-            })
-            break
-          case 'embed':
-            stepsData.push({
-              type: 'embed',
-              title: card.step_title || '',
-              embedContent: card.content || {},
-            })
-            break
-          case 'callout':
-            stepsData.push({
-              type: 'callout',
-              title: card.step_title || card.content?.title || '',
-              calloutContent: card.content || {},
-            })
-            break
-          case 'graph':
-            stepsData.push({
-              type: 'embed',
-              title: card.step_title || '',
-              embedContent: { sub_type: 'math_graph', graph_data: card.graph_data },
-            })
-            break
-          case 'concept':
-            stepsData.push({
-              type: 'read',
-              title: card.concept?.title || '',
-              markdown: card.concept?.content || '',
-            })
-            break
-        }
-      }
+      // Fetch lesson steps
+      const { data: rawSteps } = await supabase
+        .from('lesson_steps')
+        .select('*')
+        .eq('lesson_id', lessonId)
+        .order('sort_order')
 
-      if (stepsData.length === 0) {
+      if (!rawSteps || rawSteps.length === 0) {
         setError('No content available for this lesson')
         setLoading(false)
         return
       }
 
-      setSteps(stepsData)
+      // Convert to StepData
+      const stepsData: StepData[] = rawSteps.map(step => {
+        const c = step.content || {}
+        switch (step.step_type) {
+          case 'watch':
+            return { type: 'watch' as const, title: step.title || '', watchUrl: c.video_url || c.url || '' }
+          case 'answer':
+            return {
+              type: 'answer' as const,
+              title: step.title || '',
+              question: {
+                id: step.id,
+                question_text: c.question_text || '',
+                question_type: c.question_type || 'multiple_choice',
+                options: c.options || [],
+                correct_option_ids: c.correct_ids || c.correct_option_ids || [],
+                explanation: c.explanation || '',
+                option_explanations: c.option_explanations || {},
+                acceptable_answers: c.acceptable_answers,
+                correct_order: c.correct_order,
+                matching_items: c.matching_pairs ? {
+                  lefts: c.matching_pairs.map((p: any) => p.left),
+                  rights: c.matching_pairs.map((p: any) => p.right),
+                } : undefined,
+              },
+            }
+          case 'embed':
+            return { type: 'embed' as const, title: step.title || '', embedContent: c }
+          case 'callout':
+            return { type: 'callout' as const, title: step.title || '', calloutContent: c }
+          case 'read':
+          default:
+            return { type: 'read' as const, title: step.title || '', markdown: c.markdown || c.body || '' }
+        }
+      })
 
-      // Count total questions
+      setSteps(stepsData)
       const qTotal = stepsData.filter(s => s.type === 'answer').length
       setQuestionsTotal(qTotal)
 
-      // Resume from step_completions (detailed progress from API)
-      const stepCompletions: { step_index: number; is_correct?: boolean }[] = data.step_completions || []
-      const savedStepIndex: number = data.current_step_index || 0
+      // Load progress
+      if (!isPreview) {
+        const { data: progress } = await supabase
+          .from('user_lesson_progress')
+          .select('status, current_step_index, step_completions')
+          .eq('lesson_id', lessonId)
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '')
+          .single()
 
-      if (stepCompletions.length > 0 && data.progress_status !== 'completed') {
-        const completedSet = new Set<number>()
-        for (const sc of stepCompletions) {
-          completedSet.add(sc.step_index)
-        }
-        setCompletedSteps(completedSet)
-
-        // Resume to the next uncompleted step after the saved position
-        const resumeIndex = Math.min(savedStepIndex + 1, stepsData.length - 1)
-        // If that step is already completed, find the first uncompleted one
-        let targetIndex = resumeIndex
-        if (completedSet.has(targetIndex)) {
-          // Find first uncompleted step
-          let found = false
-          for (let i = 0; i < stepsData.length; i++) {
-            if (!completedSet.has(i)) {
-              targetIndex = i
-              found = true
-              break
-            }
+        if (progress && progress.status !== 'completed') {
+          const completedSet = new Set<number>()
+          for (const sc of (progress.step_completions || [])) {
+            completedSet.add((sc as any).step_index)
           }
-          // All steps completed -- stay at last step
-          if (!found) targetIndex = stepsData.length - 1
+          setCompletedSteps(completedSet)
+          const savedIdx = progress.current_step_index || 0
+          let targetIndex = Math.min(savedIdx + 1, stepsData.length - 1)
+          if (completedSet.has(targetIndex)) {
+            let found = false
+            for (let i = 0; i < stepsData.length; i++) {
+              if (!completedSet.has(i)) { targetIndex = i; found = true; break }
+            }
+            if (!found) targetIndex = stepsData.length - 1
+          }
+          setCurrentStepIndex(targetIndex)
+        } else if (progress?.status === 'completed') {
+          const completedSet = new Set<number>()
+          for (let i = 0; i < stepsData.length; i++) completedSet.add(i)
+          setCompletedSteps(completedSet)
+          setCurrentStepIndex(0)
         }
-        setCurrentStepIndex(targetIndex)
-      } else if (data.progress_status === 'completed') {
-        // Lesson already completed -- show all as complete, start at step 0 for review
-        const completedSet = new Set<number>()
-        for (let i = 0; i < stepsData.length; i++) completedSet.add(i)
-        setCompletedSteps(completedSet)
-        setCurrentStepIndex(0)
       }
     } catch (err) {
       setError('Something went wrong loading this lesson')
       console.error('Lesson load error:', err)
     }
     setLoading(false)
-  }, [courseSlug, lessonId])
+  }, [courseSlug, lessonId, isPreview])
 
   useEffect(() => { loadSession() }, [loadSession])
 
@@ -466,7 +446,6 @@ export default function LessonPlayerPage() {
             <ReadStep
               title={currentStep.title}
               content={currentStep.markdown || ''}
-              videoUrl={currentStep.videoUrl}
               accentColor={accentColor}
             />
           )}
@@ -482,7 +461,6 @@ export default function LessonPlayerPage() {
             <AnswerStep
               key={`${currentStepIndex}-${isViewingCompleted ? 'ro' : 'rw'}`}
               question={currentStep.question}
-              sessionId={sessionId}
               onComplete={handleAnswerComplete}
               readOnly={isViewingCompleted}
               previousResult={stepAnswers[currentStepIndex]?.result}

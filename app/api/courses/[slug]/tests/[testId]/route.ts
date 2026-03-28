@@ -3,8 +3,8 @@ import { getApiUser } from '@/lib/supabase/get-user-api'
 
 /**
  * POST /api/courses/[slug]/tests/[testId] — Start a new test attempt.
- * Generates a random set of questions from the pool, snapshots them,
- * creates a test_attempt row, and returns questions (without answers).
+ * Fetches all questions from test_questions, shuffles them,
+ * snapshots into a test_attempt row, and returns questions (without answers).
  */
 export async function POST(
   _request: NextRequest,
@@ -40,34 +40,19 @@ export async function POST(
       return NextResponse.json({ error: 'Not enrolled' }, { status: 403 })
     }
 
-    // Fetch test
+    // Fetch test (only columns that exist)
     const { data: test } = await supabase
       .from('tests')
-      .select('*')
+      .select('id, title, course_id, passing_score, time_limit_minutes')
       .eq('id', testId)
       .eq('course_id', course.id)
-      .eq('status', 'published')
       .single()
 
     if (!test) {
       return NextResponse.json({ error: 'Test not found' }, { status: 404 })
     }
 
-    // Check max_attempts for final_assessment
-    if (test.max_attempts) {
-      const { count } = await supabase
-        .from('test_attempts')
-        .select('id', { count: 'exact', head: true })
-        .eq('test_id', testId)
-        .eq('user_id', userId)
-        .in('status', ['completed', 'in_progress'])
-
-      if ((count || 0) >= test.max_attempts) {
-        return NextResponse.json({ error: 'Maximum attempts reached' }, { status: 409 })
-      }
-    }
-
-    // Check for existing in_progress attempt
+    // Check for existing in_progress attempt — resume if found
     const { data: existingAttempt } = await supabase
       .from('test_attempts')
       .select('*')
@@ -82,7 +67,6 @@ export async function POST(
       // Resume existing attempt - return questions without answers
       const questions = (existingAttempt.questions || []).map((q: any) => ({
         question_id: q.question_id,
-        source: q.source,
         question_text: q.question_content.question_text,
         question_type: q.question_content.question_type || 'multiple_choice',
         options: q.question_content.options?.map((o: any) => ({ id: o.id, text: o.text })),
@@ -94,7 +78,6 @@ export async function POST(
         attempt_id: existingAttempt.id,
         resumed: true,
         test_title: test.title,
-        test_type: test.test_type,
         time_limit_minutes: test.time_limit_minutes,
         started_at: existingAttempt.started_at,
         questions,
@@ -102,36 +85,34 @@ export async function POST(
       })
     }
 
-    // ── Build question pool ─────────────────────────────────────────
-    const pool = await buildQuestionPool(supabase, course.id, test.module_id, test.test_type)
+    // ── Fetch all questions from test_questions ────────────────────────
+    const { data: testQuestions, error: tqError } = await supabase
+      .from('test_questions')
+      .select('*')
+      .eq('test_id', testId)
+      .order('sort_order', { ascending: true })
 
-    if (pool.length === 0) {
-      return NextResponse.json({ error: 'No questions available in pool' }, { status: 400 })
+    if (tqError) {
+      console.error('Fetch test_questions error:', tqError)
+      return NextResponse.json({ error: 'Failed to load questions' }, { status: 500 })
     }
 
-    // ── Select & shuffle ────────────────────────────────────────────
-    const selected = selectRandom(pool, test.question_count)
-
-    if (test.shuffle_questions) {
-      shuffleArray(selected)
+    if (!testQuestions || testQuestions.length === 0) {
+      return NextResponse.json({ error: 'No questions available for this test' }, { status: 400 })
     }
 
-    // Snapshot questions (with answers for grading, but strip for client)
-    const snapshotQuestions = selected.map(q => {
-      const content = { ...q.content }
-      if (test.shuffle_options && content.options) {
-        content.options = [...content.options]
-        shuffleArray(content.options)
-      }
-      return {
-        question_id: q.id,
-        source: q.source,
-        question_content: content,
-        selected_answer: null,
-        is_correct: null,
-        flagged: false,
-      }
-    })
+    // Always shuffle the question order
+    const shuffled = [...testQuestions]
+    shuffleArray(shuffled)
+
+    // Snapshot questions (full data for grading, stripped for client)
+    const snapshotQuestions = shuffled.map((q: any) => ({
+      question_id: q.id,
+      question_content: q,
+      selected_answer: null,
+      is_correct: null,
+      flagged: false,
+    }))
 
     // Create attempt
     const { data: attempt, error: attemptError } = await supabase
@@ -151,9 +132,8 @@ export async function POST(
     }
 
     // Return questions without correct answers
-    const clientQuestions = snapshotQuestions.map(q => ({
+    const clientQuestions = snapshotQuestions.map((q: any) => ({
       question_id: q.question_id,
-      source: q.source,
       question_text: q.question_content.question_text,
       question_type: q.question_content.question_type || 'multiple_choice',
       options: q.question_content.options?.map((o: any) => ({ id: o.id, text: o.text })),
@@ -165,7 +145,6 @@ export async function POST(
       attempt_id: attempt.id,
       resumed: false,
       test_title: test.title,
-      test_type: test.test_type,
       time_limit_minutes: test.time_limit_minutes,
       started_at: attempt.started_at,
       questions: clientQuestions,
@@ -179,92 +158,6 @@ export async function POST(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-interface PoolQuestion {
-  id: string
-  source: 'step' | 'pool'
-  content: any
-}
-
-async function buildQuestionPool(
-  supabase: any,
-  courseId: string,
-  moduleId: string | null,
-  testType: string,
-): Promise<PoolQuestion[]> {
-  const pool: PoolQuestion[] = []
-  const seenTexts = new Set<string>()
-
-  const isModuleScope = testType === 'module_quiz' && moduleId
-
-  // 1. Get Answer steps from lessons
-  let lessonQuery = supabase
-    .from('lessons')
-    .select('id')
-    .eq('course_id', courseId)
-    .eq('is_active', true)
-
-  if (isModuleScope) {
-    lessonQuery = lessonQuery.eq('module_id', moduleId)
-  }
-
-  const { data: lessons } = await lessonQuery
-
-  if (lessons && lessons.length > 0) {
-    const lessonIds = lessons.map((l: any) => l.id)
-
-    const { data: steps } = await supabase
-      .from('lesson_steps')
-      .select('id, content')
-      .in('lesson_id', lessonIds)
-      .eq('step_type', 'answer')
-
-    for (const step of steps || []) {
-      const text = step.content?.question_text || ''
-      if (text && !seenTexts.has(text)) {
-        seenTexts.add(text)
-        pool.push({
-          id: step.id,
-          source: 'step',
-          content: step.content,
-        })
-      }
-    }
-  }
-
-  // 2. Get standalone pool questions
-  let poolQuery = supabase
-    .from('question_pool')
-    .select('id, content')
-    .eq('course_id', courseId)
-
-  if (isModuleScope) {
-    poolQuery = poolQuery.eq('module_id', moduleId)
-  }
-
-  const { data: poolQuestions } = await poolQuery
-
-  for (const pq of poolQuestions || []) {
-    const text = pq.content?.question_text || ''
-    if (text && !seenTexts.has(text)) {
-      seenTexts.add(text)
-      pool.push({
-        id: pq.id,
-        source: 'pool',
-        content: pq.content,
-      })
-    }
-  }
-
-  return pool
-}
-
-function selectRandom<T>(arr: T[], n: number): T[] {
-  if (arr.length <= n) return [...arr]
-  const copy = [...arr]
-  shuffleArray(copy)
-  return copy.slice(0, n)
-}
 
 function shuffleArray<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {

@@ -40,12 +40,11 @@ export async function POST(
       return NextResponse.json({ error: 'Already enrolled in this course' }, { status: 409 })
     }
 
-    // Find first lesson (lowest display_order, active)
+    // Find first lesson (lowest display_order)
     const { data: firstLesson } = await supabase
       .from('lessons')
       .select('id')
       .eq('course_id', course.id)
-      .eq('is_active', true)
       .order('display_order', { ascending: true })
       .limit(1)
       .maybeSingle()
@@ -57,9 +56,7 @@ export async function POST(
         user_id: userId,
         course_id: course.id,
         status: 'active',
-        current_topic_id: null,
         current_lesson_id: firstLesson?.id || null,
-        readiness_score: 0,
         questions_seen: 0,
         questions_correct: 0,
         sessions_completed: 0,

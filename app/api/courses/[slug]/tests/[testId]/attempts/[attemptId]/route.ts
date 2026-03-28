@@ -28,10 +28,10 @@ export async function GET(
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 })
     }
 
-    // Get test settings for show_results
+    // Get test settings
     const { data: test } = await supabase
       .from('tests')
-      .select('title, test_type, passing_score, show_results, max_attempts, time_limit_minutes')
+      .select('title, passing_score, time_limit_minutes')
       .eq('id', attempt.test_id)
       .single()
 
@@ -39,29 +39,10 @@ export async function GET(
       return NextResponse.json({ error: 'Test not found' }, { status: 404 })
     }
 
-    // Determine if we can show full results
-    let showFullResults = false
-    if (attempt.status === 'completed') {
-      if (test.show_results === 'after_submit') {
-        showFullResults = true
-      } else if (test.show_results === 'after_all_attempts' && test.max_attempts) {
-        const { count } = await supabase
-          .from('test_attempts')
-          .select('id', { count: 'exact', head: true })
-          .eq('test_id', attempt.test_id)
-          .eq('user_id', userId)
-          .in('status', ['completed'])
-
-        showFullResults = (count || 0) >= test.max_attempts
-      }
-      // 'never' → showFullResults stays false
-    }
-
-    // Build response
+    // Build response — always show full results when completed
     const questions = (attempt.questions || []).map((q: any) => {
       const base: any = {
         question_id: q.question_id,
-        source: q.source,
         question_text: q.question_content?.question_text,
         question_type: q.question_content?.question_type || 'multiple_choice',
         options: q.question_content?.options?.map((o: any) => ({ id: o.id, text: o.text })),
@@ -69,14 +50,11 @@ export async function GET(
         flagged: q.flagged || false,
       }
 
-      if (showFullResults && attempt.status === 'completed') {
+      if (attempt.status === 'completed') {
         base.is_correct = q.is_correct
         base.correct_ids = q.question_content?.correct_ids
         base.explanation = q.question_content?.explanation
         base.option_explanations = q.question_content?.option_explanations
-      } else if (attempt.status === 'completed') {
-        // Show only is_correct (pass/fail per question), not the answers
-        base.is_correct = q.is_correct
       }
 
       return base
@@ -85,7 +63,6 @@ export async function GET(
     return NextResponse.json({
       attempt_id: attempt.id,
       test_title: test.title,
-      test_type: test.test_type,
       status: attempt.status,
       started_at: attempt.started_at,
       completed_at: attempt.completed_at,
@@ -95,7 +72,7 @@ export async function GET(
       passed: attempt.passed,
       passing_score: test.passing_score,
       time_limit_minutes: test.time_limit_minutes,
-      show_full_results: showFullResults,
+      show_full_results: attempt.status === 'completed',
       questions,
       total_questions: questions.length,
     })
@@ -193,7 +170,7 @@ export async function POST(
     // Get test for passing score
     const { data: test } = await supabase
       .from('tests')
-      .select('passing_score, show_results, max_attempts, time_limit_minutes')
+      .select('passing_score, time_limit_minutes')
       .eq('id', attempt.test_id)
       .single()
 
@@ -255,10 +232,7 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to submit' }, { status: 500 })
     }
 
-    // Determine what results to show
-    let showFullResults = test.show_results === 'after_submit'
-
-    // Build response
+    // Always return full results
     const result: any = {
       attempt_id: attemptId,
       status: 'completed',
@@ -268,11 +242,8 @@ export async function POST(
       passing_score: test.passing_score,
       time_spent_seconds: timeSpent,
       total_questions: questions.length,
-      show_full_results: showFullResults,
-    }
-
-    if (showFullResults) {
-      result.questions = questions.map((q: any) => ({
+      show_full_results: true,
+      questions: questions.map((q: any) => ({
         question_id: q.question_id,
         question_text: q.question_content?.question_text,
         question_type: q.question_content?.question_type || 'multiple_choice',
@@ -282,7 +253,7 @@ export async function POST(
         correct_ids: q.question_content?.correct_ids,
         explanation: q.question_content?.explanation,
         option_explanations: q.question_content?.option_explanations,
-      }))
+      })),
     }
 
     return NextResponse.json(result)

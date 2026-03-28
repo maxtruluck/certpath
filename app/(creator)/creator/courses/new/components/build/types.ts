@@ -13,11 +13,12 @@ export interface Step {
 
 export interface Lesson {
   id: string
-  title: string
-  body: string | null
-  video_url: string | null
-  display_order: number
   module_id: string
+  course_id?: string
+  title: string
+  display_order: number
+  created_at?: string
+  updated_at?: string
   question_count: number
   word_count: number
   step_count: number
@@ -50,12 +51,6 @@ export interface Question {
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-export function getContentType(lesson: Lesson): 'video' | 'text' | 'empty' {
-  if (lesson.video_url && lesson.video_url.trim()) return 'video'
-  if (lesson.body && lesson.body.trim().length > 0) return 'text'
-  return 'empty'
-}
-
 export function hasContent(lesson: Lesson): boolean {
-  return lesson.step_count > 0 || getContentType(lesson) !== 'empty' || lesson.question_count > 0
+  return lesson.step_count > 0 || lesson.question_count > 0
 }

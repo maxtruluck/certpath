@@ -9,8 +9,6 @@ interface CreatorProfile {
   creator_name: string
   bio: string | null
   avatar_url: string | null
-  is_founding_creator: boolean
-  founding_creator_expires_at: string | null
   revenue_share_percent: number
   stripe_account_id: string | null
   onboarding_checklist_dismissed: boolean
@@ -44,7 +42,6 @@ interface CourseItem {
   difficulty: string
   is_free: boolean
   price_cents: number
-  cover_image_url: string | null
   module_count: number
   lesson_count: number
   question_count: number
@@ -188,28 +185,6 @@ function SetupChecklist({ checklist }: { checklist: Checklist }) {
             className="h-full bg-emerald-500 rounded-full transition-all duration-500"
             style={{ width: `${progressPercent}%` }}
           />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Founding Creator Banner ────────────────────────────────────
-function FoundingCreatorBanner() {
-  return (
-    <div className="bg-gray-900 rounded-2xl p-6 text-white">
-      <div className="flex items-start gap-3">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="mt-0.5 flex-shrink-0">
-          <path d="M10 2L12.09 7.26L18 8.27L14 12.14L14.81 18.02L10 15.27L5.19 18.02L6 12.14L2 8.27L7.91 7.26L10 2Z" fill="#FBBF24" stroke="#FBBF24" strokeWidth="1.5" strokeLinejoin="round" />
-        </svg>
-        <div>
-          <h3 className="text-base font-bold">You're a founding creator</h3>
-          <p className="text-sm text-gray-300 mt-1 leading-relaxed">
-            You earn 80% of every sale (vs. 70% standard) for the first 12 months. No platform fees. This is locked in from your first published course.
-          </p>
-          <a href="#" className="text-xs text-blue-400 hover:text-blue-300 font-medium mt-2 inline-block">
-            Learn more about creator terms &rarr;
-          </a>
         </div>
       </div>
     </div>
@@ -367,8 +342,6 @@ export default function CreatorDashboard() {
         </div>
 
         <SetupChecklist checklist={checklist} />
-
-        {creator.is_founding_creator && <FoundingCreatorBanner />}
       </div>
     )
   }
@@ -398,9 +371,6 @@ export default function CreatorDashboard() {
       {!checklist.dismissed && !(checklist.profile_complete && checklist.stripe_connected && checklist.first_course_created) && (
         <SetupChecklist checklist={checklist} />
       )}
-
-      {/* Founding creator banner */}
-      {creator.is_founding_creator && <FoundingCreatorBanner />}
 
       {/* Stats row -- only when published courses with enrollments exist */}
       {hasPublishedCourses && hasEnrollments && (

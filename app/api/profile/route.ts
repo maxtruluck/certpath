@@ -31,12 +31,6 @@ export async function GET(request: NextRequest) {
     const totalQuestionsCorrect = courses.reduce((sum: number, c: any) => sum + (c.questions_correct || 0), 0)
     const totalSessions = courses.reduce((sum: number, c: any) => sum + (c.sessions_completed || 0), 0)
 
-    // Get total review log entries
-    const { count: totalReviews } = await supabase
-      .from('review_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-
     // Fetch completed course details
     const completedCourseIds = completedCourses.map((c: any) => c.course_id)
     let completedCourseDetails: any[] = []
@@ -44,7 +38,7 @@ export async function GET(request: NextRequest) {
     if (completedCourseIds.length > 0) {
       const { data: courseData } = await supabase
         .from('courses')
-        .select('id, title, slug, description, category, difficulty, thumbnail_url, provider_name')
+        .select('id, title, slug, description, category, difficulty')
         .in('id', completedCourseIds)
 
       completedCourseDetails = completedCourses.map((uc: any) => {
@@ -67,7 +61,6 @@ export async function GET(request: NextRequest) {
           ? Math.round((totalQuestionsCorrect / totalQuestionsSeen) * 100)
           : 0,
         total_sessions: totalSessions,
-        total_reviews: totalReviews || 0,
       },
       completed_courses: completedCourseDetails,
     })

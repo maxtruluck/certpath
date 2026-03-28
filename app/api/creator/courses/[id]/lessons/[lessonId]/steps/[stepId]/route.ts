@@ -33,31 +33,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Failed to update step' }, { status: 500 })
     }
 
-    // For answer steps, sync content back to the linked questions row
-    if (step.step_type === 'answer' && body.content?.question_id) {
-      const qUpdates: Record<string, unknown> = {}
-      const c = body.content
-      if (c.question_text !== undefined) qUpdates.question_text = c.question_text
-      if (c.question_type !== undefined) qUpdates.question_type = c.question_type
-      if (c.options !== undefined) qUpdates.options = c.options
-      if (c.correct_ids !== undefined) qUpdates.correct_option_ids = c.correct_ids
-      if (c.explanation !== undefined) qUpdates.explanation = c.explanation
-      if (c.difficulty !== undefined) qUpdates.difficulty = c.difficulty
-      if (c.tags !== undefined) qUpdates.tags = c.tags
-      if (c.option_explanations !== undefined) qUpdates.option_explanations = c.option_explanations
-      if (c.acceptable_answers !== undefined) qUpdates.acceptable_answers = c.acceptable_answers
-      if (c.match_mode !== undefined) qUpdates.match_mode = c.match_mode
-      if (c.correct_order !== undefined) qUpdates.correct_order = c.correct_order
-      if (c.matching_pairs !== undefined) qUpdates.matching_pairs = c.matching_pairs
-
-      if (Object.keys(qUpdates).length > 0) {
-        await supabase
-          .from('questions')
-          .update(qUpdates)
-          .eq('id', c.question_id)
-      }
-    }
-
     return NextResponse.json(step)
   } catch (err) {
     console.error('PATCH step error:', err)
@@ -74,24 +49,16 @@ export async function DELETE(
     const { supabase, error } = await getCreatorCourse(id)
     if (error) return error
 
-    // Fetch step first to check for linked question
+    // Fetch step to verify it exists
     const { data: step } = await supabase
       .from('lesson_steps')
-      .select('id, sort_order, step_type, content')
+      .select('id, sort_order')
       .eq('id', stepId)
       .eq('lesson_id', lessonId)
       .single()
 
     if (!step) {
       return NextResponse.json({ error: 'Step not found' }, { status: 404 })
-    }
-
-    // Soft-delete linked question for answer steps
-    if (step.step_type === 'answer' && step.content?.question_id) {
-      await supabase
-        .from('questions')
-        .update({ is_active: false })
-        .eq('id', step.content.question_id)
     }
 
     // Delete the step

@@ -12,8 +12,6 @@ export interface CourseFormData {
   prerequisites: string
   learning_objectives: string[]
   card_color: string
-  cover_image_url: string
-  progression_type: string
 }
 
 export const INITIAL_FORM: CourseFormData = {
@@ -27,8 +25,6 @@ export const INITIAL_FORM: CourseFormData = {
   prerequisites: '',
   learning_objectives: ['', ''],
   card_color: '#3b82f6',
-  cover_image_url: '',
-  progression_type: 'linear',
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'

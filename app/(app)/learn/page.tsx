@@ -58,9 +58,9 @@ export default function LearnPage() {
         >
           <h3 className="font-bold text-gray-900 mb-1">{uc.course.title}</h3>
           <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round((uc.readiness_score || 0) * 100)}%` }} />
+            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${uc.progress_percent || 0}%` }} />
           </div>
-          <p className="text-xs text-gray-500">{Math.round((uc.readiness_score || 0) * 100)}% ready</p>
+          <p className="text-xs text-gray-500">{uc.progress_percent || 0}% complete</p>
         </Link>
       ))}
     </div>

@@ -8,7 +8,6 @@ import { MathText } from '@/lib/math-text'
 
 interface TestQuestion {
   question_id: string
-  source: 'step' | 'pool'
   question_text: string
   question_type: string
   options?: { id: string; text: string }[]
@@ -19,7 +18,6 @@ interface TestQuestion {
 interface TestSession {
   attempt_id: string
   test_title: string
-  test_type: string
   time_limit_minutes: number | null
   started_at: string
   questions: TestQuestion[]
@@ -33,7 +31,6 @@ interface TestResult {
   passing_score: number
   time_spent_seconds: number
   total_questions: number
-  show_full_results: boolean
   questions?: any[]
 }
 
@@ -254,7 +251,7 @@ export default function TestPlayerPage() {
           </div>
 
           {/* Question review */}
-          {result.show_full_results && result.questions && (
+          {result.questions && (
             <div className="space-y-3 mb-8">
               <h3 className="text-sm font-bold text-[#2C2825]">Question Review</h3>
               {result.questions.map((q: any, idx: number) => (

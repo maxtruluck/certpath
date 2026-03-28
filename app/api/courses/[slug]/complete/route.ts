@@ -23,10 +23,10 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
-    // Verify enrollment
+    // Verify enrollment and get aggregate stats
     const { data: userCourse } = await supabase
       .from('user_courses')
-      .select('readiness_score, questions_seen, questions_correct, sessions_completed')
+      .select('questions_seen, questions_correct, sessions_completed')
       .eq('user_id', userId)
       .eq('course_id', course.id)
       .maybeSingle()
@@ -35,36 +35,59 @@ export async function GET(
       return NextResponse.json({ error: 'Not enrolled in this course' }, { status: 403 })
     }
 
-    // Fetch modules with question stats for per-module readiness
-    const { data: modules } = await supabase
-      .from('modules')
-      .select('id, title, display_order')
-      .eq('course_id', course.id)
-      .order('display_order', { ascending: true })
+    // Fetch lesson progress, total lessons, tests, and test attempts in parallel
+    const [
+      { data: lessonProgress },
+      { data: allLessons },
+      { data: tests },
+      { data: testAttempts },
+    ] = await Promise.all([
+      supabase
+        .from('user_lesson_progress')
+        .select('lesson_id, status')
+        .eq('user_id', userId)
+        .eq('course_id', course.id),
+      supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', course.id),
+      supabase
+        .from('tests')
+        .select('id, title, passing_score')
+        .eq('course_id', course.id),
+      supabase
+        .from('test_attempts')
+        .select('test_id, score_percent, passed, status')
+        .eq('user_id', userId),
+    ])
 
-    // Get per-module question accuracy from review_log
-    const { data: reviewLogs } = await supabase
-      .from('review_log')
-      .select('module_id, is_correct')
-      .eq('user_id', userId)
-      .eq('course_id', course.id)
+    // Lesson progress stats
+    const totalLessons = allLessons?.length || 0
+    const completedLessons = (lessonProgress || []).filter(
+      (p: any) => p.status === 'completed'
+    ).length
 
-    const moduleStats: Record<string, { correct: number; total: number }> = {}
-    for (const log of reviewLogs || []) {
-      if (!log.module_id) continue
-      if (!moduleStats[log.module_id]) moduleStats[log.module_id] = { correct: 0, total: 0 }
-      moduleStats[log.module_id].total++
-      if (log.is_correct) moduleStats[log.module_id].correct++
+    // Best score per test
+    const testIds = new Set((tests || []).map((t: any) => t.id))
+    const bestByTest: Record<string, { best_score: number | null; passed: boolean }> = {}
+    for (const a of testAttempts || []) {
+      if (a.status !== 'completed' || !testIds.has(a.test_id)) continue
+      if (!bestByTest[a.test_id]) {
+        bestByTest[a.test_id] = { best_score: null, passed: false }
+      }
+      if (a.score_percent != null) {
+        if (bestByTest[a.test_id].best_score === null || a.score_percent > bestByTest[a.test_id].best_score!) {
+          bestByTest[a.test_id].best_score = a.score_percent
+        }
+      }
+      if (a.passed) bestByTest[a.test_id].passed = true
     }
 
-    const moduleReadiness = (modules || []).map((mod: { id: string; title: string }) => {
-      const stats = moduleStats[mod.id]
-      const readiness = stats && stats.total > 0 ? stats.correct / stats.total : 0
-      return {
-        module_title: mod.title,
-        readiness,
-      }
-    })
+    const testResults = (tests || []).map((t: any) => ({
+      test_title: t.title,
+      best_score: bestByTest[t.id]?.best_score ?? null,
+      passed: bestByTest[t.id]?.passed ?? false,
+    }))
 
     const accuracy = userCourse.questions_seen > 0
       ? userCourse.questions_correct / userCourse.questions_seen
@@ -72,11 +95,14 @@ export async function GET(
 
     return NextResponse.json({
       course_title: course.title,
-      final_readiness: userCourse.readiness_score || 0,
       questions_seen: userCourse.questions_seen || 0,
       accuracy,
       sessions_completed: userCourse.sessions_completed || 0,
-      module_readiness: moduleReadiness,
+      lesson_progress: {
+        completed: completedLessons,
+        total: totalLessons,
+      },
+      test_results: testResults,
     })
   } catch (err) {
     console.error('GET /api/courses/[slug]/complete error:', err)

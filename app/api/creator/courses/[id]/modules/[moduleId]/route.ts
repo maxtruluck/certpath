@@ -11,12 +11,11 @@ export async function PATCH(
     if (error) return error
 
     const body = await request.json()
-    const { title, description, weight_percent } = body
+    const { title, description } = body
 
     const updates: Record<string, unknown> = {}
     if (title !== undefined) updates.title = title.trim()
     if (description !== undefined) updates.description = description
-    if (weight_percent !== undefined) updates.weight_percent = weight_percent
 
     const { data: mod, error: updateError } = await supabase
       .from('modules')

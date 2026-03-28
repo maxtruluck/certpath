@@ -8,7 +8,6 @@ export interface SessionQuestion {
   question_type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'fill_blank' | 'ordering' | 'matching';
   options: { id: string; text: string }[];
   difficulty: number;
-  topic_id?: string;
   topic_title?: string;
 }
 

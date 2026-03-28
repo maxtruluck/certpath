@@ -9,8 +9,6 @@ export interface LessonSectionCard {
     lesson_id: string;
     lesson_title: string;
     video_url: string | null;
-    video_start_seconds: number | null;
-    video_end_seconds: number | null;
   };
 }
 
@@ -31,7 +29,6 @@ export interface QuestionCard {
   card_type: 'question';
   question: {
     id: string;
-    topic_id?: string;
     module_id?: string;
     course_id?: string;
     lesson_id: string | null;

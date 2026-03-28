@@ -15,8 +15,6 @@ interface LessonData {
   title: string;
   display_order: number;
   state: LessonState;
-  question_count: number;
-  word_count: number;
   items_completed: number;
   items_total: number;
 }
@@ -24,11 +22,9 @@ interface LessonData {
 interface TestData {
   id: string;
   title: string;
-  test_type: string;
   question_count: number;
   time_limit_minutes: number | null;
   passing_score: number;
-  max_attempts: number | null;
   best_score: number | null;
   passed: boolean;
   attempts_count: number;
@@ -39,11 +35,7 @@ interface ModuleData {
   title: string;
   description: string | null;
   display_order: number;
-  weight_percent: number;
   lessons: LessonData[];
-  tests: TestData[];
-  best_test_score: number | null;
-  assessment_id: string | null;
 }
 
 interface PathResponse {
@@ -142,11 +134,7 @@ function LessonRow({
       case 'locked':
         return 'Locked';
       case 'available':
-        return lesson.word_count > 0
-          ? `${lesson.word_count.toLocaleString()} words`
-          : lesson.question_count > 0
-            ? `${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'}`
-            : 'Start';
+        return 'Start';
       case 'in_progress':
         return lesson.items_total > 0
           ? `${lesson.items_completed}/${lesson.items_total} complete`
@@ -244,13 +232,10 @@ function TestRow({
   // Module quizzes lock until all module lessons completed
   // Practice exams are always unlocked
   // Final assessments lock until all module quizzes passed
-  const isLocked = test.test_type === 'module_quiz' && !allLessonsCompleted;
+  const isLocked = !allLessonsCompleted;
   const hasPassed = test.passed;
 
-  const subtitle = [
-    `${test.question_count} questions`,
-    test.time_limit_minutes ? `${test.time_limit_minutes} min` : 'Untimed',
-  ].join(' \u00B7 ');
+  const subtitle = test.time_limit_minutes ? `${test.time_limit_minutes} min` : 'Untimed';
 
   const content = (
     <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
@@ -416,11 +401,6 @@ function CoursePathContent() {
               <h3 className="text-sm font-bold text-[#2C2825]">
                 {mod.title}
               </h3>
-              {mod.weight_percent > 0 && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B635A]">
-                  {mod.weight_percent}%
-                </span>
-              )}
             </div>
           </div>
 
@@ -432,24 +412,12 @@ function CoursePathContent() {
                 lesson={lesson}
                 moduleIndex={modIdx}
                 lessonIndex={lessonIdx}
-                isLast={lessonIdx === mod.lessons.length - 1 && (!mod.tests || mod.tests.length === 0)}
+                isLast={lessonIdx === mod.lessons.length - 1}
                 slug={slug}
                 onLockedTap={showLockedToast}
               />
             ))}
 
-            {/* Module quizzes */}
-            {mod.tests && mod.tests.map(test => {
-              const allModuleLessonsCompleted = mod.lessons.every(l => l.state === 'completed')
-              return (
-                <TestRow
-                  key={test.id}
-                  test={test}
-                  slug={slug}
-                  allLessonsCompleted={allModuleLessonsCompleted}
-                />
-              )
-            })}
           </div>
         </div>
       ))}

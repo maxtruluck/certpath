@@ -14,47 +14,27 @@ export async function PATCH(
     const updates: Record<string, unknown> = {}
 
     if (body.title !== undefined) updates.title = body.title.trim()
-    if (body.body !== undefined) updates.body = body.body
     if (body.display_order !== undefined) updates.display_order = body.display_order
-    if (body.is_active !== undefined) updates.is_active = body.is_active
-    if (body.video_url !== undefined) updates.video_url = body.video_url
     if (body.module_id !== undefined) updates.module_id = body.module_id
 
-    if (Object.keys(updates).length === 0 && !body.question_section_updates) {
+    if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    let lesson = null
-    if (Object.keys(updates).length > 0) {
-      const { data, error: updateError } = await supabase
-        .from('lessons')
-        .update(updates)
-        .eq('id', lessonId)
-        .eq('course_id', id)
-        .select('*')
-        .single()
+    const { data: lesson, error: updateError } = await supabase
+      .from('lessons')
+      .update(updates)
+      .eq('id', lessonId)
+      .eq('course_id', id)
+      .select('*')
+      .single()
 
-      if (updateError) {
-        console.error('Update lesson error:', updateError)
-        return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 })
-      }
-      lesson = data
+    if (updateError) {
+      console.error('Update lesson error:', updateError)
+      return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 })
     }
 
-    // Update question section_index values if provided (from useAutoSave recompute)
-    if (body.question_section_updates && Array.isArray(body.question_section_updates)) {
-      for (const update of body.question_section_updates) {
-        if (update.question_id && update.section_index !== undefined) {
-          await supabase
-            .from('questions')
-            .update({ section_index: update.section_index })
-            .eq('id', update.question_id)
-            .eq('course_id', id)
-        }
-      }
-    }
-
-    return NextResponse.json(lesson || { success: true })
+    return NextResponse.json(lesson)
   } catch (err) {
     console.error('PATCH lesson error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

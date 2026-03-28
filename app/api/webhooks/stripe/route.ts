@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
       .from('lessons')
       .select('id')
       .eq('course_id', course_id)
-      .eq('is_active', true)
       .order('display_order', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -76,7 +75,6 @@ export async function POST(request: NextRequest) {
         course_id,
         status: 'active',
         current_lesson_id: firstLesson?.id || null,
-        readiness_score: 0,
         questions_seen: 0,
         questions_correct: 0,
         sessions_completed: 0,

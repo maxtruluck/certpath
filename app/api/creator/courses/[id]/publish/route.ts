@@ -13,7 +13,7 @@ export async function POST(
     // Verify creator
     const { data: creator } = await supabase
       .from('creators')
-      .select('id, is_founding_creator, founding_creator_expires_at')
+      .select('id')
       .eq('user_id', userId)
       .single()
 
@@ -49,18 +49,32 @@ export async function POST(
 
     const { data: lessons } = await supabase
       .from('lessons')
-      .select('id, body')
+      .select('id')
       .eq('course_id', id)
-      .eq('is_active', true)
 
-    // Check for lessons with body content (>= 50 chars)
-    const lessonsWithContent = (lessons || []).filter(
-      (l: any) => (l.body || '').length >= 50
-    )
+    // Count lesson_steps per lesson to verify content exists
+    const lessonIds = (lessons || []).map((l: any) => l.id)
+    let lessonsWithSteps = 0
+    let totalStepCount = 0
+
+    if (lessonIds.length > 0) {
+      const { data: steps } = await supabase
+        .from('lesson_steps')
+        .select('id, lesson_id')
+        .in('lesson_id', lessonIds)
+
+      const stepsByLesson = new Map<string, number>()
+      for (const s of steps || []) {
+        stepsByLesson.set(s.lesson_id, (stepsByLesson.get(s.lesson_id) || 0) + 1)
+      }
+
+      totalStepCount = (steps || []).length
+      lessonsWithSteps = stepsByLesson.size
+    }
 
     const missing: string[] = []
     if (!modules || modules.length === 0) missing.push('at least 1 module')
-    if (lessonsWithContent.length === 0) missing.push('at least 1 lesson with content')
+    if (lessonsWithSteps === 0) missing.push('at least 1 lesson with content')
 
     if (missing.length > 0) {
       return NextResponse.json(
@@ -69,27 +83,14 @@ export async function POST(
       )
     }
 
-    // Compute estimated_duration_minutes from total word count
-    const totalWords = (lessons || []).reduce((sum: number, l: any) => {
-      return sum + (l.body || '').split(/\s+/).filter(Boolean).length
-    }, 0)
-    const estimatedMinutes = Math.max(1, Math.round(totalWords / 200))
+    // Estimate duration: 2 minutes per step
+    const estimatedMinutes = Math.max(1, totalStepCount * 2)
 
     const published_at = new Date().toISOString()
     const updateData: Record<string, unknown> = {
       status: 'published',
       published_at,
       estimated_duration_minutes: estimatedMinutes,
-    }
-
-    // Set founding creator expiry on first publish
-    if (creator.is_founding_creator && !creator.founding_creator_expires_at) {
-      const expiresAt = new Date()
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-      await supabase
-        .from('creators')
-        .update({ founding_creator_expires_at: expiresAt.toISOString() })
-        .eq('id', creator.id)
     }
 
     const { error: updateError } = await supabase

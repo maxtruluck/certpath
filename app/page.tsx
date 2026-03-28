@@ -12,7 +12,6 @@ interface FeaturedCourse {
   slug: string;
   is_free: boolean;
   price_cents: number | null;
-  thumbnail_url: string | null;
   creator_name: string;
   module_count: number;
   lesson_count: number;
@@ -24,7 +23,7 @@ async function getFeaturedCourses(): Promise<FeaturedCourse[]> {
 
     const { data: courses } = await supabase
       .from('courses')
-      .select('id, title, slug, is_free, price_cents, thumbnail_url, creator_id')
+      .select('id, title, slug, is_free, price_cents, creator_id')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
       .limit(6);
@@ -37,7 +36,7 @@ async function getFeaturedCourses(): Promise<FeaturedCourse[]> {
     const [{ data: creators }, { data: modules }, { data: lessons }] = await Promise.all([
       supabase.from('creators').select('id, creator_name').in('id', creatorIds),
       supabase.from('modules').select('id, course_id').in('course_id', courseIds),
-      supabase.from('lessons').select('id, course_id').in('course_id', courseIds).eq('is_active', true),
+      supabase.from('lessons').select('id, course_id').in('course_id', courseIds),
     ]);
 
     const creatorMap = new Map((creators || []).map(c => [c.id, c.creator_name]));
@@ -48,7 +47,6 @@ async function getFeaturedCourses(): Promise<FeaturedCourse[]> {
       slug: c.slug,
       is_free: c.is_free,
       price_cents: c.price_cents,
-      thumbnail_url: c.thumbnail_url || null,
       creator_name: creatorMap.get(c.creator_id) || 'Unknown',
       module_count: (modules || []).filter(m => m.course_id === c.id).length,
       lesson_count: (lessons || []).filter(l => l.course_id === c.id).length,
@@ -132,13 +130,7 @@ export default async function LandingPage() {
                 href={`/course/${course.slug}`}
                 className="group rounded-2xl bg-white border border-[#E8E4DD] overflow-hidden hover:border-[#D4CFC7] hover:shadow-sm transition-all"
               >
-                {course.thumbnail_url ? (
-                  <div className="h-32 overflow-hidden">
-                    <img src={course.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="h-1.5" style={{ backgroundColor: CARD_COLORS[i % CARD_COLORS.length] }} />
-                )}
+                <div className="h-1.5" style={{ backgroundColor: CARD_COLORS[i % CARD_COLORS.length] }} />
                 <div className="p-5">
                   <h3 className="font-bold text-[#2C2825] text-base mb-1 group-hover:text-[#1A1816]">
                     {course.title}
