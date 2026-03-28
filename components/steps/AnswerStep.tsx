@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -155,6 +155,16 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
   // Whether we should reveal correct answers (only after retries exhausted or correct)
   const retriesExhausted = wrongAttempts >= MAX_WRONG_ATTEMPTS
   const shouldReveal = answerResult?.is_correct || retriesExhausted
+
+  // Auto-fire onComplete when answer is finalized (correct or retries exhausted)
+  // This enables the parent's Next button immediately without requiring a Continue click
+  const completedRef = useRef(false)
+  useEffect(() => {
+    if (shouldReveal && answerResult && !completedRef.current) {
+      completedRef.current = true
+      onComplete(answerResult.is_correct)
+    }
+  }, [shouldReveal, answerResult, onComplete])
 
   function getOptionState(optionId: string): 'default' | 'selected' | 'correct' | 'incorrect' {
     if (!answerResult) return selectedIds.includes(optionId) ? 'selected' : 'default'
@@ -396,18 +406,13 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
             <p className="text-sm text-red-600">Give it another try.</p>
           )}
 
-          {!readOnly && (
+          {/* Show Try Again only on first wrong attempt (before retries exhausted) */}
+          {!readOnly && !effectiveResult.is_correct && !shouldReveal && (
             <button
               onClick={handleContinueOrRetry}
-              className={`w-full py-3 rounded-xl font-semibold transition-colors ${
-                effectiveResult.is_correct
-                  ? 'bg-green-500 hover:bg-green-600 text-white'
-                  : shouldReveal
-                    ? 'bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF]'
-                    : 'bg-white border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]'
-              }`}
+              className="w-full py-3 rounded-xl font-semibold transition-colors bg-white border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]"
             >
-              {effectiveResult.is_correct || shouldReveal ? 'Continue' : 'Try Again'}
+              Try Again
             </button>
           )}
         </div>
