@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
       setError(authError.message);
@@ -26,7 +26,20 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/home');
+    // Check role for redirect
+    let destination = '/home';
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+      if (profile?.role === 'creator') {
+        destination = '/creator';
+      }
+    }
+
+    router.push(destination);
     router.refresh();
   }
 

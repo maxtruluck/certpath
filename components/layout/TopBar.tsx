@@ -8,20 +8,22 @@ interface TopBarProps {
 
 export function TopBar({ userInitial = 'O' }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-50 bg-[#FAFAF8]/90 backdrop-blur-md border-b border-[#E8E4DD]">
-      <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-14">
-        <Link href="/home" className="flex items-baseline gap-0.5">
-          <span className="text-lg font-semibold text-[#2C2825] tracking-tight">open</span>
-          <span className="text-lg font-extrabold text-[#2C2825] tracking-tight">ED</span>
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#eee]">
+      <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-12">
+        <Link href="/home" className="flex items-baseline gap-0">
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>openED</span>
         </Link>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/profile"
-            className="w-8 h-8 rounded-full bg-[#F5F3EF] border border-[#E8E4DD] flex items-center justify-center text-sm font-semibold text-[#6B635A] hover:bg-[#EBE8E2] transition-colors"
-          >
-            {userInitial}
-          </Link>
-        </div>
+        <Link
+          href="/profile"
+          style={{
+            width: 28, height: 28, borderRadius: '50%',
+            backgroundColor: '#E6F1FB',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 600, color: '#185FA5',
+          }}
+        >
+          {userInitial}
+        </Link>
       </div>
     </header>
   );

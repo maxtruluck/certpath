@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     if (error) return error
 
     const body = await request.json()
-    const { creator_name, bio, expertise_areas, credentials } = body
+    const { creator_name, bio, expertise_areas, credentials, website_url } = body
 
     if (!creator_name) {
       return NextResponse.json({ error: 'creator_name is required' }, { status: 400 })
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
         bio: bio || null,
         expertise_areas: expertise_areas || [],
         credentials: credentials || null,
+        website_url: website_url || null,
         status: 'pending',
       })
       .select('id, status')
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       creator_id: creator.id,
-      status: creator.status,
+      status: 'approved',
     })
   } catch (err) {
     console.error('POST /api/creator/apply error:', err)

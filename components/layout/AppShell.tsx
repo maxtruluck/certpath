@@ -18,7 +18,7 @@ export function AppShell({ children, hideBottomNav = false, userInitial = 'O' }:
   const showNav = !hideBottomNav && !isPracticeRoute;
 
   return (
-    <div className="min-h-[100dvh] bg-[#FAFAF8]">
+    <div className="min-h-[100dvh] bg-white">
       {showNav && <TopBar userInitial={userInitial} />}
       <main className={`max-w-lg mx-auto px-4 ${showNav ? 'pb-24 pt-4' : 'pb-8'}`}>
         {children}

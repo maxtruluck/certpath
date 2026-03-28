@@ -12,15 +12,10 @@ import type { Question, AnswerResult, EmbedContent, CalloutContent } from '@/lib
 interface StepData {
   type: 'read' | 'watch' | 'answer' | 'embed' | 'callout'
   title: string
-  // read
   markdown?: string
-  // watch
   watchUrl?: string
-  // answer
   question?: Question
-  // embed
   embedContent?: EmbedContent
-  // callout
   calloutContent?: CalloutContent
 }
 
@@ -28,6 +23,19 @@ interface StepAnswer {
   isCorrect: boolean
   result: AnswerResult
   selectedIds: string[]
+}
+
+// ─── Step type badge config ─────────────────────────────────────
+
+const STEP_BADGES: Record<string, { label: string; bg: string; text: string }> = {
+  read: { label: 'Read', bg: '#E1F5EE', text: '#085041' },
+  watch: { label: 'Watch', bg: '#EDE9FF', text: '#3B2F8E' },
+  answer: { label: 'Answer', bg: '#FDEEE8', text: '#8B3518' },
+  embed: { label: 'Embed', bg: '#E6F1FB', text: '#0C447C' },
+  tip: { label: 'Tip', bg: '#FEF3CD', text: '#856404' },
+  key_concept: { label: 'Key Concept', bg: '#FEF3CD', text: '#856404' },
+  warning: { label: 'Warning', bg: '#FEF3CD', text: '#856404' },
+  exam_note: { label: 'Exam Note', bg: '#FEF3CD', text: '#856404' },
 }
 
 // ─── Page ───────────────────────────────────────────────────────
@@ -53,53 +61,26 @@ export default function LessonPlayerPage() {
   const [courseId, setCourseId] = useState('')
   const [lessonTitle, setLessonTitle] = useState('')
   const [moduleTitle, setModuleTitle] = useState('')
-  const [accentColor, setAccentColor] = useState('#2C2825')
 
   // Stats
   const [questionsCorrect, setQuestionsCorrect] = useState(0)
   const [questionsTotal, setQuestionsTotal] = useState(0)
 
+  // Answer submitted for current step (gates Next button on answer steps)
+  const [answerSubmitted, setAnswerSubmitted] = useState(false)
+
   const currentStep = steps[currentStepIndex]
   const isLastStep = currentStepIndex === steps.length - 1
   const maxCompleted = Math.max(-1, ...Array.from(completedSteps))
 
-  // Scroll detection for reading indicators
+  // Content ref for scroll
   const contentRef = useRef<HTMLDivElement>(null)
-  const [scrollProgress, setScrollProgress] = useState(0)
-  const [isScrollable, setIsScrollable] = useState(false)
-  const [isAtBottom, setIsAtBottom] = useState(false)
 
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    const check = () => {
-      const scrollable = el.scrollHeight > el.clientHeight
-      setIsScrollable(scrollable)
-      if (scrollable) {
-        const pct = el.scrollTop / (el.scrollHeight - el.clientHeight)
-        setScrollProgress(Math.min(1, pct))
-        setIsAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 20)
-      } else {
-        setScrollProgress(0)
-        setIsAtBottom(true)
-      }
-    }
-    check()
-    el.addEventListener('scroll', check, { passive: true })
-    const observer = new ResizeObserver(check)
-    observer.observe(el)
-    return () => { el.removeEventListener('scroll', check); observer.disconnect() }
-  }, [currentStepIndex])
-
-  // Reset scroll position when step changes
+  // Reset scroll and answer state on step change
   useEffect(() => {
     contentRef.current?.scrollTo(0, 0)
+    setAnswerSubmitted(false)
   }, [currentStepIndex])
-
-  // Reading time for current step
-  const readingTime = currentStep?.type === 'read' && currentStep.markdown
-    ? getReadingTime(currentStep.markdown)
-    : null
 
   // ── Load session ──────────────────────────────────────────────
   const loadSession = useCallback(async () => {
@@ -107,24 +88,18 @@ export default function LessonPlayerPage() {
     try {
       const supabase = createClient()
 
-      // Get course info
       let resolvedCourseId: string
-
       if (isPreview) {
-        // In preview mode, look up course via the lesson directly (skips published check)
         const lessonRes = await fetch(`/api/creator/preview/course-for-lesson?lesson_id=${lessonId}`)
         if (!lessonRes.ok) throw new Error('Course not found')
         const lessonData = await lessonRes.json()
         resolvedCourseId = lessonData.course_id
-        setAccentColor(lessonData.card_color || '#2C2825')
       } else {
         const courseRes = await fetch(`/api/courses/${courseSlug}`)
         if (!courseRes.ok) throw new Error('Course not found')
         const courseData = await courseRes.json()
         resolvedCourseId = courseData.id
-        setAccentColor(courseData.card_color || '#2C2825')
       }
-
       setCourseId(resolvedCourseId)
 
       // Fetch lesson info
@@ -188,8 +163,7 @@ export default function LessonPlayerPage() {
       })
 
       setSteps(stepsData)
-      const qTotal = stepsData.filter(s => s.type === 'answer').length
-      setQuestionsTotal(qTotal)
+      setQuestionsTotal(stepsData.filter(s => s.type === 'answer').length)
 
       // Load progress
       if (!isPreview) {
@@ -209,11 +183,9 @@ export default function LessonPlayerPage() {
           const savedIdx = progress.current_step_index || 0
           let targetIndex = Math.min(savedIdx + 1, stepsData.length - 1)
           if (completedSet.has(targetIndex)) {
-            let found = false
             for (let i = 0; i < stepsData.length; i++) {
-              if (!completedSet.has(i)) { targetIndex = i; found = true; break }
+              if (!completedSet.has(i)) { targetIndex = i; break }
             }
-            if (!found) targetIndex = stepsData.length - 1
           }
           setCurrentStepIndex(targetIndex)
         } else if (progress?.status === 'completed') {
@@ -238,26 +210,16 @@ export default function LessonPlayerPage() {
     newCompleted.add(stepIndex)
     setCompletedSteps(newCompleted)
 
-    // Skip persistence in preview mode
     if (isPreview) return
 
-    // POST to API -- non-blocking but show toast on failure
     try {
       const res = await fetch(`/api/lesson/${lessonId}/step-complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          step_index: stepIndex,
-          total_steps: steps.length,
-          is_correct: isCorrect,
-        }),
+        body: JSON.stringify({ step_index: stepIndex, total_steps: steps.length, is_correct: isCorrect }),
       })
-      if (!res.ok) {
-        console.error('step-complete failed:', res.status)
-        showToast('Progress may not have saved')
-      }
-    } catch (err) {
-      console.error('step-complete error:', err)
+      if (!res.ok) showToast('Progress may not have saved')
+    } catch {
       showToast('Progress may not have saved')
     }
   }
@@ -267,23 +229,11 @@ export default function LessonPlayerPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  function handleStepContinue() {
+  function handleNext() {
     markStepComplete(currentStepIndex)
-    advanceToNext(false)
-  }
-
-  function handleAnswerComplete(isCorrect: boolean) {
-    if (isCorrect) setQuestionsCorrect(prev => prev + 1)
-    markStepComplete(currentStepIndex, isCorrect)
-    advanceToNext(isCorrect)
-  }
-
-  function advanceToNext(lastAnswerCorrect: boolean) {
     if (isLastStep) {
-      // Account for the answer that just completed (state hasn't flushed yet)
-      const finalCorrect = lastAnswerCorrect ? questionsCorrect + 1 : questionsCorrect
       const stats = {
-        questionsCorrect: finalCorrect,
+        questionsCorrect,
         questionsTotal,
         stepsCompleted: completedSteps.size + 1,
         stepsTotal: steps.length,
@@ -299,17 +249,14 @@ export default function LessonPlayerPage() {
     }
   }
 
-  function goToStep(index: number) {
-    // Can only go back to completed steps
-    if (index <= maxCompleted + 1 && index >= 0 && index < steps.length) {
-      setCurrentStepIndex(index)
-    }
+  function handleAnswerComplete(isCorrect: boolean) {
+    if (isCorrect) setQuestionsCorrect(prev => prev + 1)
+    markStepComplete(currentStepIndex, isCorrect)
+    setAnswerSubmitted(true)
   }
 
-  function handleBack() {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(prev => prev - 1)
-    }
+  function handlePrevious() {
+    if (currentStepIndex > 0) setCurrentStepIndex(prev => prev - 1)
   }
 
   function handleExit() {
@@ -319,220 +266,196 @@ export default function LessonPlayerPage() {
   // ── Loading / Error states ────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-[#FAFAF8] flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="animate-spin w-8 h-8 border-2 border-[#2C2825] border-t-transparent rounded-full mx-auto" />
-          <p className="text-[#6B635A] text-sm">Loading lesson...</p>
-        </div>
+      <div className="min-h-[100dvh] flex items-center justify-center" style={{ backgroundColor: '#fff' }}>
+        <div className="animate-spin w-8 h-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-[100dvh] bg-[#FAFAF8] flex items-center justify-center px-4">
+      <div className="min-h-[100dvh] flex items-center justify-center px-4" style={{ backgroundColor: '#fff' }}>
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-          </div>
-          <p className="text-[#6B635A] font-medium">{error}</p>
+          <p style={{ color: '#999' }}>{error}</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={handleExit} className="text-sm font-medium text-[#6B635A] px-4 py-2 rounded-xl border border-[#E8E4DD] hover:bg-[#F5F3EF]">Back to Course</button>
-            <button onClick={loadSession} className="text-sm font-medium text-[#F5F3EF] bg-[#2C2825] px-4 py-2 rounded-xl hover:bg-[#1A1816]">Try again</button>
+            <button onClick={handleExit} style={{ fontSize: 14, padding: '8px 16px', border: '1px solid #e5e5e5', borderRadius: 10, color: '#888' }}>Back to Course</button>
+            <button onClick={loadSession} style={{ fontSize: 14, padding: '8px 16px', backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, border: 'none' }}>Try again</button>
           </div>
         </div>
       </div>
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────
-  const isViewingCompleted = completedSteps.has(currentStepIndex) && currentStepIndex <= maxCompleted
+  // ── Step badge ────────────────────────────────────────────────
+  const badgeKey = currentStep?.type === 'callout'
+    ? (currentStep.calloutContent?.callout_style || 'tip')
+    : currentStep?.type || 'read'
+  const badge = STEP_BADGES[badgeKey] || STEP_BADGES.read
+
+  // Whether Next is enabled
   const isAnswerStep = currentStep?.type === 'answer'
-  const showFooterButton = !isAnswerStep
+  const isViewingCompleted = completedSteps.has(currentStepIndex)
+  const nextEnabled = !isAnswerStep || answerSubmitted || isViewingCompleted
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-[#FAFAF8]">
-      {/* ─── Fixed Header ─── */}
-      <div className="flex-shrink-0">
-        {/* Preview mode banner */}
+    <div className="h-[100dvh] flex flex-col" style={{ backgroundColor: '#fff' }}>
+      {/* ─── Header ─── */}
+      <div style={{ flexShrink: 0, padding: '0 12px' }}>
+        {/* Preview banner */}
         {isPreview && (
-          <div className="bg-amber-50 text-amber-700 text-xs text-center py-1">
-            Preview Mode — progress not saved
+          <div style={{ backgroundColor: '#FEF3CD', color: '#856404', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
+            Preview mode
           </div>
         )}
 
         {/* Top bar */}
-        <div className="max-w-[640px] mx-auto px-5">
-          <div className="flex items-center gap-3 py-2.5">
-            <button
-              onClick={handleBack}
-              disabled={currentStepIndex === 0}
-              className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-30"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </button>
+        <div className="flex items-center justify-between" style={{ height: 44 }}>
+          <button onClick={() => setExitConfirm(true)} style={{ fontSize: 13, color: '#888', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+            Back
+          </button>
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', flex: 1, textAlign: 'center' }} className="truncate px-2">
+            {lessonTitle}
+          </p>
+          <span style={{ fontSize: 12, color: '#999', flexShrink: 0 }}>
+            {currentStepIndex + 1} / {steps.length}
+          </span>
+        </div>
 
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-500 truncate">
-                {moduleTitle ? `${moduleTitle} · ` : ''}{lessonTitle}
-              </p>
-            </div>
-
-            <span className="text-sm font-mono text-gray-400 whitespace-nowrap">
-              {currentStepIndex + 1}/{steps.length}
-            </span>
-
-            <button
-              onClick={() => setExitConfirm(true)}
-              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Segmented progress bar */}
-          <div className="flex gap-1 pb-3 items-center">
-            {steps.map((_, i) => {
-              const isCompleted = completedSteps.has(i)
-              const isCurrent = i === currentStepIndex
-              const isClickable = i <= maxCompleted + 1
-              const isFuture = !isCompleted && !isCurrent
-
-              return (
-                <button
-                  key={i}
-                  onClick={() => isClickable && goToStep(i)}
-                  disabled={!isClickable}
-                  className={`flex-1 rounded-full transition-all duration-300 ${
-                    isCurrent ? 'h-2.5' : 'h-1.5'
-                  } ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
-                  style={{
-                    backgroundColor: isFuture ? '#EBE8E2' : accentColor,
-                    opacity: isCompleted && !isCurrent ? 0.5 : 1,
-                    minWidth: '4px',
-                  }}
-                />
-              )
-            })}
-          </div>
+        {/* Progress dots */}
+        <div className="flex gap-px" style={{ padding: '0 12px 12px' }}>
+          {steps.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 2,
+                backgroundColor: completedSteps.has(i) ? '#1D9E75' : i === currentStepIndex ? '#378ADD' : '#eee',
+              }}
+            />
+          ))}
         </div>
       </div>
 
-      {/* ─── Scroll Progress Bar ─── */}
-      {isScrollable && (
-        <div className="flex-shrink-0 h-[2px] bg-gray-100">
-          <div
-            className="h-full transition-[width] duration-150 ease-out"
-            style={{ width: `${scrollProgress * 100}%`, backgroundColor: accentColor }}
+      {/* ─── Content area ─── */}
+      <div ref={contentRef} className="flex-1 overflow-y-auto" style={{ padding: 20 }}>
+        {/* Step type badge */}
+        <span
+          style={{
+            display: 'inline-block',
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '2.5px 10px',
+            borderRadius: 4,
+            backgroundColor: badge.bg,
+            color: badge.text,
+            marginBottom: 16,
+          }}
+        >
+          {badge.label}
+        </span>
+
+        {currentStep?.type === 'read' && (
+          <ReadStep
+            title={currentStep.title}
+            content={currentStep.markdown || ''}
+            accentColor="#1a1a1a"
           />
-        </div>
-      )}
+        )}
 
-      {/* ─── Scrollable Content Area ─── */}
-      <div ref={contentRef} className="flex-1 overflow-y-auto relative">
-        <div className="max-w-[640px] mx-auto px-5 pt-4 pb-8">
-          {/* Reading time indicator */}
-          {readingTime && (
-            <p className="text-xs text-gray-400 text-right mb-3">~{readingTime} min read</p>
-          )}
+        {currentStep?.type === 'watch' && (
+          <WatchStep
+            title={currentStep.title}
+            videoUrl={currentStep.watchUrl || ''}
+          />
+        )}
 
-          {currentStep?.type === 'read' && (
-            <ReadStep
-              title={currentStep.title}
-              content={currentStep.markdown || ''}
-              accentColor={accentColor}
-            />
-          )}
+        {currentStep?.type === 'answer' && currentStep.question && (
+          <AnswerStep
+            key={`${currentStepIndex}-${isViewingCompleted ? 'ro' : 'rw'}`}
+            question={currentStep.question}
+            onComplete={handleAnswerComplete}
+            readOnly={isViewingCompleted}
+            previousResult={stepAnswers[currentStepIndex]?.result}
+            previousSelectedIds={stepAnswers[currentStepIndex]?.selectedIds}
+          />
+        )}
 
-          {currentStep?.type === 'watch' && (
-            <WatchStep
-              title={currentStep.title}
-              videoUrl={currentStep.watchUrl || ''}
-            />
-          )}
+        {currentStep?.type === 'embed' && currentStep.embedContent && (
+          <EmbedStep
+            title={currentStep.title}
+            content={currentStep.embedContent}
+          />
+        )}
 
-          {currentStep?.type === 'answer' && currentStep.question && (
-            <AnswerStep
-              key={`${currentStepIndex}-${isViewingCompleted ? 'ro' : 'rw'}`}
-              question={currentStep.question}
-              onComplete={handleAnswerComplete}
-              readOnly={isViewingCompleted}
-              previousResult={stepAnswers[currentStepIndex]?.result}
-              previousSelectedIds={stepAnswers[currentStepIndex]?.selectedIds}
-            />
-          )}
-
-          {currentStep?.type === 'embed' && currentStep.embedContent && (
-            <EmbedStep
-              title={currentStep.title}
-              content={currentStep.embedContent}
-            />
-          )}
-
-          {currentStep?.type === 'callout' && currentStep.calloutContent && (
-            <CalloutStep
-              variant={currentStep.calloutContent.callout_style || 'tip'}
-              title={currentStep.calloutContent.title || currentStep.title}
-              content={currentStep.calloutContent.markdown || ''}
-              accentColor={accentColor}
-            />
-          )}
-        </div>
-
-        {/* Scroll fade gradient -- visible when content scrolls and not at bottom */}
-        {isScrollable && !isAtBottom && (
-          <div className="sticky bottom-0 h-[60px] bg-gradient-to-t from-[#FAFAF8] to-transparent pointer-events-none" />
+        {currentStep?.type === 'callout' && currentStep.calloutContent && (
+          <CalloutStep
+            variant={currentStep.calloutContent.callout_style || 'tip'}
+            title={currentStep.calloutContent.title || currentStep.title}
+            content={currentStep.calloutContent.markdown || ''}
+            accentColor="#1a1a1a"
+          />
         )}
       </div>
 
-      {/* ─── Pinned Footer Button ─── */}
-      {showFooterButton && (() => {
-        const scrollGated = isScrollable && !isAtBottom
-        return (
-          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3">
-            <div className="max-w-[640px] mx-auto">
-              <button
-                onClick={handleStepContinue}
-                disabled={scrollGated}
-                className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-                  scrollGated
-                    ? 'bg-[#2C2825] text-[#F5F3EF] opacity-50 cursor-default'
-                    : 'bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] opacity-100'
-                }`}
-              >
-                {isLastStep ? 'Complete Lesson' : 'Continue'}
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      {/* ─── Footer ─── */}
+      <div
+        className="flex justify-between items-center"
+        style={{ flexShrink: 0, padding: '12px 20px', borderTop: '1px solid #eee' }}
+      >
+        {/* Previous */}
+        {currentStepIndex > 0 ? (
+          <button
+            onClick={handlePrevious}
+            style={{
+              fontSize: 14, padding: '10px 20px',
+              backgroundColor: '#fff', border: '1px solid #e5e5e5',
+              borderRadius: 10, color: '#888', cursor: 'pointer',
+            }}
+          >
+            &larr; Previous
+          </button>
+        ) : (
+          <div />
+        )}
+
+        {/* Next */}
+        <button
+          onClick={handleNext}
+          disabled={!nextEnabled}
+          style={{
+            fontSize: 14, padding: '10px 20px',
+            backgroundColor: '#1a1a1a', color: '#fff',
+            borderRadius: 10, border: 'none', cursor: nextEnabled ? 'pointer' : 'default',
+            opacity: nextEnabled ? 1 : 0.4,
+          }}
+        >
+          {isLastStep ? 'Complete lesson \u2713' : 'Next \u2192'}
+        </button>
+      </div>
 
       {/* Exit confirmation modal */}
       {exitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4" onClick={() => setExitConfirm(false)}>
-          <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E8E4DD] p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-center text-[#2C2825]">Leave lesson?</h3>
-            <p className="text-sm text-[#6B635A] text-center">Your progress will be saved. You can resume later.</p>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)', padding: 16 }} onClick={() => setExitConfirm(false)}>
+          <div className="w-full max-w-lg bg-white rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', color: '#1a1a1a' }}>Leave lesson?</h3>
+            <p style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>Your progress will be saved. You can resume later.</p>
             <div className="flex gap-3">
-              <button onClick={() => setExitConfirm(false)} className="flex-1 py-3 text-sm font-medium rounded-xl border border-[#E8E4DD] text-[#2C2825] hover:bg-[#F5F3EF]">Keep going</button>
-              <button onClick={handleExit} className="flex-1 py-3 text-sm font-medium rounded-xl bg-red-500 text-white hover:bg-red-600">Leave</button>
+              <button onClick={() => setExitConfirm(false)} style={{ flex: 1, padding: 12, fontSize: 14, fontWeight: 500, borderRadius: 10, border: '1px solid #e5e5e5', color: '#1a1a1a', backgroundColor: '#fff', cursor: 'pointer' }}>Keep going</button>
+              <button onClick={handleExit} style={{ flex: 1, padding: 12, fontSize: 14, fontWeight: 500, borderRadius: 10, border: 'none', backgroundColor: '#E24B4A', color: '#fff', cursor: 'pointer' }}>Leave</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Toast notification */}
+      {/* Toast */}
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#2C2825] text-white text-sm font-medium shadow-lg animate-fade-up">
+        <div style={{
+          position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, padding: '8px 16px', borderRadius: 8,
+          backgroundColor: '#1a1a1a', color: '#fff', fontSize: 14, fontWeight: 500,
+        }}>
           {toast}
         </div>
       )}

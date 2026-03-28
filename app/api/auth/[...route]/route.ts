@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -47,10 +47,22 @@ export async function POST(request: NextRequest) {
 
     if (action === 'callback') {
       const code = url.searchParams.get('code');
+      let destination = '/home';
       if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
+        const { data } = await supabase.auth.exchangeCodeForSession(code);
+        if (data?.user) {
+          const service = await createServiceClient();
+          const { data: profile } = await service
+            .from('profiles')
+            .select('role')
+            .eq('id', data.user.id)
+            .single();
+          if (profile?.role === 'creator') {
+            destination = '/creator';
+          }
+        }
       }
-      return NextResponse.redirect(new URL('/home', request.url));
+      return NextResponse.redirect(new URL(destination, request.url));
     }
 
     return NextResponse.json({ error: 'Unknown auth action' }, { status: 404 });
@@ -63,9 +75,25 @@ export async function GET(request: NextRequest) {
   // Handle OAuth callback
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  let destination = '/home';
+
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data } = await supabase.auth.exchangeCodeForSession(code);
+
+    // Check role for redirect
+    if (data?.user) {
+      const service = await createServiceClient();
+      const { data: profile } = await service
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+      if (profile?.role === 'creator') {
+        destination = '/creator';
+      }
+    }
   }
-  return NextResponse.redirect(new URL('/home', request.url));
+
+  return NextResponse.redirect(new URL(destination, request.url));
 }

@@ -26,10 +26,18 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
-    // Fetch modules and lessons
+    // Fetch modules with their lessons for the collapsible preview
     const [modulesRes, lessonsRes] = await Promise.all([
-      supabase.from('modules').select('id').eq('course_id', course.id),
-      supabase.from('lessons').select('id').eq('course_id', course.id),
+      supabase
+        .from('modules')
+        .select('id, title, display_order')
+        .eq('course_id', course.id)
+        .order('display_order', { ascending: true }),
+      supabase
+        .from('lessons')
+        .select('id, module_id, title, display_order')
+        .eq('course_id', course.id)
+        .order('display_order', { ascending: true }),
     ])
 
     // Count answer-type lesson_steps (lesson_steps has no course_id, join via lesson_ids)
@@ -50,6 +58,19 @@ export async function GET(
       question_count: questionCount,
     }
 
+    // Group lessons by module for collapsible preview
+    const lessonsByModule: Record<string, any[]> = {}
+    for (const l of lessonsRes.data || []) {
+      if (!lessonsByModule[l.module_id]) lessonsByModule[l.module_id] = []
+      lessonsByModule[l.module_id].push({ id: l.id, title: l.title, display_order: l.display_order })
+    }
+    const modules = (modulesRes.data || []).map((m: any) => ({
+      id: m.id,
+      title: m.title,
+      display_order: m.display_order,
+      lessons: (lessonsByModule[m.id] || []).sort((a: any, b: any) => a.display_order - b.display_order),
+    }))
+
     // User progress
     const { data: userProgress } = await supabase
       .from('user_courses')
@@ -61,6 +82,7 @@ export async function GET(
     return NextResponse.json({
       ...course,
       stats,
+      modules,
       user_progress: userProgress || null,
     })
   } catch (err) {

@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
-/* ─── Types (matches mobile profile.tsx) ─── */
+/* ─── Types ─── */
 
 interface ProfileData {
-  user: { display_name: string; avatar_url: string | null; created_at?: string };
+  user: { display_name: string; avatar_url: string | null; created_at?: string; email?: string };
   stats: {
     courses_enrolled: number; courses_completed: number;
     total_questions_seen: number; total_questions_correct: number;
@@ -17,51 +17,19 @@ interface ProfileData {
 
 interface DashboardCourse {
   id: string; course_id: string;
-  course: { id: string; title: string; slug: string; description: string; category: string; difficulty: string };
-  questions_seen: number; questions_correct: number;
-  questions_total: number; lessons_total: number; sessions_completed: number;
-  last_session_at: string | null; enrolled_at?: string;
+  course: { id: string; title: string; slug: string; card_color?: string };
   progress_percent?: number;
+  status?: string;
+  last_session_at: string | null;
 }
 
-/* ─── Helpers (same as mobile) ─── */
-
-function formatRelativeDate(dateStr: string | null): string {
-  if (!dateStr) return 'Not started';
-  const diffMs = Date.now() - new Date(dateStr).getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Last studied today';
-  if (diffDays === 1) return 'Last studied 1d ago';
-  if (diffDays < 7) return `Last studied ${diffDays}d ago`;
-  if (diffDays < 14) return 'Last studied 1w ago';
-  if (diffDays < 30) return `Last studied ${Math.floor(diffDays / 7)}w ago`;
-  return `Last studied ${Math.floor(diffDays / 30)}mo ago`;
-}
-
-function formatMemberSince(profile: ProfileData, courses: DashboardCourse[]): string {
-  let earliest: Date | null = null;
-  if (profile.user.created_at) { earliest = new Date(profile.user.created_at); }
-  else {
-    const dates = courses.map((c) => c.enrolled_at).filter(Boolean).map((d) => new Date(d!).getTime());
-    if (dates.length > 0) earliest = new Date(Math.min(...dates));
-  }
-  if (!earliest) return 'Learning on openED';
-  const month = earliest.toLocaleString('en-US', { month: 'short' });
-  return `Learning on openED since ${month} ${earliest.getFullYear()}`;
-}
-
-function getAccuracyColor(pct: number): string {
-  if (pct > 70) return '#0F6E56';
-  if (pct >= 40) return '#854F0B';
-  return '#94a3b8';
-}
-
-/* ─── Component (mirrors mobile profile.tsx) ─── */
+/* ─── Component ─── */
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [courses, setCourses] = useState<DashboardCourse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -69,6 +37,11 @@ export default function ProfilePage() {
         const [profileRes, dashRes] = await Promise.all([fetch('/api/profile'), fetch('/api/dashboard')]);
         if (profileRes.ok) setProfile(await profileRes.json());
         if (dashRes.ok) { const d = await dashRes.json(); setCourses(d.active_courses || []); }
+
+        // Get email from Supabase auth
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) setEmail(user.email);
       } catch { /* ignore */ }
       setLoading(false);
     }
@@ -78,11 +51,16 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gray-100 rounded-full" />
-          <div className="space-y-2"><div className="h-5 bg-gray-100 rounded w-32" /><div className="h-3 bg-gray-100 rounded w-24" /></div>
+        <div className="flex flex-col items-center gap-3 py-6">
+          <div className="w-16 h-16 bg-gray-100 rounded-full" />
+          <div className="h-5 bg-gray-100 rounded w-32" />
+          <div className="h-3 bg-gray-100 rounded w-24" />
         </div>
-        <div className="flex gap-2"><div className="flex-1 h-16 bg-gray-100 rounded-lg" /><div className="flex-1 h-16 bg-gray-100 rounded-lg" /><div className="flex-1 h-16 bg-gray-100 rounded-lg" /></div>
+        <div className="flex gap-3 justify-center">
+          <div className="w-20 h-14 bg-gray-100 rounded-lg" />
+          <div className="w-20 h-14 bg-gray-100 rounded-lg" />
+          <div className="w-20 h-14 bg-gray-100 rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -91,130 +69,173 @@ export default function ProfilePage() {
   const stats = profile?.stats;
   const initial = user?.display_name?.charAt(0)?.toUpperCase() || '?';
 
+  // Count lessons done from courses
+  const lessonsDone = stats?.total_questions_correct || 0; // Using questions as proxy; ideally from separate endpoint
+
   return (
-    <div className="space-y-4">
-      {/* Header bar (matches mobile topBar: "Profile" bold 20px) */}
-      <h1 className="text-xl font-bold text-[#0f172a]">Profile</h1>
-
-      {/* Section A: Avatar + name (matches mobile: 48x48 blue circle, 17px name, 11px memberSince) */}
-      <div className="flex items-center gap-3 py-4">
-        <div className="w-12 h-12 rounded-full bg-[#3b82f6] flex items-center justify-center flex-shrink-0">
-          <span className="text-lg font-bold text-white">{initial}</span>
+    <div className="space-y-5">
+      {/* Profile header - centered */}
+      <div className="flex flex-col items-center" style={{ paddingTop: 8, paddingBottom: 16 }}>
+        {/* Avatar */}
+        <div
+          style={{
+            width: 64, height: 64, borderRadius: '50%',
+            backgroundColor: '#E6F1FB',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 8,
+          }}
+        >
+          <span style={{ fontSize: 22, fontWeight: 600, color: '#185FA5' }}>{initial}</span>
         </div>
-        <div className="flex-1 space-y-0.5">
-          <p className="text-[17px] font-bold text-[#0f172a] truncate">{user?.display_name || 'Learner'}</p>
-          <p className="text-[11px] text-[#94a3b8]">{profile ? formatMemberSince(profile, courses) : 'Learning on openED'}</p>
+        {/* Name */}
+        <p style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a', marginBottom: 2 }}>
+          {user?.display_name || 'Learner'}
+        </p>
+        {/* Email */}
+        <p style={{ fontSize: 13, color: '#999', marginBottom: 16 }}>
+          {email || user?.email || ''}
+        </p>
+
+        {/* Stats row */}
+        <div className="flex items-center justify-center" style={{ gap: 24 }}>
+          <div className="text-center">
+            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{stats?.courses_enrolled || 0}</p>
+            <p style={{ fontSize: 11, color: '#999' }}>Courses</p>
+          </div>
+          <div className="text-center">
+            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{stats?.courses_completed || 0}</p>
+            <p style={{ fontSize: 11, color: '#999' }}>Lessons done</p>
+          </div>
+          <div className="text-center">
+            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{stats?.total_questions_seen || 0}</p>
+            <p style={{ fontSize: 11, color: '#999' }}>Questions</p>
+          </div>
         </div>
       </div>
 
-      {/* Section B: Stats row (matches mobile: 22px value, 8px label, accuracy colored) */}
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1 bg-[#f8fafc] rounded-lg py-3 text-center">
-          <p className="text-[22px] font-bold mb-0.5" style={{ color: getAccuracyColor(stats?.accuracy_percent || 0) }}>{stats?.accuracy_percent || 0}%</p>
-          <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Accuracy</p>
-        </div>
-        <div className="flex-1 bg-[#f8fafc] rounded-lg py-3 text-center">
-          <p className="text-[22px] font-bold text-[#0f172a] mb-0.5">{stats?.total_questions_seen || 0}</p>
-          <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Questions</p>
-        </div>
-        <div className="flex-1 bg-[#f8fafc] rounded-lg py-3 text-center">
-          <p className="text-[22px] font-bold text-[#0f172a] mb-0.5">{stats?.courses_completed || 0}</p>
-          <p className="text-[8px] font-medium text-[#94a3b8] uppercase">Completed</p>
-        </div>
-      </div>
+      {/* Enrolled courses section */}
+      <div>
+        <p style={{
+          fontSize: 13, fontWeight: 600, color: '#888',
+          textTransform: 'uppercase', letterSpacing: 0.5,
+          marginBottom: 12,
+        }}>
+          Enrolled courses
+        </p>
 
-      {/* Section C: My Courses (matches mobile exactly) */}
-      <div className="mb-4">
-        <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">MY COURSES</p>
         {courses.length > 0 ? (
-          <div className="space-y-1.5">
+          <div>
             {[...courses].sort((a, b) => {
               const aTime = a.last_session_at ? new Date(a.last_session_at).getTime() : 0;
               const bTime = b.last_session_at ? new Date(b.last_session_at).getTime() : 0;
               return bTime - aTime;
             }).map((item) => {
               const pct = Math.min(100, item.progress_percent ?? 0);
-              const isComplete = pct >= 100;
+              const isComplete = pct >= 100 || item.status === 'completed';
+              const color = item.course.card_color || '#3b82f6';
               return (
-                <Link key={item.id} href={`/course/${item.course.slug}/path`}
-                  className="flex items-center gap-3 bg-[#f8fafc] rounded-lg p-3 hover:bg-[#f1f5f9] transition-colors"
-                >
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <p className="text-xs font-semibold text-[#0f172a] truncate">{item.course.title}</p>
-                    <p className="text-[9px] text-[#94a3b8]">{item.lessons_total} lessons &middot; {formatRelativeDate(item.last_session_at)}</p>
-                    {!isComplete && (
-                      <div className="h-1 bg-[#e2e8f0] rounded-full overflow-hidden mt-1">
-                        <div className="h-full bg-[#3B82F6] rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    )}
-                  </div>
-                  {isComplete ? (
-                    <div className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
+                <Link key={item.id} href={`/course/${item.course.slug}/path`} className="block">
+                  <div
+                    className="flex items-center gap-3"
+                    style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}
+                  >
+                    {/* Color bar */}
+                    <div style={{ width: 4, height: 32, backgroundColor: color, borderRadius: 2, flexShrink: 0 }} />
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a' }} className="truncate">
+                        {item.course.title}
+                      </p>
+                      <p style={{ fontSize: 11, color: '#999' }}>{pct}% complete</p>
                     </div>
-                  ) : (
-                    <span className="text-sm font-semibold text-[#94a3b8] min-w-[36px] text-right">{pct}%</span>
-                  )}
+                    {/* Badge */}
+                    <span
+                      style={{
+                        fontSize: 10, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
+                        backgroundColor: isComplete ? '#E1F5EE' : '#E6F1FB',
+                        color: isComplete ? '#0F6E56' : '#185FA5',
+                      }}
+                    >
+                      {isComplete ? 'Completed' : 'Active'}
+                    </span>
+                  </div>
                 </Link>
               );
             })}
           </div>
         ) : (
-          <div className="bg-[#f8fafc] rounded-xl py-6 px-5 text-center">
-            <p className="text-[15px] font-bold text-[#0f172a] mb-1">Start your learning journey</p>
-            <p className="text-xs text-[#94a3b8] mb-4">Browse interactive courses from expert creators</p>
-            <Link href="/browse" className="inline-block bg-[#3B82F6] text-white font-semibold px-5 py-2.5 rounded-[10px] text-sm hover:bg-[#2563EB] transition-colors">
+          <div className="text-center" style={{ padding: '24px 0' }}>
+            <p style={{ fontSize: 13, color: '#999', marginBottom: 12 }}>No courses enrolled yet</p>
+            <Link
+              href="/browse"
+              style={{
+                display: 'inline-block',
+                backgroundColor: '#1a1a1a', color: '#fff',
+                fontSize: 13, fontWeight: 500,
+                padding: '8px 20px', borderRadius: 8,
+              }}
+            >
               Browse courses
             </Link>
           </div>
         )}
       </div>
 
-      {/* Section E: Learning Stats (matches mobile learningStatsCard) */}
-      <div className="mb-4">
-        <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">LEARNING STATS</p>
-        <div className="bg-[#f8fafc] rounded-lg overflow-hidden divide-y divide-[#e2e8f0]">
-          {[
-            { label: 'Questions answered', value: stats?.total_questions_seen || 0 },
-            { label: 'Correct answers', value: stats?.total_questions_correct || 0 },
-            { label: 'Sessions completed', value: stats?.total_sessions || 0 },
-            { label: 'Courses completed', value: stats?.courses_completed || 0 },
-          ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between px-[14px] py-3">
-              <span className="text-xs text-[#94a3b8]">{row.label}</span>
-              <span className="text-xs font-semibold text-[#0f172a]">{row.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Account section */}
+      <div style={{ borderTop: '1px solid #eee', paddingTop: 16 }}>
+        <p style={{
+          fontSize: 13, fontWeight: 600, color: '#888',
+          textTransform: 'uppercase', letterSpacing: 0.5,
+          marginBottom: 12,
+        }}>
+          Account
+        </p>
 
-      {/* Section D: Account (matches mobile accountCard) */}
-      <div className="mb-4">
-        <p className="text-xs font-semibold text-[#999] uppercase tracking-[0.5px] mb-2">ACCOUNT</p>
-        <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden divide-y divide-[#e2e8f0]">
-          <button className="w-full flex items-center justify-between px-4 py-4 hover:bg-[#f1f5f9] transition-colors"
+        <div>
+          {/* Edit profile */}
+          <button
+            className="w-full flex items-center justify-between"
+            style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0', background: 'none', border: 'none', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0', cursor: 'pointer' }}
             onClick={() => alert('Edit profile will be available in a future update.')}
           >
-            <span className="text-base font-medium text-[#0f172a]">Edit profile</span>
-            <svg className="w-[18px] h-[18px] text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
+            <span style={{ fontSize: 14, color: '#555' }}>Edit profile</span>
+            <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
           </button>
-          <button className="w-full flex items-center justify-between px-4 py-4 hover:bg-[#f1f5f9] transition-colors"
+
+          {/* Notification preferences */}
+          <button
+            className="w-full flex items-center justify-between"
+            style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0', background: 'none', border: 'none', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0', cursor: 'pointer' }}
+            onClick={() => alert('Notification preferences coming soon.')}
+          >
+            <span style={{ fontSize: 14, color: '#555' }}>Notification preferences</span>
+            <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
+          </button>
+
+          {/* Purchase history */}
+          <button
+            className="w-full flex items-center justify-between"
+            style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0', background: 'none', border: 'none', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0', cursor: 'pointer' }}
+            onClick={() => alert('Purchase history coming soon.')}
+          >
+            <span style={{ fontSize: 14, color: '#555' }}>Purchase history</span>
+            <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
+          </button>
+
+          {/* Sign out */}
+          <button
+            className="w-full flex items-center justify-between"
+            style={{ padding: '12px 0', background: 'none', border: 'none', cursor: 'pointer' }}
             onClick={async () => {
               if (confirm('Are you sure you want to sign out?')) {
                 const supabase = createClient();
                 await supabase.auth.signOut();
-                window.location.href = '/login';
+                window.location.href = '/';
               }
             }}
           >
-            <span className="text-base font-medium text-[#0f172a]">Sign out</span>
-            <svg className="w-[18px] h-[18px] text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
+            <span style={{ fontSize: 14, color: '#E24B4A' }}>Sign out</span>
+            <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
           </button>
         </div>
       </div>

@@ -31,7 +31,7 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 interface WizardState {
   courseId: string | null
-  currentStep: 1 | 2 | 3 | 4
+  currentStep: 1 | 2 | 3
   form: CourseFormData
   activeLesson: string | null
   editorTab: 'content' | 'questions'
@@ -41,7 +41,7 @@ interface WizardState {
 
   // Actions
   setCourseId: (id: string) => void
-  setStep: (step: 1 | 2 | 3 | 4) => void
+  setStep: (step: 1 | 2 | 3) => void
   updateForm: (updates: Partial<CourseFormData>) => void
   selectLesson: (id: string | null) => void
   setEditorTab: (tab: 'content' | 'questions') => void

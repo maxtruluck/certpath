@@ -1,13 +1,17 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import CreatorSidebar from './components/CreatorSidebar'
 
 export default function CreatorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isWizard = pathname === '/creator/courses/new' || pathname.startsWith('/creator/courses/new?')
 
-  if (isWizard) {
+  // Dashboard and wizard pages use their own full-width layout (no sidebar)
+  const isFullWidth =
+    pathname === '/creator' ||
+    pathname === '/creator/courses/new' ||
+    pathname.startsWith('/creator/courses/new?')
+
+  if (isFullWidth) {
     return (
       <div className="min-h-screen bg-white">
         {children}
@@ -15,14 +19,12 @@ export default function CreatorLayout({ children }: { children: React.ReactNode 
     )
   }
 
+  // Legacy pages that still use sidebar (earnings, settings as page, courses list)
   return (
-    <div className="flex min-h-screen min-w-[960px] bg-[#FAFAF8]">
-      <CreatorSidebar />
-      <main className="flex-1 ml-[240px]">
-        <div className="max-w-6xl mx-auto px-10 py-10">
-          {children}
-        </div>
-      </main>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-6xl mx-auto px-10 py-10">
+        {children}
+      </div>
     </div>
   )
 }

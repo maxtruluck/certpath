@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ interface ModuleData {
 }
 
 interface PathResponse {
-  course: { id: string; title: string };
+  course: { id: string; title: string; creator_id?: string };
   modules: ModuleData[];
   course_tests?: TestData[];
   primary_cta?: { type: string; lesson_id: string | null; label: string };
@@ -47,176 +47,107 @@ interface PathResponse {
 }
 
 // ---------------------------------------------------------------------------
-// State styling
-// ---------------------------------------------------------------------------
-
-const stateStyles: Record<LessonState, {
-  bg: string; border: string; text: string; badge: string; dot: string;
-}> = {
-  locked: {
-    bg: 'bg-[#F5F3EF]',
-    border: 'border-dashed border-[#D4CFC7]',
-    text: 'text-[#A39B90]',
-    badge: 'bg-[#EBE8E2] text-[#A39B90]',
-    dot: 'bg-[#D4CFC7]',
-  },
-  available: {
-    bg: 'bg-white',
-    border: 'border-[#E8E4DD]',
-    text: 'text-[#6B635A]',
-    badge: 'bg-[#F5F3EF] text-[#6B635A]',
-    dot: 'bg-[#6B635A]',
-  },
-  in_progress: {
-    bg: 'bg-blue-50',
-    border: 'border-blue-300',
-    text: 'text-blue-700',
-    badge: 'bg-blue-100 text-blue-700',
-    dot: 'bg-blue-500',
-  },
-  completed: {
-    bg: 'bg-green-50',
-    border: 'border-green-300',
-    text: 'text-green-700',
-    badge: 'bg-green-100 text-green-700',
-    dot: 'bg-green-500',
-  },
-};
-
-// ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-5 animate-pulse pb-24">
-      <div className="h-10 bg-[#EBE8E2] rounded-xl w-2/3" />
-      <div className="h-24 bg-[#EBE8E2] rounded-2xl" />
-      {[1, 2, 3].map(i => (
-        <div key={i} className="space-y-3">
-          <div className="h-6 bg-[#EBE8E2] rounded-lg w-1/2" />
-          {[1, 2, 3].map(j => (
-            <div key={j} className="h-16 bg-[#EBE8E2] rounded-xl" />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function LessonRow({
   lesson,
   moduleIndex,
   lessonIndex,
-  isLast,
   slug,
-  onLockedTap,
 }: {
   lesson: LessonData;
   moduleIndex: number;
   lessonIndex: number;
-  isLast: boolean;
   slug: string;
-  onLockedTap: (title: string) => void;
 }) {
-  const style = stateStyles[lesson.state];
-  const number = `${moduleIndex + 1}.${lessonIndex + 1}`;
   const isLocked = lesson.state === 'locked';
+  const isCompleted = lesson.state === 'completed';
+  const isActive = lesson.state === 'in_progress' || lesson.state === 'available';
+  const isInProgress = lesson.state === 'in_progress';
 
-  function handleTap() {
-    if (isLocked) {
-      onLockedTap(lesson.title);
-    }
-  }
+  const progressPct = isInProgress && lesson.items_total > 0
+    ? Math.round((lesson.items_completed / lesson.items_total) * 100)
+    : 0;
 
-  const subtitle = (() => {
-    switch (lesson.state) {
-      case 'locked':
-        return 'Locked';
-      case 'available':
-        return 'Start';
-      case 'in_progress':
-        return lesson.items_total > 0
-          ? `${lesson.items_completed}/${lesson.items_total} complete`
-          : 'In progress';
-      case 'completed':
-        return null; // Rendered as icon
-    }
-  })();
+  const statusText = isCompleted ? 'Complete' :
+    isInProgress && lesson.items_total > 0 ? `${lesson.items_completed}/${lesson.items_total} complete` :
+    isLocked ? 'Locked' : '';
+
+  const statusColor = isCompleted ? '#1D9E75' :
+    isInProgress ? '#378ADD' :
+    '#ccc';
 
   const content = (
-    <div className={`flex items-center gap-3 p-3 rounded-xl border ${style.bg} ${style.border} transition-all ${
-      isLocked ? 'opacity-60 cursor-default' : 'hover:shadow-sm cursor-pointer'
-    }`}>
-      {/* Number circle */}
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${style.dot} ${
-        lesson.state === 'locked' ? 'text-white/70' : 'text-white'
-      }`}>
-        {lesson.state === 'completed' ? (
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <div
+      className="flex items-center gap-3"
+      style={{
+        padding: '12px 20px',
+        backgroundColor: isInProgress ? '#fafafa' : 'transparent',
+        cursor: isLocked ? 'default' : 'pointer',
+      }}
+    >
+      {/* Circle */}
+      <div
+        style={{
+          width: 36, height: 36, borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 600,
+          backgroundColor: isCompleted ? '#1D9E75' : isInProgress ? '#E6F1FB' : isLocked ? '#f0f0f0' : '#E6F1FB',
+          color: isCompleted ? '#fff' : isInProgress ? '#185FA5' : isLocked ? '#ccc' : '#185FA5',
+          border: isInProgress ? '2px solid #378ADD' : 'none',
+          flexShrink: 0,
+        }}
+      >
+        {isCompleted ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
-        ) : number}
+        ) : (
+          `${moduleIndex + 1}.${lessonIndex + 1}`
+        )}
       </div>
 
-      {/* Title + subtitle */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-semibold truncate ${
-          isLocked ? 'text-[#A39B90]' : 'text-[#2C2825]'
-        }`}>
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          fontSize: 14, fontWeight: 500,
+          color: isLocked ? '#ccc' : '#1a1a1a',
+        }} className="truncate">
           {lesson.title}
         </p>
-        {subtitle && (
-          <p className={`text-xs mt-0.5 ${style.text}`}>
-            {subtitle}
-          </p>
-        )}
-        {lesson.state === 'completed' && (
-          <p className={`text-xs mt-0.5 ${style.text} flex items-center gap-1`}>
-            Complete
+        {statusText && (
+          <p style={{ fontSize: 12, color: statusColor, marginTop: 2 }}>
+            {statusText}
           </p>
         )}
       </div>
 
-      {/* Right badges */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Progress indicator for in_progress */}
-        {lesson.state === 'in_progress' && lesson.items_total > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">
-            {Math.round((lesson.items_completed / lesson.items_total) * 100)}%
+      {/* Right side */}
+      <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+        {/* Progress badge for in_progress */}
+        {isInProgress && lesson.items_total > 0 && (
+          <span style={{
+            fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4,
+            backgroundColor: '#E6F1FB', color: '#185FA5',
+          }}>
+            {progressPct}%
           </span>
         )}
-
         {/* Arrow for non-locked */}
         {!isLocked && (
-          <svg className="w-4 h-4 text-[#A39B90]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
+          <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
         )}
       </div>
     </div>
   );
 
-  if (isLocked) {
-    return (
-      <div className="relative">
-        <div onClick={handleTap}>{content}</div>
-        {!isLast && (
-          <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-[#E8E4DD]" />
-        )}
-      </div>
-    );
-  }
+  if (isLocked) return <div>{content}</div>;
 
   return (
-    <div className="relative">
-      <Link href={`/lesson/${slug}/${lesson.id}`}>
-        {content}
-      </Link>
-      {!isLast && (
-        <div className="absolute left-[1.4rem] top-full w-0.5 h-2 bg-[#E8E4DD]" />
-      )}
-    </div>
+    <Link href={`/lesson/${slug}/${lesson.id}`} className="block hover:bg-[#fafafa]">
+      {content}
+    </Link>
   );
 }
 
@@ -229,74 +160,56 @@ function TestRow({
   slug: string;
   allLessonsCompleted: boolean;
 }) {
-  // Module quizzes lock until all module lessons completed
-  // Practice exams are always unlocked
-  // Final assessments lock until all module quizzes passed
   const isLocked = !allLessonsCompleted;
-  const hasPassed = test.passed;
-
-  const subtitle = test.time_limit_minutes ? `${test.time_limit_minutes} min` : 'Untimed';
+  const subtitle = test.time_limit_minutes
+    ? `${test.question_count} questions · ${test.time_limit_minutes} min`
+    : `${test.question_count} questions · Untimed`;
 
   const content = (
-    <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-      isLocked
-        ? 'bg-[#F5F3EF] border-dashed border-[#D4CFC7] opacity-60 cursor-default'
-        : hasPassed
-          ? 'bg-green-50 border-green-300 hover:shadow-sm cursor-pointer'
-          : 'bg-white border-[#E8E4DD] hover:shadow-sm cursor-pointer'
-    }`}>
+    <div
+      className="flex items-center gap-3"
+      style={{
+        margin: '4px 16px',
+        padding: '12px 20px',
+        border: '1px solid #e5e5e5',
+        borderRadius: 10,
+        opacity: isLocked ? 0.5 : 1,
+        cursor: isLocked ? 'default' : 'pointer',
+      }}
+    >
       {/* Icon */}
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-        isLocked ? 'bg-[#D4CFC7]' : hasPassed ? 'bg-green-500' : 'bg-[#6B635A]'
-      }`}>
-        {hasPassed ? (
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-          </svg>
-        )}
+      <div
+        style={{
+          width: 36, height: 36, borderRadius: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: '#FEF3CD', color: '#856404',
+          fontSize: 16, fontWeight: 700, flexShrink: 0,
+        }}
+      >
+        ?
       </div>
 
-      {/* Title + subtitle */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-semibold truncate ${isLocked ? 'text-[#A39B90]' : 'text-[#2C2825]'}`}>
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a' }} className="truncate">
           {test.title}
         </p>
-        <p className={`text-xs mt-0.5 ${isLocked ? 'text-[#A39B90]' : 'text-[#6B635A]'}`}>
-          {isLocked ? 'Complete lessons first' : subtitle}
+        <p style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+          {isLocked ? 'Complete all lessons first' : subtitle}
         </p>
       </div>
 
-      {/* Score badge + arrow */}
-      <div className="flex items-center gap-2 shrink-0">
-        {test.best_score !== null && (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-            hasPassed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-          }`}>
-            {test.best_score}%
-          </span>
-        )}
-        {test.attempts_count > 0 && (
-          <span className="text-xs text-[#A39B90]">
-            {test.attempts_count} attempt{test.attempts_count !== 1 ? 's' : ''}
-          </span>
-        )}
-        {!isLocked && (
-          <svg className="w-4 h-4 text-[#A39B90]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        )}
-      </div>
+      {/* Arrow */}
+      {!isLocked && (
+        <span style={{ fontSize: 14, color: '#ccc', flexShrink: 0 }}>&rsaquo;</span>
+      )}
     </div>
   );
 
   if (isLocked) return <div>{content}</div>;
 
   return (
-    <Link href={`/test/${slug}/${test.id}`}>
+    <Link href={`/test/${slug}/${test.id}`} className="block hover:border-[#ccc]">
       {content}
     </Link>
   );
@@ -309,7 +222,9 @@ function TestRow({
 function CoursePathContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParamsHook = useSearchParams();
   const slug = params.slug as string;
+  const isPreview = searchParamsHook.get('preview') === 'true';
   const [data, setData] = useState<PathResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -318,9 +233,10 @@ function CoursePathContent() {
   useEffect(() => {
     async function fetchPath() {
       try {
-        const res = await fetch(`/api/courses/${slug}/path`);
+        const url = `/api/courses/${slug}/path${isPreview ? '?preview=true' : ''}`;
+        const res = await fetch(url);
         if (res.status === 403) {
-          router.replace(`/course/${slug}/enroll`);
+          router.replace(`/course/${slug}`);
           return;
         }
         if (!res.ok) throw new Error('Failed to fetch');
@@ -331,23 +247,29 @@ function CoursePathContent() {
       setLoading(false);
     }
     fetchPath();
-  }, [slug, router]);
+  }, [slug, router, isPreview]);
 
-  function showLockedToast() {
-    setToast('Complete the previous lesson first');
-    setTimeout(() => setToast(null), 2500);
+  if (loading) {
+    return (
+      <div className="space-y-5 animate-pulse pb-24">
+        <div className="h-10 bg-gray-100 rounded-xl w-2/3" />
+        <div className="h-24 bg-gray-100 rounded-xl" />
+        {[1, 2, 3].map(i => (
+          <div key={i} className="space-y-3">
+            <div className="h-6 bg-gray-100 rounded-lg w-1/2" />
+            <div className="h-16 bg-gray-100 rounded-xl" />
+            <div className="h-16 bg-gray-100 rounded-xl" />
+          </div>
+        ))}
+      </div>
+    );
   }
-
-  if (loading) return <LoadingSkeleton />;
 
   if (error || !data) {
     return (
       <div className="text-center py-12">
-        <p className="text-[#6B635A] mb-4">{error || 'Path not found'}</p>
-        <button
-          onClick={() => router.push('/home')}
-          className="text-[#2C2825] font-medium text-sm"
-        >
+        <p style={{ color: '#999', marginBottom: 16 }}>{error || 'Path not found'}</p>
+        <button onClick={() => router.push('/home')} style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500 }}>
           Back to home
         </button>
       </div>
@@ -359,89 +281,75 @@ function CoursePathContent() {
     : 0;
 
   return (
-    <div className="pb-8 space-y-5">
-      {/* -- Header --------------------------------------------------- */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.push('/home')}
-          className="text-[#A39B90] hover:text-[#6B635A]"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-        <h1 className="text-lg font-bold text-[#2C2825] flex-1 truncate">
-          {data.course.title}
-        </h1>
-      </div>
-
-      {/* -- Progress hero ---------------------------------------------- */}
-      <div className="rounded-2xl bg-white border border-[#E8E4DD] p-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-[#6B635A]">Progress</h2>
-          <span className="text-sm font-medium text-[#2C2825]">
-            {data.progress.completed} of {data.progress.total} lessons completed
-          </span>
-        </div>
-        <div className="w-full h-3 bg-[#EBE8E2] rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-green-500 rounded-full transition-all duration-700"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
-
-      </div>
-
-      {/* -- Modules + Lessons ----------------------------------------- */}
-      {data.modules.map((mod, modIdx) => (
-        <div key={mod.id} className="animate-fade-up" style={{ animationDelay: `${(modIdx + 1) * 60}ms` }}>
-          {/* Module header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-[#2C2825]">
-                {mod.title}
-              </h3>
-            </div>
-          </div>
-
-          {/* Lesson rows */}
-          <div className="space-y-2">
-            {mod.lessons.map((lesson, lessonIdx) => (
-              <LessonRow
-                key={lesson.id}
-                lesson={lesson}
-                moduleIndex={modIdx}
-                lessonIndex={lessonIdx}
-                isLast={lessonIdx === mod.lessons.length - 1}
-                slug={slug}
-                onLockedTap={showLockedToast}
-              />
-            ))}
-
-          </div>
-        </div>
-      ))}
-
-      {/* -- Course-level tests ------------------------------------------ */}
-      {data.course_tests && data.course_tests.length > 0 && (
-        <div className="animate-fade-up" style={{ animationDelay: `${(data.modules.length + 1) * 60}ms` }}>
-          <h3 className="text-sm font-bold text-[#2C2825] mb-3">Practice & Assessment</h3>
-          <div className="space-y-2">
-            {data.course_tests.map(test => (
-              <TestRow
-                key={test.id}
-                test={test}
-                slug={slug}
-                allLessonsCompleted={progressPct === 100}
-              />
-            ))}
-          </div>
+    <div className="pb-8">
+      {/* Preview banner */}
+      {isPreview && (
+        <div style={{
+          backgroundColor: '#FEF3CD', color: '#856404', fontSize: 12,
+          textAlign: 'center', padding: '8px 0', marginBottom: 16,
+        }}>
+          Preview mode — this course is not yet published
         </div>
       )}
 
-      {/* -- Toast ----------------------------------------------------- */}
+      {/* Header */}
+      <div style={{ backgroundColor: '#fafafa', padding: '16px 20px', borderBottom: '1px solid #eee', margin: '-16px -16px 0' }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>
+          {data.course.title}
+        </h1>
+        <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: '#999' }}>Progress</span>
+          <span style={{ fontSize: 12, color: '#999' }}>
+            {data.progress.completed} of {data.progress.total} lessons completed
+          </span>
+        </div>
+        <div style={{ height: 4, backgroundColor: '#eee', borderRadius: 2 }}>
+          <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: '#1D9E75', borderRadius: 2, transition: 'width 0.5s' }} />
+        </div>
+      </div>
+
+      {/* Modules + Lessons */}
+      {data.modules.map((mod, modIdx) => (
+        <div key={mod.id}>
+          {/* Module title */}
+          <div style={{ padding: '16px 20px 8px 20px' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{mod.title}</h3>
+          </div>
+
+          {/* Lesson rows */}
+          {mod.lessons.map((lesson, lessonIdx) => (
+            <LessonRow
+              key={lesson.id}
+              lesson={isPreview ? { ...lesson, state: lesson.state === 'locked' ? 'available' : lesson.state } : lesson}
+              moduleIndex={modIdx}
+              lessonIndex={lessonIdx}
+              slug={slug}
+            />
+          ))}
+        </div>
+      ))}
+
+      {/* Course-level tests */}
+      {data.course_tests && data.course_tests.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          {data.course_tests.map(test => (
+            <TestRow
+              key={test.id}
+              test={test}
+              slug={slug}
+              allLessonsCompleted={isPreview || progressPct === 100}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Toast */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#2C2825] text-white text-sm font-medium shadow-lg animate-fade-up">
+        <div style={{
+          position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, padding: '8px 16px', borderRadius: 8,
+          backgroundColor: '#1a1a1a', color: '#fff', fontSize: 14, fontWeight: 500,
+        }}>
           {toast}
         </div>
       )}
@@ -449,15 +357,11 @@ function CoursePathContent() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page export
-// ---------------------------------------------------------------------------
-
 export default function CoursePathPage() {
   return (
     <Suspense fallback={
       <div className="min-h-[100dvh] flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-[#2C2825] border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full" />
       </div>
     }>
       <CoursePathContent />

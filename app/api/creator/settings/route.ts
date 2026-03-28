@@ -8,7 +8,7 @@ export async function GET() {
 
     const { data: creator } = await supabase
       .from('creators')
-      .select('creator_name, bio, expertise_areas, credentials')
+      .select('creator_name, bio, expertise_areas, credentials, website_url, stripe_account_id')
       .eq('user_id', userId)
       .single()
 
@@ -27,6 +27,8 @@ export async function GET() {
       bio: creator.bio || '',
       expertise_areas: creator.expertise_areas || [],
       credentials: creator.credentials || '',
+      website_url: creator.website_url || '',
+      stripe_account_id: creator.stripe_account_id || null,
       display_name: profile?.display_name || '',
       avatar_url: profile?.avatar_url || '',
     })
@@ -54,6 +56,8 @@ export async function PATCH(request: NextRequest) {
     if (body.creator_name !== undefined) creatorUpdates.creator_name = body.creator_name
     if (body.bio !== undefined) creatorUpdates.bio = body.bio
     if (body.credentials !== undefined) creatorUpdates.credentials = body.credentials
+    if (body.expertise_areas !== undefined) creatorUpdates.expertise_areas = body.expertise_areas
+    if (body.website_url !== undefined) creatorUpdates.website_url = body.website_url
 
     if (Object.keys(creatorUpdates).length > 0) {
       await supabase.from('creators').update(creatorUpdates).eq('id', creator.id)

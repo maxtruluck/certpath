@@ -33,7 +33,10 @@ export default function SignupPage() {
       return;
     }
 
-    router.push('/home');
+    // Check for redirect param (e.g., from /teach/apply)
+    const params = new URLSearchParams(window.location.search);
+    const redirectTo = params.get('redirect');
+    router.push(redirectTo || '/home');
     router.refresh();
   }
 

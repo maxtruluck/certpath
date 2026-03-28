@@ -43,7 +43,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const protectedPaths = ['/home', '/browse', '/profile', '/course', '/practice', '/creator', '/admin'];
+  const protectedPaths = ['/home', '/browse', '/profile', '/course', '/practice', '/creator'];
   const isProtected = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
   if (isProtected && !user) {
@@ -56,8 +56,15 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage = authPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
   if (isAuthPage && user) {
+    // Check role to redirect to appropriate dashboard
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
     const url = request.nextUrl.clone();
-    url.pathname = '/home';
+    url.pathname = profile?.role === 'creator' ? '/creator' : '/home';
     return NextResponse.redirect(url);
   }
 

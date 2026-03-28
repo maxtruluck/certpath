@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/supabase/get-user-api'
 
-function slugify(text: string): string {
-  return text
+function generateSlug(title: string): string {
+  const base = title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 80)
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim()
+  const suffix = Math.random().toString(36).substring(2, 6)
+  return `${base}-${suffix}`
 }
 
 export async function POST(request: NextRequest) {
@@ -48,15 +51,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'title is required' }, { status: 400 })
     }
 
-    // Generate unique slug
-    let slug = slugify(title)
-    const { data: existingSlugs } = await supabase
-      .from('courses')
-      .select('slug')
-      .ilike('slug', `${slug}%`)
-
-    if (existingSlugs && existingSlugs.length > 0) {
-      slug = `${slug}-${existingSlugs.length + 1}`
+    // Generate unique slug with random suffix, retry on collision
+    let slug = generateSlug(title)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data: existing } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('slug', slug)
+        .single()
+      if (!existing) break
+      slug = generateSlug(title)
     }
 
     const { data: course, error: insertError } = await supabase

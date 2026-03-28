@@ -4,17 +4,15 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StepCourseInfo from './components/StepCourseInfo'
 import StepBuildCourse from './components/StepBuildCourse'
-import StepSettings from './components/StepSettings'
 import StepReview from './components/StepReview'
 import { useWizardStore, INITIAL_FORM } from '@/lib/store/creator-wizard'
 import type { CourseFormData } from '@/lib/store/creator-wizard'
 
-// ─── Step Config ────────────────────────────────────────────────
+// ─── Step Config (3 steps) ─────────────────────────────────────
 const STEPS = [
   { label: 'Define', number: 1 },
   { label: 'Build', number: 2 },
-  { label: 'Settings', number: 3 },
-  { label: 'Review', number: 4 },
+  { label: 'Review', number: 3 },
 ]
 
 // ─── Compact Top Bar ────────────────────────────────────────────
@@ -23,13 +21,11 @@ function BuilderTopBar({
   currentStep,
   saveStatus,
   onNavigateStep,
-  onSettingsClick,
 }: {
   courseTitle: string
   currentStep: number
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
-  onNavigateStep: (step: 1 | 2 | 3 | 4) => void
-  onSettingsClick?: () => void
+  onNavigateStep: (step: 1 | 2 | 3) => void
 }) {
   const saveLabels: Record<string, string> = {
     idle: '',
@@ -46,67 +42,79 @@ function BuilderTopBar({
 
   return (
     <div
-      className="flex items-center justify-between px-5 border-b border-[#eee] bg-white flex-shrink-0"
-      style={{ height: 48 }}
+      className="flex items-center justify-between px-5 bg-white flex-shrink-0"
+      style={{ height: 48, borderBottom: '1px solid #eee' }}
     >
       {/* Left: Dashboard link + title */}
       <div className="flex items-center min-w-0">
-        <button
-          onClick={() => onNavigateStep(1)}
-          className="text-[13px] text-[#888] hover:text-[#555] cursor-pointer whitespace-nowrap"
+        <a
+          href="/creator"
+          className="text-[13px] text-[#888] hover:text-[#555] whitespace-nowrap"
         >
-          <a href="/creator" onClick={e => { e.preventDefault(); window.location.href = '/creator' }}>
-            ← Dashboard
-          </a>
-        </button>
+          &larr; Dashboard
+        </a>
         <span className="text-[#ddd] mx-3 select-none">|</span>
-        <span className="text-[15px] font-semibold text-[#1a1a1a] truncate">
-          {courseTitle || 'Untitled Course'}
+        <span className="text-[13px] font-medium text-[#1a1a1a] truncate">
+          {courseTitle || 'New Course'}
         </span>
       </div>
 
-      {/* Right: Step dots + save status + settings */}
-      <div className="flex items-center gap-[14px]">
-        {/* Step dots */}
-        <div className="flex items-center gap-1">
-          {STEPS.map(step => {
-            const isCompleted = currentStep > step.number
-            const isActive = currentStep === step.number
-            let bg = '#f0f0f0'
-            let color = '#bbb'
-            if (isCompleted) { bg = '#1D9E75'; color = '#fff' }
-            if (isActive) { bg = '#378ADD'; color = '#fff' }
+      {/* Center: Step dots */}
+      <div className="flex items-center gap-0">
+        {STEPS.map((step, idx) => {
+          const isCompleted = currentStep > step.number
+          const isActive = currentStep === step.number
+          const isFuture = currentStep < step.number
 
-            return (
+          let dotBg = '#ddd'
+          let dotColor = '#bbb'
+          if (isCompleted) { dotBg = '#1D9E75'; dotColor = '#fff' }
+          if (isActive) { dotBg = '#378ADD'; dotColor = '#fff' }
+
+          return (
+            <div key={step.number} className="flex items-center">
+              {/* Connector line */}
+              {idx > 0 && (
+                <div
+                  style={{
+                    width: 24,
+                    height: 1,
+                    background: isCompleted || isActive ? '#1D9E75' : '#ddd',
+                  }}
+                />
+              )}
+              {/* Dot */}
               <button
-                key={step.number}
                 onClick={() => {
-                  if (step.number <= currentStep) onNavigateStep(step.number as 1 | 2 | 3 | 4)
+                  if (step.number <= currentStep) onNavigateStep(step.number as 1 | 2 | 3)
                 }}
-                className="flex items-center justify-center rounded-full cursor-pointer"
+                className="flex items-center justify-center rounded-full"
                 style={{
-                  width: 26,
-                  height: 26,
-                  background: bg,
-                  color,
-                  fontSize: 11,
+                  width: 22,
+                  height: 22,
+                  background: dotBg,
+                  color: dotColor,
+                  fontSize: 10,
                   fontWeight: 500,
+                  cursor: isFuture ? 'default' : 'pointer',
                 }}
                 title={step.label}
               >
                 {isCompleted ? (
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
                     <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
                   step.number
                 )}
               </button>
-            )
-          })}
-        </div>
+            </div>
+          )
+        })}
+      </div>
 
-        {/* Save status */}
+      {/* Right: Save status + nav buttons */}
+      <div className="flex items-center gap-3">
         {saveStatus !== 'idle' && (
           <span className={`text-[11px] whitespace-nowrap ${saveColors[saveStatus]}`}>
             {saveStatus === 'saved' && (
@@ -118,14 +126,65 @@ function BuilderTopBar({
           </span>
         )}
 
-        {/* Settings button */}
-        {onSettingsClick && (
+        {/* Step-specific nav buttons */}
+        {currentStep === 1 && (
           <button
-            onClick={onSettingsClick}
-            className="text-[12px] font-medium text-white px-4 py-1.5 rounded-md"
-            style={{ background: '#222', border: 'none' }}
+            onClick={() => onNavigateStep(2)}
+            style={{
+              background: '#1a1a1a',
+              color: 'white',
+              fontSize: 13,
+              padding: '4px 16px',
+              borderRadius: 6,
+              fontWeight: 500,
+            }}
           >
-            Settings →
+            Continue &rarr;
+          </button>
+        )}
+        {currentStep === 2 && (
+          <>
+            <button
+              onClick={() => onNavigateStep(1)}
+              style={{
+                background: 'white',
+                color: '#555',
+                fontSize: 13,
+                padding: '4px 16px',
+                borderRadius: 6,
+                border: '1px solid #e5e5e5',
+              }}
+            >
+              &larr; Define
+            </button>
+            <button
+              onClick={() => onNavigateStep(3)}
+              style={{
+                background: '#1a1a1a',
+                color: 'white',
+                fontSize: 13,
+                padding: '4px 16px',
+                borderRadius: 6,
+                fontWeight: 500,
+              }}
+            >
+              Review &rarr;
+            </button>
+          </>
+        )}
+        {currentStep === 3 && (
+          <button
+            onClick={() => onNavigateStep(2)}
+            style={{
+              background: 'white',
+              color: '#555',
+              fontSize: 13,
+              padding: '4px 16px',
+              borderRadius: 6,
+              border: '1px solid #e5e5e5',
+            }}
+          >
+            &larr; Build
           </button>
         )}
       </div>
@@ -145,9 +204,11 @@ function CreateCourseContent() {
   } = useWizardStore()
 
   const [saving, setSaving] = useState(false)
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
   const [creatorProfile, setCreatorProfile] = useState<{
     revenue_share_percent: number
-  }>({ revenue_share_percent: 70 })
+    stripe_account_id: string | null
+  }>({ revenue_share_percent: 70, stripe_account_id: null })
 
   const isInitialized = useRef(false)
 
@@ -159,6 +220,7 @@ function CreateCourseContent() {
         if (d.creator) {
           setCreatorProfile({
             revenue_share_percent: d.creator.revenue_share_percent || 70,
+            stripe_account_id: d.creator.stripe_account_id || null,
           })
         }
       })
@@ -185,9 +247,9 @@ function CreateCourseContent() {
               card_color: d.card_color || '#3b82f6',
             })
             setCourseId(editId)
-            // Resume at last wizard step
+            // Resume at last wizard step (capped at 3)
             const resumeStep = d.last_wizard_step || 1
-            setStep(Math.min(resumeStep, 4) as 1 | 2 | 3 | 4)
+            setStep(Math.min(resumeStep, 3) as 1 | 2 | 3)
           }
         })
         .catch(() => {})
@@ -267,11 +329,17 @@ function CreateCourseContent() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [courseId, currentStep])
 
-  const goToStep = async (step: 1 | 2 | 3 | 4) => {
-    // Save before transitioning
+  const goToStep = async (step: 1 | 2 | 3) => {
+    // Validate before moving forward from step 1
+    if (step > 1 && currentStep === 1) {
+      if (!form.title.trim() || !form.description.trim() || !form.category) {
+        return
+      }
+    }
+    // Save before transitioning forward
     if (step > currentStep) {
       const id = await saveDraft()
-      if (!id && step > 1) return // Block forward navigation if save failed and no courseId
+      if (!id && step > 1) return // Block forward navigation if save failed
     }
     window.history.pushState({ step }, '', '')
     setStep(step)
@@ -280,7 +348,6 @@ function CreateCourseContent() {
   const handlePublish = async () => {
     if (!courseId) return
     try {
-      // Save final state first
       await saveDraft()
       const res = await fetch(`/api/creator/courses/${courseId}/publish`, { method: 'POST' })
       const data = await res.json()
@@ -288,8 +355,8 @@ function CreateCourseContent() {
         alert(data.error || 'Failed to publish')
         return
       }
-      reset()
-      router.push('/creator/courses')
+      // Show post-publish success state
+      setPublishedSlug(form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''))
     } catch {
       alert('Failed to publish. Please try again.')
     }
@@ -301,33 +368,18 @@ function CreateCourseContent() {
     router.push('/creator')
   }
 
-  // ─── Step 4: Review ──────────────────────────────────────────
-  if (currentStep === 4 && courseId) {
+  // ─── Post-Publish Success State ──────────────────────────────
+  if (publishedSlug) {
     return (
-      <div className="flex flex-col h-screen overflow-hidden">
-        <BuilderTopBar
-          courseTitle={form.title}
-          currentStep={4}
-          saveStatus={saveStatus}
-          onNavigateStep={goToStep}
-        />
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-10 py-10">
-            <StepReview
-              courseId={courseId}
-              form={form}
-              onBack={() => goToStep(3)}
-              onPublish={handlePublish}
-              onSaveDraft={handleSaveDraft}
-              revenueSharePercent={creatorProfile.revenue_share_percent}
-            />
-          </div>
-        </div>
-      </div>
+      <PostPublishSuccess
+        courseTitle={form.title}
+        slug={publishedSlug}
+        onReset={() => { reset(); router.push('/creator') }}
+      />
     )
   }
 
-  // ─── Step 3: Settings ─────────────────────────────────────────
+  // ─── Step 3: Review & Publish ────────────────────────────────
   if (currentStep === 3 && courseId) {
     return (
       <div className="flex flex-col h-screen overflow-hidden">
@@ -336,19 +388,17 @@ function CreateCourseContent() {
           currentStep={3}
           saveStatus={saveStatus}
           onNavigateStep={goToStep}
-          onSettingsClick={undefined}
         />
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-10 py-10">
-            <StepSettings
-              form={form}
-              onChange={updateForm}
-              onBack={() => goToStep(2)}
-              onContinue={() => goToStep(4)}
-              courseId={courseId}
-              revenueSharePercent={creatorProfile.revenue_share_percent}
-            />
-          </div>
+          <StepReview
+            courseId={courseId}
+            form={form}
+            onBack={() => goToStep(2)}
+            onPublish={handlePublish}
+            onSaveDraft={handleSaveDraft}
+            revenueSharePercent={creatorProfile.revenue_share_percent}
+            stripeConnected={!!creatorProfile.stripe_account_id}
+          />
         </div>
       </div>
     )
@@ -363,7 +413,6 @@ function CreateCourseContent() {
           currentStep={2}
           saveStatus={saveStatus}
           onNavigateStep={goToStep}
-          onSettingsClick={() => goToStep(3)}
         />
         <StepBuildCourse
           courseId={courseId}
@@ -387,15 +436,101 @@ function CreateCourseContent() {
         onNavigateStep={goToStep}
       />
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-10 py-10">
-          <StepCourseInfo
-            form={form}
-            onChange={updateForm}
-            onContinue={() => goToStep(2)}
-            onSaveDraft={() => saveDraft()}
-            saving={saving}
-          />
+        <StepCourseInfo
+          form={form}
+          onChange={updateForm}
+          onContinue={() => goToStep(2)}
+          onSaveDraft={() => saveDraft()}
+          saving={saving}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Post-Publish Success (Task 6) ─────────────────────────────
+function PostPublishSuccess({
+  courseTitle,
+  slug,
+  onReset,
+}: {
+  courseTitle: string
+  slug: string
+  onReset: () => void
+}) {
+  const [countdown, setCountdown] = useState(5)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          onReset()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [onReset])
+
+  return (
+    <div className="min-h-screen bg-white flex items-start justify-center" style={{ paddingTop: 80 }}>
+      <div className="text-center" style={{ maxWidth: 480 }}>
+        {/* Green check */}
+        <div
+          className="mx-auto flex items-center justify-center rounded-full"
+          style={{ width: 64, height: 64, background: '#E1F5EE', marginBottom: 20 }}
+        >
+          <div
+            className="flex items-center justify-center rounded-full"
+            style={{ width: 40, height: 40, background: '#1D9E75' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M5 10L8.5 13.5L15 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
         </div>
+
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1a1a1a', marginBottom: 8 }}>
+          Course published!
+        </h1>
+        <p style={{ fontSize: 16, color: '#555', marginBottom: 8 }}>
+          {courseTitle}
+        </p>
+        <p style={{ fontSize: 14, color: '#999', maxWidth: 400, margin: '0 auto 28px' }}>
+          Your course is now live on the marketplace. Learners can find and enroll in it right away.
+        </p>
+
+        <a
+          href={`/course/${slug}`}
+          style={{
+            display: 'inline-block',
+            background: '#1a1a1a',
+            color: 'white',
+            fontSize: 14,
+            padding: '10px 24px',
+            borderRadius: 8,
+            fontWeight: 500,
+            marginBottom: 16,
+          }}
+        >
+          View your course &rarr;
+        </a>
+
+        <div>
+          <a
+            href="/creator"
+            style={{ fontSize: 13, color: '#378ADD' }}
+            className="hover:underline"
+          >
+            Back to dashboard
+          </a>
+        </div>
+
+        <p style={{ fontSize: 12, color: '#ccc', marginTop: 24 }}>
+          Redirecting to dashboard in {countdown} second{countdown !== 1 ? 's' : ''}...
+        </p>
       </div>
     </div>
   )

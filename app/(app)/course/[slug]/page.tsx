@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
+interface ModulePreview {
+  id: string;
+  title: string;
+  display_order: number;
+  lessons: { id: string; title: string; display_order: number }[];
+}
+
 interface CourseDetail {
   id: string;
   title: string;
@@ -12,32 +19,26 @@ interface CourseDetail {
   category: string;
   difficulty: string;
   price_cents: number;
+  card_color?: string;
+  tags?: string[];
+  learning_objectives?: string[];
+  estimated_duration_minutes?: number | null;
   creator: {
     id: string;
     creator_name: string;
     bio: string | null;
-    expertise_areas: string[] | null;
-    credentials: string | null;
   } | null;
   stats: {
     module_count: number;
     lesson_count: number;
     question_count: number;
   };
+  modules?: ModulePreview[];
   user_progress: {
     id: string;
     status: string;
-    questions_seen: number;
-    questions_correct: number;
-    sessions_completed: number;
   } | null;
 }
-
-const difficultyColors: Record<string, string> = {
-  beginner: 'bg-green-50 text-green-700 border-green-200',
-  intermediate: 'bg-amber-50 text-amber-700 border-amber-200',
-  advanced: 'bg-red-50 text-red-700 border-red-200',
-};
 
 export default function CourseOverviewPage() {
   const params = useParams();
@@ -48,37 +49,40 @@ export default function CourseOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set([0]));
 
   useEffect(() => {
     async function fetchCourse() {
       try {
-        const url = `/api/courses/${params.slug}`;
-        const res = await fetch(url);
-        if (res.status === 404) {
-          setError('Course not found');
-          setLoading(false);
-          return;
-        }
+        const res = await fetch(`/api/courses/${params.slug}`);
+        if (res.status === 404) { setError('Course not found'); setLoading(false); return; }
         if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        setCourse(data);
-      } catch (err) {
+        setCourse(await res.json());
+      } catch {
         setError('Something went wrong');
-        console.error('Course fetch error:', err);
       }
       setLoading(false);
     }
     fetchCourse();
-  }, [params.slug, isPreview]);
+  }, [params.slug]);
+
+  function toggleModule(index: number) {
+    setExpandedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-6 bg-[#EBE8E2] rounded w-16" />
-        <div className="h-32 bg-[#EBE8E2] rounded-2xl" />
-        <div className="h-8 bg-[#EBE8E2] rounded w-2/3" />
-        <div className="h-4 bg-[#EBE8E2] rounded w-1/2" />
-        <div className="h-20 bg-[#EBE8E2] rounded-2xl" />
+        <div className="h-4 bg-gray-100 rounded w-16" />
+        <div className="h-1.5 bg-gray-100 rounded w-full" />
+        <div className="h-7 bg-gray-100 rounded w-3/4" />
+        <div className="h-4 bg-gray-100 rounded w-1/3" />
+        <div className="h-20 bg-gray-100 rounded-[10px]" />
       </div>
     );
   }
@@ -86,11 +90,8 @@ export default function CourseOverviewPage() {
   if (error || !course) {
     return (
       <div className="text-center py-12">
-        <p className="text-[#6B635A] mb-4">{error || 'Course not found'}</p>
-        <button
-          onClick={() => router.push('/browse')}
-          className="text-[#2C2825] font-medium text-sm"
-        >
+        <p style={{ color: '#999', marginBottom: 16 }}>{error || 'Course not found'}</p>
+        <button onClick={() => router.push('/browse')} style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500 }}>
           Back to browse
         </button>
       </div>
@@ -98,196 +99,179 @@ export default function CourseOverviewPage() {
   }
 
   const isEnrolled = !!course.user_progress;
-  const priceFormatted = course.price_cents
-    ? `$${(course.price_cents / 100).toFixed(2)}`
-    : 'Free';
-  function getAbbreviation(title: string): string {
-    return title
-      .split(/[\s-]+/)
-      .filter((w) => w.length > 1)
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase();
-  }
-
-  const accentColor = (course as any).card_color || '#2C2825';
+  const accentColor = course.card_color || '#3b82f6';
+  const isFree = !course.price_cents || course.price_cents === 0;
+  const duration = course.estimated_duration_minutes;
 
   return (
     <div className="space-y-5">
       {/* Preview banner */}
       {isPreview && (
-        <div className="bg-amber-100 text-amber-700 text-center text-sm font-medium py-2 -mx-4 -mt-4 rounded-t-lg">
-          Preview Mode — progress not saved
+        <div style={{ backgroundColor: '#FEF3CD', color: '#856404', fontSize: 12, textAlign: 'center', padding: '8px 0', margin: '-16px -16px 0' }}>
+          Preview mode — this course is not yet published
         </div>
       )}
 
-      {/* Accent color bar */}
-      <div className={`h-1 -mx-4 ${isPreview ? '' : '-mt-4 rounded-t-lg'}`} style={{ backgroundColor: accentColor }} />
+      {/* Back link */}
+      <button onClick={() => router.back()} style={{ fontSize: 13, color: '#888', display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+        Back
+      </button>
 
-      {/* Header bar */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1 text-sm text-[#6B635A] hover:text-[#2C2825] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          Back
-        </button>
-        <h1 className="text-sm font-semibold text-[#2C2825] flex-1 text-center">Course overview</h1>
-        <div className="w-12" />
-      </div>
+      {/* Color bar */}
+      <div style={{ height: 6, borderRadius: 3, width: '100%', backgroundColor: accentColor, marginBottom: 20 }} />
 
-      {/* Thumbnail/icon */}
-      <div className="w-full h-36 rounded-2xl bg-[#F5F3EF] flex items-center justify-center animate-fade-up">
-        <span className="text-4xl font-bold text-[#D4CFC7]">
-          {getAbbreviation(course.title)}
+      {/* Title */}
+      <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>{course.title}</h1>
+
+      {/* Creator */}
+      <p style={{ fontSize: 14, color: '#999', marginBottom: 12 }}>
+        by {course.creator?.creator_name || 'openED'}
+      </p>
+
+      {/* Tags */}
+      <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 12 }}>
+        {/* Primary category tag */}
+        <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 4, backgroundColor: '#E6F1FB', color: '#185FA5' }}>
+          {course.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
         </span>
-      </div>
-
-      {/* Title and creator */}
-      <div className="animate-fade-up">
-        <h2 className="text-xl font-bold text-[#2C2825]">{course.title}</h2>
-        <p className="text-sm text-[#6B635A] mt-1">
-          By {course.creator?.creator_name || 'openED'}
-        </p>
-      </div>
-
-      {/* Badges */}
-      <div className="flex flex-wrap gap-2 animate-fade-up">
-        <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 capitalize">
-          {course.category.replace('_', ' ')}
-        </span>
-        {[...new Set<string>((course as any).tags || [])].filter((tag: string) => tag.toLowerCase().replace(/[\s_]+/g, '_') !== course.category.toLowerCase().replace(/[\s_]+/g, '_')).map((tag: string) => (
-          <span key={tag} className="text-xs font-medium px-3 py-1 rounded-full bg-[#F5F3EF] text-[#6B635A] border border-[#E8E4DD]">
-            {tag}
-          </span>
-        ))}
+        {(course.tags || [])
+          .filter(tag => tag.toLowerCase().replace(/[\s_]+/g, '_') !== course.category.toLowerCase().replace(/[\s_]+/g, '_'))
+          .map(tag => (
+            <span key={tag} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 4, border: '1px solid #e5e5e5', color: '#555' }}>
+              {tag}
+            </span>
+          ))}
       </div>
 
       {/* Description */}
       {course.description && (
-        <p className="text-sm text-[#6B635A] leading-relaxed animate-fade-up">{course.description}</p>
+        <p style={{ fontSize: 14, color: '#555', lineHeight: 1.6, marginBottom: 20 }}>{course.description}</p>
       )}
 
-      {/* Stats row 1: Questions, Modules, Exam fee */}
-      <div className="grid grid-cols-3 gap-3 animate-fade-up">
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.question_count}</p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Questions</p>
+      {/* Stats row - 3 cards */}
+      <div className="flex gap-3" style={{ marginBottom: 20 }}>
+        <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', border: '1px solid #e5e5e5', borderRadius: 10 }}>
+          <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{course.stats.module_count}</p>
+          <p style={{ fontSize: 11, color: '#999' }}>Modules</p>
         </div>
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.module_count}</p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Modules</p>
+        <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', border: '1px solid #e5e5e5', borderRadius: 10 }}>
+          <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{course.stats.lesson_count}</p>
+          <p style={{ fontSize: 11, color: '#999' }}>Lessons</p>
         </div>
-        <div className="rounded-xl bg-[#F5F3EF] border border-[#E8E4DD] p-3 text-center">
-          <p className="text-lg font-bold text-[#2C2825] font-mono">{course.stats.lesson_count}</p>
-          <p className="text-[10px] text-[#6B635A] font-medium">Lessons</p>
+        <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', border: '1px solid #e5e5e5', borderRadius: 10 }}>
+          <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{duration ? `~${duration}m` : '--'}</p>
+          <p style={{ fontSize: 11, color: '#999' }}>Duration</p>
         </div>
       </div>
 
-      {/* Learning objectives */}
-      {(course as any).learning_objectives?.length > 0 ? (
-        <div className="animate-fade-up">
-          <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
-          <ul className="space-y-1.5">
-            {(course as any).learning_objectives.map((obj: string, i: number) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-[#6B635A]">
-                <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-                {obj}
-              </li>
+      {/* What you'll learn */}
+      {(course.learning_objectives || []).length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 10 }}>What you&apos;ll learn</h3>
+          <div className="space-y-2">
+            {(course.learning_objectives || []).map((obj, i) => (
+              <div key={i} className="flex gap-2" style={{ alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 14, color: '#1D9E75', marginTop: 2, flexShrink: 0 }}>&#10003;</span>
+                <span style={{ fontSize: 13, color: '#555', lineHeight: 1.4 }}>{obj}</span>
+              </div>
             ))}
-          </ul>
-        </div>
-      ) : (
-        <div className="animate-fade-up">
-          <h3 className="text-sm font-bold text-[#2C2825] mb-2">What you&apos;ll learn</h3>
-          <p className="text-sm text-[#6B635A]">
-            {course.stats.module_count} module{course.stats.module_count !== 1 ? 's' : ''} covering {course.stats.lesson_count} lesson{course.stats.lesson_count !== 1 ? 's' : ''} with {course.stats.question_count} practice questions.
-          </p>
-        </div>
-      )}
-
-      {/* Enrolled: show progress */}
-      {isEnrolled && course.user_progress && (
-        <div className="rounded-2xl bg-[#F5F3EF] border border-[#E8E4DD] p-4 space-y-3 animate-fade-up">
-          <div className="flex justify-between text-xs text-[#6B635A]">
-            <span>{course.user_progress.questions_seen} questions seen</span>
-            <span>{course.user_progress.sessions_completed} sessions</span>
           </div>
         </div>
       )}
 
-      {/* Action button */}
-      {isPreview ? (
-        <button
-          onClick={() => window.close()}
-          className="w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
-        >
-          Close Preview
-        </button>
-      ) : isEnrolled ? (
-        <Link
-          href={`/course/${course.slug}/path`}
-          className="block w-full bg-[#2C2825] hover:bg-[#1A1816] text-[#F5F3EF] font-semibold py-3 rounded-xl text-center transition-colors"
-        >
-          Continue studying
-        </Link>
-      ) : course.price_cents > 0 ? (
-        <div className="space-y-2">
-          <button
-            onClick={async () => {
-              if (actionLoading) return;
-              setActionLoading(true);
-              try {
-                const res = await fetch('/api/checkout', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ course_id: course.id }),
-                });
-                const data = await res.json();
-                if (data.url) {
-                  window.location.href = data.url;
-                } else {
-                  setError(data.error || 'Checkout failed');
-                  setActionLoading(false);
-                }
-              } catch {
-                setError('Something went wrong');
-                setActionLoading(false);
-              }
-            }}
-            disabled={actionLoading}
-            className="w-full bg-[#2C2825] hover:bg-[#1A1816] disabled:opacity-50 text-[#F5F3EF] font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            {actionLoading ? (
-              <>
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Redirecting...
-              </>
-            ) : (
-              `Buy Course — ${priceFormatted}`
-            )}
-          </button>
-          <p className="text-xs text-[#A39B90] text-center">One-time payment, lifetime access</p>
+      {/* Course content - collapsible modules */}
+      {(course.modules || []).length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 10 }}>Course content</h3>
+          <div>
+            {(course.modules || []).map((mod, i) => {
+              const isExpanded = expandedModules.has(i);
+              return (
+                <div key={mod.id}>
+                  {/* Module header */}
+                  <button
+                    onClick={() => toggleModule(i)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 0',
+                      borderBottom: '1px solid #eee',
+                      background: 'none',
+                      border: 'none',
+                      borderBottomWidth: 1,
+                      borderBottomStyle: 'solid',
+                      borderBottomColor: '#eee',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', textAlign: 'left' }}>{mod.title}</span>
+                    <span style={{ fontSize: 12, color: '#999', flexShrink: 0, marginLeft: 8 }}>
+                      {mod.lessons.length} lessons {isExpanded ? '\u25B4' : '\u25BE'}
+                    </span>
+                  </button>
+                  {/* Expanded lessons */}
+                  {isExpanded && (
+                    <div>
+                      {mod.lessons.map((lesson, li) => (
+                        <div
+                          key={lesson.id}
+                          className="flex gap-2"
+                          style={{ padding: '8px 0 8px 12px', alignItems: 'center' }}
+                        >
+                          <span style={{ fontSize: 11, color: '#999', width: 24, flexShrink: 0 }}>{li + 1}</span>
+                          <span style={{ fontSize: 13, color: '#666' }}>{lesson.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-2">
+      )}
+
+      {/* Price + enroll */}
+      <div>
+        {/* Price display */}
+        <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 18, fontWeight: 600, color: isFree ? '#1D9E75' : '#1a1a1a' }}>
+            {isFree ? 'Free' : `$${(course.price_cents / 100).toFixed(2)}`}
+          </span>
+        </div>
+
+        {/* Action button */}
+        {isPreview ? (
+          <button
+            onClick={() => window.close()}
+            style={{
+              width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
+              borderRadius: 10, fontSize: 15, fontWeight: 500, border: 'none', cursor: 'pointer',
+            }}
+          >
+            Close Preview
+          </button>
+        ) : isEnrolled ? (
+          <Link
+            href={`/course/${course.slug}/path`}
+            style={{
+              display: 'block', width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
+              borderRadius: 10, fontSize: 15, fontWeight: 500, textAlign: 'center',
+            }}
+          >
+            Continue learning &rarr;
+          </Link>
+        ) : isFree ? (
           <button
             onClick={async () => {
               if (actionLoading) return;
               setActionLoading(true);
               try {
                 const res = await fetch(`/api/courses/${course.slug}/enroll`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
                 });
                 if (res.ok || res.status === 409) {
                   router.push(`/course/${course.slug}/path`);
@@ -296,29 +280,43 @@ export default function CourseOverviewPage() {
                   setError(data.error || 'Enrollment failed');
                   setActionLoading(false);
                 }
-              } catch {
-                setError('Something went wrong');
-                setActionLoading(false);
-              }
+              } catch { setError('Something went wrong'); setActionLoading(false); }
             }}
             disabled={actionLoading}
-            className="w-full bg-[#2C2825] hover:bg-[#1A1816] disabled:opacity-50 text-[#F5F3EF] font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+            style={{
+              width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
+              borderRadius: 10, fontSize: 15, fontWeight: 500, border: 'none', cursor: 'pointer',
+              opacity: actionLoading ? 0.5 : 1,
+            }}
           >
-            {actionLoading ? (
-              <>
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Enrolling...
-              </>
-            ) : (
-              'Enroll Free'
-            )}
+            {actionLoading ? 'Enrolling...' : 'Enroll for free'}
           </button>
-          <p className="text-xs text-[#A39B90] text-center">Free - start studying immediately</p>
-        </div>
-      )}
+        ) : (
+          <button
+            onClick={async () => {
+              if (actionLoading) return;
+              setActionLoading(true);
+              try {
+                const res = await fetch('/api/checkout', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ course_id: course.id }),
+                });
+                const data = await res.json();
+                if (data.url) { window.location.href = data.url; }
+                else { setError(data.error || 'Checkout failed'); setActionLoading(false); }
+              } catch { setError('Something went wrong'); setActionLoading(false); }
+            }}
+            disabled={actionLoading}
+            style={{
+              width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
+              borderRadius: 10, fontSize: 15, fontWeight: 500, border: 'none', cursor: 'pointer',
+              opacity: actionLoading ? 0.5 : 1,
+            }}
+          >
+            {actionLoading ? 'Redirecting...' : `Buy for $${(course.price_cents / 100).toFixed(2)}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

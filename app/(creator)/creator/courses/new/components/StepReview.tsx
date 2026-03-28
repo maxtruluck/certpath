@@ -5,12 +5,14 @@ import type { CourseFormData } from '@/lib/store/creator-wizard'
 
 interface CourseData {
   title: string
+  slug: string
   description: string
   category: string
   difficulty: string
   is_free: boolean
   price_cents: number
   tags: string[]
+  card_color: string
   modules: Array<{
     id: string
     title: string
@@ -20,6 +22,7 @@ interface CourseData {
       body: string
       question_count: number
       word_count: number
+      step_count: number
     }>
   }>
   stats: {
@@ -32,7 +35,7 @@ interface CourseData {
 interface AuditCheck {
   label: string
   status: 'pass' | 'warn' | 'info'
-  message: string
+  statusLabel: string
 }
 
 function formatCents(cents: number): string {
@@ -43,77 +46,26 @@ function computeAudit(data: CourseData): AuditCheck[] {
   const checks: AuditCheck[] = []
   const allLessons = data.modules.flatMap(m => m.lessons)
 
-  // All lessons have content
-  const emptyLessons = allLessons.filter(l => (l.body || '').length < 50)
+  // All lessons have steps
+  const emptyLessons = allLessons.filter(l => (l.step_count || 0) === 0)
   if (emptyLessons.length === 0) {
-    checks.push({ label: 'All lessons have content', status: 'pass', message: `${allLessons.length} lessons with content` })
+    checks.push({ label: 'All lessons have steps', status: 'pass', statusLabel: 'Pass' })
   } else {
-    checks.push({ label: 'Lessons missing content', status: 'warn', message: `${emptyLessons.length} lessons have no content` })
+    checks.push({ label: `${emptyLessons.length} lesson${emptyLessons.length !== 1 ? 's' : ''} have no steps`, status: 'warn', statusLabel: 'Warning' })
   }
 
-  // Questions added
-  const totalQuestions = data.stats.question_count
-  checks.push({ label: 'Questions added', status: 'pass', message: `${totalQuestions} questions` })
-
-  // Lessons missing questions
-  const lessonsWithoutQuestions = allLessons.filter(l => l.question_count === 0)
-  if (lessonsWithoutQuestions.length > 0) {
-    checks.push({
-      label: 'Lessons missing questions',
-      status: 'warn',
-      message: `${lessonsWithoutQuestions.length} lessons missing questions -- Lessons without questions won't have review cards`,
-    })
-  }
-
-  // Description
+  // Description length
   if ((data.description || '').length >= 50) {
-    checks.push({ label: 'Description complete', status: 'pass', message: `${data.description.length} characters` })
+    checks.push({ label: 'Description is 50+ characters', status: 'pass', statusLabel: 'Pass' })
   } else {
-    checks.push({ label: 'Description incomplete', status: 'warn', message: `${(data.description || '').length} characters (50+ recommended)` })
+    checks.push({ label: 'Description is under 50 characters', status: 'warn', statusLabel: 'Warning' })
   }
 
-  // Video embeds (informational)
-  const hasVideo = allLessons.some(l => (l.body || '').includes('youtube.com') || (l.body || '').includes('vimeo.com'))
-  if (hasVideo) {
-    checks.push({ label: 'Video embeds detected', status: 'pass', message: 'Courses with video have 2x completion' })
-  } else {
-    checks.push({ label: 'No video embeds', status: 'info', message: 'Not required -- courses with video have 2x completion' })
-  }
+  // Total answer steps
+  const totalAnswers = allLessons.reduce((s, l) => s + (l.question_count || 0), 0)
+  checks.push({ label: `${totalAnswers} answer step${totalAnswers !== 1 ? 's' : ''} across all lessons`, status: 'info', statusLabel: 'Info' })
 
   return checks
-}
-
-function AuditCheckRow({ check }: { check: AuditCheck }) {
-  const icons = {
-    pass: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-emerald-500">
-        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M5.5 8L7 9.5L10.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-    warn: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-amber-500">
-        <path d="M8 2L14 13H2L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M8 7v2M8 11h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-    info: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-gray-400">
-        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M8 7v4M8 5h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  }
-
-  return (
-    <div className="flex items-start gap-3 py-2">
-      <div className="mt-0.5 flex-shrink-0">{icons[check.status]}</div>
-      <div>
-        <p className="text-sm font-medium text-[#2C2825]">{check.label}</p>
-        <p className="text-xs text-gray-400">{check.message}</p>
-      </div>
-    </div>
-  )
 }
 
 export default function StepReview({
@@ -123,6 +75,7 @@ export default function StepReview({
   onPublish,
   onSaveDraft,
   revenueSharePercent,
+  stripeConnected,
 }: {
   courseId: string
   form: CourseFormData
@@ -130,6 +83,7 @@ export default function StepReview({
   onPublish: () => void
   onSaveDraft: () => void
   revenueSharePercent: number
+  stripeConnected?: boolean
 }) {
   const [courseData, setCourseData] = useState<CourseData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -146,9 +100,12 @@ export default function StepReview({
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto py-8 animate-pulse">
-        <div className="h-48 bg-gray-100 rounded-2xl mb-6" />
-        <div className="h-64 bg-gray-100 rounded-2xl" />
+      <div style={{ maxWidth: 700, margin: '0 auto', padding: '40px 24px 60px' }}>
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-100 rounded w-48 mb-6" />
+          <div className="h-48 bg-gray-100 rounded-xl mb-6" />
+          <div className="h-32 bg-gray-100 rounded-xl" />
+        </div>
       </div>
     )
   }
@@ -161,101 +118,251 @@ export default function StepReview({
     sum + mod.lessons.reduce((ls, l) => ls + (l.word_count || 0), 0), 0) || 0
   const durationMinutes = Math.round(totalWords / 200)
   const durationDisplay = durationMinutes < 60
-    ? `~${durationMinutes} min`
+    ? `~${durationMinutes || 1} min`
     : `~${(Math.round(durationMinutes / 30) / 2)} hours`
 
   const earningsCents = form.is_free ? 0 : Math.round(form.price_cents * revenueSharePercent / 100)
 
-  return (
-    <div className="max-w-2xl mx-auto py-8">
-      {/* Marketplace Preview Card */}
-      <div className="rounded-2xl border border-[#E8E4DD] overflow-hidden bg-white mb-4">
-        {/* Gradient header */}
-        <div className="h-32 bg-gradient-to-br from-blue-500 to-blue-700" />
+  // Publish disabled conditions
+  const moduleCount = data?.stats.module_count || 0
+  const totalSteps = data?.modules.reduce((s, m) =>
+    s + m.lessons.reduce((ls, l) => ls + (l.step_count || 0), 0), 0) || 0
+  const canPublish = moduleCount > 0 && totalSteps > 0 && (form.is_free || stripeConnected)
 
-        <div className="p-6">
+  const badgeStyles: Record<string, { bg: string; color: string }> = {
+    pass: { bg: '#E1F5EE', color: '#0F6E56' },
+    warn: { bg: '#FEF3CD', color: '#856404' },
+    info: { bg: '#E6F1FB', color: '#185FA5' },
+  }
+
+  return (
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '40px 24px 60px' }}>
+      {/* 1. Page title */}
+      <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>
+        Review & Publish
+      </h1>
+      <p style={{ fontSize: 14, color: '#999', marginBottom: 32 }}>
+        Make sure everything looks good before going live
+      </p>
+
+      {/* 2. Marketplace Preview */}
+      <div
+        style={{
+          border: '1px solid #e5e5e5',
+          borderRadius: 12,
+          overflow: 'hidden',
+          marginBottom: 8,
+        }}
+      >
+        {/* Color bar */}
+        <div style={{ height: 6, background: form.card_color || '#3b82f6' }} />
+
+        <div style={{ padding: 20 }}>
           <div className="flex items-start justify-between">
-            <div className="flex-1 mr-4">
-              <h2 className="text-xl font-bold text-[#2C2825]">{form.title || 'Untitled Course'}</h2>
-              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{form.description || 'No description'}</p>
+            <div className="flex-1 min-w-0" style={{ marginRight: 16 }}>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1a1a1a' }}>
+                {form.title || 'Untitled Course'}
+              </p>
+              <p style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                by You
+              </p>
             </div>
-            <span className="text-lg font-bold text-[#2C2825] whitespace-nowrap">
+            <span style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: form.is_free ? '#1D9E75' : '#1a1a1a',
+              flexShrink: 0,
+            }}>
               {form.is_free ? 'Free' : formatCents(form.price_cents)}
             </span>
           </div>
-          <div className="flex items-center gap-4 mt-4 text-xs text-gray-400">
-            <span>{data?.stats.module_count || 0} modules</span>
-            <span>{data?.stats.lesson_count || 0} lessons</span>
-            <span>{data?.stats.question_count || 0} questions</span>
-            <span>{durationDisplay}</span>
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <span className="px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-600">{form.category}</span>
-            <span className="px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-600 capitalize">{form.difficulty}</span>
-          </div>
+
+          <p style={{ fontSize: 13, color: '#666', marginTop: 10, lineHeight: '1.5' }}>
+            {form.description || 'No description'}
+          </p>
+
+          <p style={{ fontSize: 12, color: '#888', marginTop: 10 }}>
+            {data?.stats.module_count || 0} module{(data?.stats.module_count || 0) !== 1 ? 's' : ''} &middot;{' '}
+            {data?.stats.lesson_count || 0} lesson{(data?.stats.lesson_count || 0) !== 1 ? 's' : ''} &middot;{' '}
+            {totalSteps} step{totalSteps !== 1 ? 's' : ''} &middot;{' '}
+            {durationDisplay}
+          </p>
+
+          {(form.tags || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5" style={{ marginTop: 10 }}>
+              {form.tags.map(tag => (
+                <span
+                  key={tag}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: '#f0f0f0',
+                    color: '#666',
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      <p className="text-center text-xs text-gray-400 mb-8">How your course appears in the marketplace</p>
+      <p style={{ fontSize: 11, color: '#aaa', fontStyle: 'italic', textAlign: 'center', marginBottom: 28 }}>
+        How your course appears in the marketplace
+      </p>
 
-      {/* Content Audit */}
-      <div className="rounded-2xl border border-[#E8E4DD] bg-white p-6 mb-6">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 mb-4">Content Audit</h3>
-        <div className="divide-y divide-gray-100">
+      {/* 3. Content Audit */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ fontSize: 12, textTransform: 'uppercase', color: '#888', fontWeight: 600, letterSpacing: '0.5px', marginBottom: 10 }}>
+          Content Audit
+        </p>
+        <div className="space-y-2">
           {audit.map((check, idx) => (
-            <AuditCheckRow key={idx} check={check} />
+            <div
+              key={idx}
+              className="flex items-center justify-between"
+              style={{
+                background: '#fafafa',
+                padding: '10px 14px',
+                borderRadius: 8,
+              }}
+            >
+              <span style={{ fontSize: 13, color: '#555' }}>{check.label}</span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  background: badgeStyles[check.status].bg,
+                  color: badgeStyles[check.status].color,
+                }}
+              >
+                {check.statusLabel}
+              </span>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Preview as Learner */}
-      <div className="rounded-2xl bg-blue-50 border border-blue-200 p-6 text-center mb-6">
-        <button className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-          Preview as Learner
-        </button>
-        <p className="text-xs text-blue-400 mt-1">Walk through the card stack exactly as a learner would</p>
+      {/* 4. Preview as Learner */}
+      <div
+        className="flex items-center justify-between"
+        style={{
+          background: '#f8fbff',
+          border: '1px solid #E6F1FB',
+          borderRadius: 10,
+          padding: '14px 18px',
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <p style={{ fontSize: 14, color: '#185FA5', fontWeight: 500 }}>Preview as learner</p>
+          <p style={{ fontSize: 12, color: '#999' }}>Walk through the course exactly as a learner would</p>
+        </div>
+        <a
+          href={data?.slug ? `/course/${data.slug}/path?preview=true` : '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: '#378ADD',
+            color: 'white',
+            fontSize: 13,
+            padding: '8px 20px',
+            borderRadius: 6,
+            fontWeight: 500,
+            textDecoration: 'none',
+          }}
+        >
+          Open preview &rarr;
+        </a>
       </div>
 
-      {/* Pricing confirmation */}
-      {!form.is_free && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-center justify-between mb-6">
-          <div>
-            <p className="text-sm font-medium text-[#2C2825]">Pricing: {formatCents(form.price_cents)}</p>
-            <p className="text-xs text-gray-400">
-              You earn {formatCents(earningsCents)} per sale ({revenueSharePercent}% standard rate)
+      {/* 5. Pricing Confirmation */}
+      <div
+        className="flex items-center justify-between"
+        style={{
+          background: '#fafafa',
+          border: '1px solid #e5e5e5',
+          borderRadius: 10,
+          padding: '14px 18px',
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <p style={{ fontSize: 12, color: '#999' }}>Course price</p>
+          <p style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a' }}>
+            {form.is_free ? 'Free' : formatCents(form.price_cents)}
+          </p>
+          {!form.is_free && (
+            <p style={{ fontSize: 12, color: '#1D9E75' }}>
+              You earn {formatCents(earningsCents)} per sale ({revenueSharePercent}%)
             </p>
-          </div>
-          <button onClick={onBack} className="text-xs font-medium text-blue-600 hover:text-blue-800">
-            Change &rarr;
-          </button>
+          )}
+        </div>
+        <button
+          onClick={onBack}
+          style={{ fontSize: 12, color: '#378ADD', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          Edit in Define &rarr;
+        </button>
+      </div>
+
+      {/* Stripe warning for paid courses */}
+      {!form.is_free && !stripeConnected && (
+        <div
+          style={{
+            background: '#FEF3CD',
+            border: '1px solid #F59E0B',
+            borderRadius: 8,
+            padding: '10px 14px',
+            marginBottom: 24,
+            fontSize: 13,
+            color: '#856404',
+          }}
+        >
+          Connect Stripe in Creator Settings to publish a paid course.
         </div>
       )}
 
-      {/* Publish section */}
-      <div className="rounded-2xl bg-gray-50 border border-gray-200 p-6">
-        <p className="text-xs text-gray-500 mb-4">
-          Once published, this course will be visible to all learners on openED.
+      {/* 6. Publish Section */}
+      <div style={{ borderTop: '1px solid #eee', paddingTop: 24 }}>
+        <p style={{ fontSize: 12, color: '#999', textAlign: 'center', marginBottom: 16 }}>
+          By publishing, you confirm this course meets the openED content guidelines.
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={onSaveDraft}
-            className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-300 rounded-xl hover:bg-white transition-colors"
+            style={{
+              fontSize: 14,
+              color: '#888',
+              background: 'white',
+              border: '1px solid #e5e5e5',
+              padding: '12px 28px',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
           >
             Save as Draft
           </button>
           <button
             onClick={onPublish}
-            className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors"
+            disabled={!canPublish}
+            style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: 'white',
+              background: canPublish ? '#1a1a1a' : '#ccc',
+              border: 'none',
+              padding: '12px 28px',
+              borderRadius: 8,
+              cursor: canPublish ? 'pointer' : 'default',
+            }}
           >
             Publish Course
           </button>
         </div>
-      </div>
-
-      {/* Back link */}
-      <div className="mt-6 pt-5 border-t border-gray-100">
-        <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-          &larr; Back to settings
-        </button>
       </div>
     </div>
   )
