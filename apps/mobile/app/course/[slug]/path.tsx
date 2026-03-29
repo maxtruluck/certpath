@@ -105,9 +105,11 @@ export default function CoursePathScreen() {
     );
   }
 
-  const sections = data.modules.map((mod) => ({
+  const sections = data.modules.map((mod, idx) => ({
     title: mod.title,
     description: mod.description,
+    lessonCount: mod.lessons.length,
+    moduleNumber: idx + 1,
     data: mod.lessons,
   }));
 
@@ -159,7 +161,15 @@ export default function CoursePathScreen() {
         }
         renderSectionHeader={({ section }) => (
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={styles.sectionHeaderTop}>
+              <View style={styles.sectionNumberBadge}>
+                <Text style={styles.sectionNumberText}>{section.moduleNumber}</Text>
+              </View>
+              <View style={styles.sectionHeaderInfo}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionMeta}>{section.lessonCount} lessons</Text>
+              </View>
+            </View>
             {section.description ? (
               <Text style={styles.sectionDesc}>{section.description}</Text>
             ) : null}
@@ -296,18 +306,48 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['4xl'],
   },
   sectionHeader: {
-    paddingVertical: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing['2xl'],
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: spacing.md,
+  },
+  sectionHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sectionNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionNumberText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  sectionHeaderInfo: {
+    flex: 1,
+    gap: 2,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
+    fontSize: fontSize.base,
+    fontWeight: '700',
     color: colors.text,
+  },
+  sectionMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
   },
   sectionDesc: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    lineHeight: 20,
   },
   lessonRow: {
     flexDirection: 'row',
