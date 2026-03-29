@@ -166,9 +166,11 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
     if (readOnly) return // Don't fire onComplete in review mode
     if (shouldReveal && answerResult && !completedRef.current) {
       completedRef.current = true
-      onComplete(answerResult.is_correct)
+      // Only award credit if correct on first attempt (no prior wrong answers)
+      const earnedCredit = answerResult.is_correct && wrongAttempts === 0
+      onComplete(earnedCredit)
     }
-  }, [shouldReveal, answerResult, onComplete, readOnly])
+  }, [shouldReveal, answerResult, onComplete, readOnly, wrongAttempts])
 
   function getOptionState(optionId: string): 'default' | 'selected' | 'correct' | 'incorrect' {
     // In readOnly review mode, highlight correct answers from previousResult
