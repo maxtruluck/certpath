@@ -156,7 +156,7 @@ export default function CourseDetailScreen() {
           <StatPill icon="layers-outline" value={`${course.stats.module_count} modules`} />
         </View>
 
-        {course.cert_info.passing_score && (
+        {course.cert_info?.passing_score && (
           <View style={styles.certInfo}>
             <Text style={styles.certInfoTitle}>Exam Information</Text>
             <View style={styles.certRow}>
