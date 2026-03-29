@@ -163,7 +163,7 @@ export default function LessonPlayerPage() {
           .select('status, current_step_index, step_completions')
           .eq('lesson_id', lessonId)
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '')
-          .single()
+          .maybeSingle()
 
         if (progress && progress.status !== 'completed') {
           const completedSet = new Set<number>()
