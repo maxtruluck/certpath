@@ -19,17 +19,6 @@ interface LessonData {
   items_total: number;
 }
 
-interface TestData {
-  id: string;
-  title: string;
-  question_count: number;
-  time_limit_minutes: number | null;
-  passing_score: number;
-  best_score: number | null;
-  passed: boolean;
-  attempts_count: number;
-}
-
 interface ModuleData {
   id: string;
   title: string;
@@ -41,7 +30,6 @@ interface ModuleData {
 interface PathResponse {
   course: { id: string; title: string; creator_id?: string };
   modules: ModuleData[];
-  course_tests?: TestData[];
   primary_cta?: { type: string; lesson_id: string | null; label: string };
   progress: { completed: number; total: number };
 }
@@ -146,70 +134,6 @@ function LessonRow({
 
   return (
     <Link href={`/lesson/${slug}/${lesson.id}`} className="block hover:bg-[#fafafa]">
-      {content}
-    </Link>
-  );
-}
-
-function TestRow({
-  test,
-  slug,
-  allLessonsCompleted,
-}: {
-  test: TestData;
-  slug: string;
-  allLessonsCompleted: boolean;
-}) {
-  const isLocked = !allLessonsCompleted;
-  const subtitle = test.time_limit_minutes
-    ? `${test.question_count} questions · ${test.time_limit_minutes} min`
-    : `${test.question_count} questions · Untimed`;
-
-  const content = (
-    <div
-      className="flex items-center gap-3"
-      style={{
-        margin: '4px 16px',
-        padding: '12px 20px',
-        border: '1px solid #e5e5e5',
-        borderRadius: 10,
-        opacity: isLocked ? 0.5 : 1,
-        cursor: isLocked ? 'default' : 'pointer',
-      }}
-    >
-      {/* Icon */}
-      <div
-        style={{
-          width: 36, height: 36, borderRadius: 8,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: '#FEF3CD', color: '#856404',
-          fontSize: 16, fontWeight: 700, flexShrink: 0,
-        }}
-      >
-        ?
-      </div>
-
-      {/* Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a' }} className="truncate">
-          {test.title}
-        </p>
-        <p style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-          {isLocked ? 'Complete all lessons first' : subtitle}
-        </p>
-      </div>
-
-      {/* Arrow */}
-      {!isLocked && (
-        <span style={{ fontSize: 14, color: '#ccc', flexShrink: 0 }}>&rsaquo;</span>
-      )}
-    </div>
-  );
-
-  if (isLocked) return <div>{content}</div>;
-
-  return (
-    <Link href={`/test/${slug}/${test.id}`} className="block hover:border-[#ccc]">
       {content}
     </Link>
   );
@@ -335,20 +259,6 @@ function CoursePathContent() {
           ))}
         </div>
       ))}
-
-      {/* Course-level tests */}
-      {data.course_tests && data.course_tests.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          {data.course_tests.map(test => (
-            <TestRow
-              key={test.id}
-              test={test}
-              slug={slug}
-              allLessonsCompleted={isPreview || progressPct === 100}
-            />
-          ))}
-        </div>
-      )}
 
       {/* Toast */}
       {toast && (

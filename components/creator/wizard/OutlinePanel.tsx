@@ -17,7 +17,6 @@ interface Module {
   title: string
   display_order: number
   lessons: Lesson[]
-  question_count: number
 }
 
 function isLessonReady(lesson: Lesson): boolean {
@@ -313,30 +312,6 @@ export default function OutlinePanel({
                     </button>
                   )}
 
-                  {/* Module quiz (inside module, after lessons) */}
-                  {(mod.question_count || 0) > 0 ? (
-                    <div
-                      className="cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{
-                        padding: '5px 10px',
-                        margin: '3px 8px',
-                        fontSize: 11,
-                        color: '#856404',
-                        background: '#FEF3CD',
-                        borderRadius: 5,
-                      }}
-                    >
-                      Module quiz &middot; {mod.question_count} question{mod.question_count !== 1 ? 's' : ''}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => alert('Quiz editor coming soon')}
-                      style={{ fontSize: 11, color: '#aaa', padding: '3px 10px' }}
-                      className="hover:text-amber-600 transition-colors"
-                    >
-                      + Quiz
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -382,14 +357,6 @@ export default function OutlinePanel({
           </button>
         )}
 
-        {/* Final exam (course-level) */}
-        <button
-          onClick={() => alert('Final exam editor coming soon')}
-          style={{ fontSize: 11, color: '#aaa', padding: '4px 16px' }}
-          className="hover:text-amber-600 transition-colors"
-        >
-          + Final exam
-        </button>
       </div>
 
       {/* Footer progress */}

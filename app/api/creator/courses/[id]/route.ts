@@ -72,15 +72,9 @@ export async function GET(
           step_count: stepsByLesson.get(l.id) || 0,
         }))
 
-      const moduleQuestionCount = moduleLessons.reduce(
-        (sum: number, l: any) => sum + l.question_count,
-        0
-      )
-
       return {
         ...mod,
         lessons: moduleLessons,
-        question_count: moduleQuestionCount,
       }
     })
 

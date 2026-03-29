@@ -29,7 +29,6 @@ export interface Module {
   title: string
   display_order: number
   lessons: Lesson[]
-  question_count: number
 }
 
 export interface Question {
