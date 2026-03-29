@@ -63,7 +63,6 @@ export default function LessonPlayerPage() {
 
   const currentStep = steps[currentStepIndex]
   const isLastStep = currentStepIndex === steps.length - 1
-  const maxCompleted = Math.max(-1, ...Array.from(completedSteps))
 
   // Content ref for scroll
   const contentRef = useRef<HTMLDivElement>(null)
@@ -175,8 +174,13 @@ export default function LessonPlayerPage() {
           const savedIdx = progress.current_step_index || 0
           let targetIndex = Math.min(savedIdx + 1, stepsData.length - 1)
           if (completedSet.has(targetIndex)) {
+            let foundUncompleted = false
             for (let i = 0; i < stepsData.length; i++) {
-              if (!completedSet.has(i)) { targetIndex = i; break }
+              if (!completedSet.has(i)) { targetIndex = i; foundUncompleted = true; break }
+            }
+            if (!foundUncompleted) {
+              // All steps completed — start from beginning for review
+              targetIndex = 0
             }
           }
           setCurrentStepIndex(targetIndex)
@@ -317,7 +321,7 @@ export default function LessonPlayerPage() {
             {lessonTitle}
           </p>
           <span style={{ fontSize: 12, color: '#999', flexShrink: 0 }}>
-            {currentStepIndex + 1} / {steps.length}
+            {Math.min(currentStepIndex + 1, steps.length)} / {steps.length}
           </span>
         </div>
 
@@ -375,7 +379,7 @@ export default function LessonPlayerPage() {
             key={currentStepIndex}
             question={currentStep.question}
             onComplete={handleAnswerComplete}
-            readOnly={false}
+            readOnly={isViewingCompleted}
           />
         )}
 
