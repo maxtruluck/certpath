@@ -162,7 +162,6 @@ export default function LessonPlayerPage() {
           .from('user_lesson_progress')
           .select('status, current_step_index, step_completions')
           .eq('lesson_id', lessonId)
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '')
           .maybeSingle()
 
         if (progress && progress.status !== 'completed') {
