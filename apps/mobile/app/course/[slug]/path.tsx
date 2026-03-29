@@ -149,6 +149,7 @@ export default function CoursePathScreen() {
         sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
