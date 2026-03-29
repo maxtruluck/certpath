@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ReadStep, WatchStep, AnswerStep, EmbedStep, CalloutStep } from '@/components/steps'
-import { createClient } from '@/lib/supabase/client'
 import type { Question, EmbedContent, CalloutContent } from '@/lib/types/lesson-player'
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -29,6 +28,58 @@ const STEP_BADGES: Record<string, { label: string; bg: string; text: string }> =
   key_concept: { label: 'Key Concept', bg: '#FEF3CD', text: '#856404' },
   warning: { label: 'Warning', bg: '#FEF3CD', text: '#856404' },
   exam_note: { label: 'Exam Note', bg: '#FEF3CD', text: '#856404' },
+}
+
+// ─── "Get the App" view for non-preview learners ──────────────
+
+function GetTheAppView({ courseSlug, lessonId }: { courseSlug: string; lessonId: string }) {
+  const router = useRouter()
+  return (
+    <div className="h-[100dvh] flex flex-col items-center justify-center" style={{ backgroundColor: '#fff', textAlign: 'center', padding: 24 }}>
+      <div style={{ marginBottom: 24 }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+        </svg>
+      </div>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+        Lessons are in the app
+      </h1>
+      <p style={{ fontSize: 14, color: '#888', marginBottom: 24, maxWidth: 320, lineHeight: 1.5 }}>
+        Download the openED app to access interactive lessons, track progress, and learn on the go.
+      </p>
+      <div className="flex flex-col gap-3 w-full" style={{ maxWidth: 280 }}>
+        <a
+          href={`opened://lesson/${courseSlug}/${lessonId}`}
+          style={{
+            display: 'block', backgroundColor: '#1a1a1a', color: '#fff',
+            fontSize: 14, fontWeight: 600, textAlign: 'center',
+            padding: '12px 0', borderRadius: 10,
+          }}
+        >
+          Open in App
+        </a>
+        <a
+          href="https://apps.apple.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'block', backgroundColor: '#fff', color: '#1a1a1a',
+            fontSize: 14, fontWeight: 600, textAlign: 'center',
+            padding: '12px 0', borderRadius: 10,
+            border: '1px solid #e5e5e5',
+          }}
+        >
+          Download on the App Store
+        </a>
+      </div>
+      <button
+        onClick={() => router.push(`/course/${courseSlug}/path`)}
+        style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', marginTop: 16, textDecoration: 'underline' }}
+      >
+        Back to course
+      </button>
+    </div>
+  )
 }
 
 // ─── Page ───────────────────────────────────────────────────────
@@ -78,88 +129,37 @@ export default function LessonPlayerPage() {
   const loadSession = useCallback(async () => {
     setLoading(true)
     try {
-      const supabase = createClient()
-
-      let resolvedCourseId: string
+      // Preview mode: resolve course ID for creator preview
       if (isPreview) {
         const lessonRes = await fetch(`/api/creator/preview/course-for-lesson?lesson_id=${lessonId}`)
         if (!lessonRes.ok) throw new Error('Course not found')
         const lessonData = await lessonRes.json()
-        resolvedCourseId = lessonData.course_id
-      } else {
-        const courseRes = await fetch(`/api/courses/${courseSlug}`)
-        if (!courseRes.ok) throw new Error('Course not found')
-        const courseData = await courseRes.json()
-        resolvedCourseId = courseData.id
-      }
-      setCourseId(resolvedCourseId)
-
-      // Fetch lesson info
-      const { data: lesson } = await supabase
-        .from('lessons')
-        .select('id, title, module_id, modules(title)')
-        .eq('id', lessonId)
-        .single()
-
-      if (!lesson) throw new Error('Lesson not found')
-      setLessonTitle(lesson.title)
-      setModuleTitle((lesson as any).modules?.title || '')
-
-      // Fetch lesson steps
-      const { data: rawSteps } = await supabase
-        .from('lesson_steps')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('sort_order')
-
-      if (!rawSteps || rawSteps.length === 0) {
-        setError('No content available for this lesson')
-        setLoading(false)
-        return
+        setCourseId(lessonData.course_id)
       }
 
-      // Convert to StepData
-      const stepsData: StepData[] = rawSteps.map(step => {
-        const c = step.content || {}
-        switch (step.step_type) {
-          case 'watch':
-            return { type: 'watch' as const, title: step.title || '', watchUrl: c.video_url || c.url || '' }
-          case 'answer':
-            return {
-              type: 'answer' as const,
-              title: step.title || '',
-              question: {
-                id: step.id,
-                question_text: c.question_text || '',
-                question_type: c.question_type || 'multiple_choice',
-                options: c.options || [],
-                correct_option_ids: c.correct_ids || c.correct_option_ids || [],
-                explanation: c.explanation || '',
-                option_explanations: c.option_explanations || {},
-                acceptable_answers: c.acceptable_answers,
-                correct_order: c.correct_order,
-                matching_items: c.matching_pairs ? {
-                  lefts: c.matching_pairs.map((p: any) => p.left),
-                  rights: c.matching_pairs.map((p: any) => p.right),
-                } : undefined,
-              },
-            }
-          case 'embed':
-            return { type: 'embed' as const, title: step.title || '', embedContent: c }
-          case 'callout':
-            return { type: 'callout' as const, title: step.title || '', calloutContent: c }
-          case 'read':
-          default:
-            return { type: 'read' as const, title: step.title || '', markdown: c.markdown || c.body || '' }
+      // Fetch lesson content + steps from API
+      const contentRes = await fetch(`/api/lessons/${lessonId}/content`)
+      if (!contentRes.ok) {
+        const body = await contentRes.json().catch(() => ({}))
+        if (body.error === 'No content available for this lesson') {
+          setError('No content available for this lesson')
+          setLoading(false)
+          return
         }
-      })
+        throw new Error(body.error || 'Failed to load lesson')
+      }
 
+      const { lesson, steps: stepsData } = await contentRes.json()
+
+      if (!isPreview) setCourseId(lesson.course_id)
+      setLessonTitle(lesson.title)
+      setModuleTitle(lesson.module_title)
       setSteps(stepsData)
-      setQuestionsTotal(stepsData.filter(s => s.type === 'answer').length)
+      setQuestionsTotal(stepsData.filter((s: StepData) => s.type === 'answer').length)
 
       // Load progress
       if (!isPreview) {
-        const progressRes = await fetch(`/api/lesson/${lessonId}/progress`)
+        const progressRes = await fetch(`/api/lessons/${lessonId}/progress`)
         const { progress } = await progressRes.json()
 
         if (progress && progress.status !== 'completed') {
@@ -200,6 +200,11 @@ export default function LessonPlayerPage() {
 
   useEffect(() => { loadSession() }, [loadSession])
 
+  // Non-preview learners see "Get the app" instead of the web lesson player
+  if (!isPreview) {
+    return <GetTheAppView courseSlug={courseSlug} lessonId={lessonId} />
+  }
+
   // ── Step completion ───────────────────────────────────────────
   async function markStepComplete(stepIndex: number, isCorrect?: boolean) {
     const newCompleted = new Set(completedSteps)
@@ -209,7 +214,7 @@ export default function LessonPlayerPage() {
     if (isPreview) return
 
     try {
-      const res = await fetch(`/api/lesson/${lessonId}/step-complete`, {
+      const res = await fetch(`/api/lessons/${lessonId}/step-complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ step_index: stepIndex, total_steps: steps.length, is_correct: isCorrect }),

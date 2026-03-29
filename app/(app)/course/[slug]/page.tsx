@@ -255,15 +255,29 @@ export default function CourseOverviewPage() {
             Close Preview
           </button>
         ) : isEnrolled ? (
-          <Link
-            href={`/course/${course.slug}/path`}
-            style={{
-              display: 'block', width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
-              borderRadius: 10, fontSize: 15, fontWeight: 500, textAlign: 'center',
-            }}
-          >
-            Continue learning &rarr;
-          </Link>
+          <div className="flex flex-col gap-3">
+            <a
+              href={`opened://course/${course.slug}`}
+              style={{
+                display: 'block', width: '100%', padding: 14, backgroundColor: '#1a1a1a', color: '#fff',
+                borderRadius: 10, fontSize: 15, fontWeight: 500, textAlign: 'center',
+              }}
+            >
+              Open in App
+            </a>
+            <a
+              href="https://apps.apple.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block', width: '100%', padding: 14, backgroundColor: '#fff', color: '#1a1a1a',
+                borderRadius: 10, fontSize: 14, fontWeight: 500, textAlign: 'center',
+                border: '1px solid #e5e5e5',
+              }}
+            >
+              Download the App
+            </a>
+          </div>
         ) : isFree ? (
           <button
             onClick={async () => {

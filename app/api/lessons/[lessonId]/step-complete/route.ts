@@ -145,7 +145,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('POST /api/lesson/[lessonId]/step-complete error:', err)
+    console.error('POST /api/lessons/[lessonId]/step-complete error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

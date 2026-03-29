@@ -35,9 +35,6 @@ function CheckoutSuccessContent() {
 
       if (isEnrolled) {
         setEnrolled(true);
-        setTimeout(() => {
-          if (!cancelled) router.push(`/course/${courseSlug}/path`);
-        }, 2000);
         return;
       }
 
@@ -72,13 +69,21 @@ function CheckoutSuccessContent() {
               </svg>
             </div>
             <h1 className="text-xl font-bold text-gray-900">You&apos;re in!</h1>
-            <p className="text-sm text-gray-500">Redirecting to your course...</p>
-            <a
-              href={`/course/${courseSlug}/path`}
-              className="inline-block text-sm text-blue-500 font-medium hover:underline"
-            >
-              Go to course
-            </a>
+            <p className="text-sm text-gray-500">Course enrolled successfully.</p>
+            <div className="flex flex-col gap-3 items-center mt-2">
+              <a
+                href={`opened://course/${courseSlug}`}
+                className="inline-block px-6 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                Return to App
+              </a>
+              <a
+                href={`/course/${courseSlug}/path`}
+                className="inline-block text-sm text-blue-500 font-medium hover:underline"
+              >
+                Continue on web
+              </a>
+            </div>
           </>
         ) : timedOut ? (
           <>
@@ -91,12 +96,20 @@ function CheckoutSuccessContent() {
             <p className="text-sm text-gray-500">
               Your payment was received but enrollment is still being set up. This usually takes a few seconds.
             </p>
-            <a
-              href={`/course/${courseSlug}/path`}
-              className="inline-block mt-2 px-6 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors"
-            >
-              Go to course
-            </a>
+            <div className="flex flex-col gap-3 items-center mt-2">
+              <a
+                href={`opened://course/${courseSlug}`}
+                className="inline-block px-6 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                Return to App
+              </a>
+              <a
+                href={`/course/${courseSlug}/path`}
+                className="inline-block text-sm text-blue-500 font-medium hover:underline"
+              >
+                Continue on web
+              </a>
+            </div>
           </>
         ) : (
           <>

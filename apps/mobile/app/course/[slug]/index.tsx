@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  AppState,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,12 +62,27 @@ export default function CourseDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 
-  useEffect(() => {
-    apiFetch<CourseDetail>(`/api/courses/${slug}`)
+  const fetchCourse = useCallback(() => {
+    return apiFetch<CourseDetail>(`/api/courses/${slug}`)
       .then(setCourse)
-      .catch((err) => console.error('Course detail error:', err))
-      .finally(() => setLoading(false));
+      .catch((err) => console.error('Course detail error:', err));
   }, [slug]);
+
+  useEffect(() => {
+    fetchCourse().finally(() => setLoading(false));
+  }, [fetchCourse]);
+
+  // Re-fetch enrollment status when app returns to foreground (after web purchase)
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        fetchCourse();
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, [fetchCourse]);
 
   const handleEnroll = async () => {
     if (!course) return;

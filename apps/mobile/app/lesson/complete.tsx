@@ -1,40 +1,51 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useSessionStore } from '@/lib/store';
 import { colors, radii, spacing, fontSize } from '@/lib/theme';
 import Button from '@/components/Button';
 
-export default function SessionCompleteScreen() {
+export default function LessonCompleteScreen() {
   const router = useRouter();
-  const {
-    lessonTitle,
-    correctCount,
-    totalAnswered,
-    resetSession,
-  } = useSessionStore();
+  const params = useLocalSearchParams<{
+    questionsCorrect?: string;
+    questionsTotal?: string;
+    stepsCompleted?: string;
+    stepsTotal?: string;
+    lessonTitle?: string;
+    courseSlug?: string;
+    courseId?: string;
+  }>();
 
-  const correct = correctCount();
-  const total = totalAnswered();
+  const correct = parseInt(params.questionsCorrect || '0', 10);
+  const total = parseInt(params.questionsTotal || '0', 10);
+  const stepsCompleted = parseInt(params.stepsCompleted || '0', 10);
+  const stepsTotal = parseInt(params.stepsTotal || '0', 10);
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const lessonTitle = params.lessonTitle || '';
+  const courseSlug = params.courseSlug || '';
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  const handleDone = () => {
-    resetSession();
-    router.dismissAll();
+  const handleBackToCourse = () => {
+    if (courseSlug) {
+      router.replace(`/course/${courseSlug}/path`);
+    } else {
+      router.dismissAll();
+    }
   };
 
   const handleNextLesson = () => {
-    resetSession();
     // Go back to path screen which will show the updated state
-    router.back();
-    router.back();
+    if (courseSlug) {
+      router.replace(`/course/${courseSlug}/path`);
+    } else {
+      router.back();
+    }
   };
 
   return (
@@ -45,27 +56,34 @@ export default function SessionCompleteScreen() {
             <Ionicons name="checkmark" size={40} color={colors.success} />
           </View>
           <Text style={styles.title}>Lesson Complete!</Text>
-          {lessonTitle && (
+          {lessonTitle ? (
             <Text style={styles.lessonName}>{lessonTitle}</Text>
-          )}
+          ) : null}
         </View>
 
-        {total > 0 && (
-          <View style={styles.statsSection}>
-            <View style={styles.statRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>{correct}/{total}</Text>
-                <Text style={styles.statLabel}>Correct</Text>
-              </View>
+        <View style={styles.statsSection}>
+          {/* Steps completed */}
+          <View style={styles.statRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{stepsCompleted}/{stepsTotal}</Text>
+              <Text style={styles.statLabel}>Steps</Text>
+            </View>
+            {total > 0 && (
               <View style={styles.statBox}>
                 <Text style={[styles.statValue, accuracy >= 80 ? styles.goodAccuracy : accuracy >= 50 ? styles.okAccuracy : styles.lowAccuracy]}>
                   {accuracy}%
                 </Text>
                 <Text style={styles.statLabel}>Accuracy</Text>
               </View>
-            </View>
+            )}
           </View>
-        )}
+
+          {total > 0 && (
+            <Text style={styles.scoreDetail}>
+              {correct}/{total} questions correct
+            </Text>
+          )}
+        </View>
 
         <View style={styles.actions}>
           <Button
@@ -73,8 +91,8 @@ export default function SessionCompleteScreen() {
             onPress={handleNextLesson}
           />
           <Button
-            title="Done"
-            onPress={handleDone}
+            title="Back to Course"
+            onPress={handleBackToCourse}
             variant="secondary"
           />
         </View>
@@ -119,6 +137,7 @@ const styles = StyleSheet.create({
   },
   statsSection: {
     marginBottom: spacing['3xl'],
+    gap: spacing.md,
   },
   statRow: {
     flexDirection: 'row',
@@ -140,6 +159,11 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
+  },
+  scoreDetail: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   goodAccuracy: {
     color: colors.success,

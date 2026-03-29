@@ -12,7 +12,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiFetch } from '@/lib/api';
-import { useSessionStore } from '@/lib/store';
 import { colors, radii, spacing, fontSize } from '@/lib/theme';
 import ProgressBar from '@/components/ProgressBar';
 import Button from '@/components/Button';
@@ -56,7 +55,6 @@ export default function CoursePathScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [startingLesson, setStartingLesson] = useState<string | null>(null);
-  const startSession = useSessionStore((s) => s.startSession);
 
   const fetchPath = useCallback(async () => {
     try {
@@ -81,29 +79,10 @@ export default function CoursePathScreen() {
     if (!data) return;
     setStartingLesson(lessonId);
     try {
-      const session = await apiFetch<{
-        session_id: string;
-        course_id: string;
-        lesson_id: string;
-        lesson_title: string;
-        cards: any[];
-        total_items: number;
-        items_completed: number;
-      }>(`/api/session/generate?course_id=${data.course.id}&lesson_id=${lessonId}`);
-
-      startSession({
-        sessionId: session.session_id,
-        courseId: session.course_id,
-        lessonId: session.lesson_id,
-        lessonTitle: session.lesson_title,
-        cards: session.cards,
-        totalItems: session.total_items,
-        itemsCompleted: session.items_completed,
+      router.push({
+        pathname: '/lesson/[sessionId]',
+        params: { sessionId: lessonId, lessonId, courseSlug: slug },
       });
-
-      router.push(`/lesson/${session.session_id}`);
-    } catch (err: any) {
-      console.error('Launch lesson error:', err);
     } finally {
       setStartingLesson(null);
     }

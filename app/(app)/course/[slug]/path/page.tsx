@@ -35,7 +35,60 @@ interface PathResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Components
+// "Get the App" page for learners
+// ---------------------------------------------------------------------------
+
+function GetTheAppView({ slug }: { slug: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center" style={{ minHeight: '60vh', textAlign: 'center', padding: 24 }}>
+      <div style={{ marginBottom: 24 }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+        </svg>
+      </div>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+        Continue learning in the app
+      </h1>
+      <p style={{ fontSize: 14, color: '#888', marginBottom: 24, maxWidth: 320, lineHeight: 1.5 }}>
+        Open this course in the openED app to access interactive lessons and track your progress.
+      </p>
+      <div className="flex flex-col gap-3 w-full" style={{ maxWidth: 280 }}>
+        <a
+          href={`opened://course/${slug}`}
+          style={{
+            display: 'block', backgroundColor: '#1a1a1a', color: '#fff',
+            fontSize: 14, fontWeight: 600, textAlign: 'center',
+            padding: '12px 0', borderRadius: 10,
+          }}
+        >
+          Open in App
+        </a>
+        <a
+          href="https://apps.apple.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'block', backgroundColor: '#fff', color: '#1a1a1a',
+            fontSize: 14, fontWeight: 600, textAlign: 'center',
+            padding: '12px 0', borderRadius: 10,
+            border: '1px solid #e5e5e5',
+          }}
+        >
+          Download on the App Store
+        </a>
+      </div>
+      <Link
+        href={`/course/${slug}`}
+        style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'underline', marginTop: 16 }}
+      >
+        View course details
+      </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Creator preview (kept for course review functionality)
 // ---------------------------------------------------------------------------
 
 function LessonRow({
@@ -51,7 +104,6 @@ function LessonRow({
 }) {
   const isLocked = lesson.state === 'locked';
   const isCompleted = lesson.state === 'completed';
-  const isActive = lesson.state === 'in_progress' || lesson.state === 'available';
   const isInProgress = lesson.state === 'in_progress';
 
   const progressPct = isInProgress && lesson.items_total > 0
@@ -75,7 +127,6 @@ function LessonRow({
         cursor: isLocked ? 'default' : 'pointer',
       }}
     >
-      {/* Circle */}
       <div
         style={{
           width: 36, height: 36, borderRadius: '50%',
@@ -95,37 +146,21 @@ function LessonRow({
           `${moduleIndex + 1}.${lessonIndex + 1}`
         )}
       </div>
-
-      {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{
-          fontSize: 14, fontWeight: 500,
-          color: isLocked ? '#ccc' : '#1a1a1a',
-        }} className="truncate">
+        <p style={{ fontSize: 14, fontWeight: 500, color: isLocked ? '#ccc' : '#1a1a1a' }} className="truncate">
           {lesson.title}
         </p>
         {statusText && (
-          <p style={{ fontSize: 12, color: statusColor, marginTop: 2 }}>
-            {statusText}
-          </p>
+          <p style={{ fontSize: 12, color: statusColor, marginTop: 2 }}>{statusText}</p>
         )}
       </div>
-
-      {/* Right side */}
       <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-        {/* Progress badge for in_progress */}
         {isInProgress && lesson.items_total > 0 && (
-          <span style={{
-            fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4,
-            backgroundColor: '#E6F1FB', color: '#185FA5',
-          }}>
+          <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4, backgroundColor: '#E6F1FB', color: '#185FA5' }}>
             {progressPct}%
           </span>
         )}
-        {/* Arrow for non-locked */}
-        {!isLocked && (
-          <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>
-        )}
+        {!isLocked && <span style={{ fontSize: 14, color: '#ccc' }}>&rsaquo;</span>}
       </div>
     </div>
   );
@@ -133,36 +168,23 @@ function LessonRow({
   if (isLocked) return <div>{content}</div>;
 
   return (
-    <Link href={`/lesson/${slug}/${lesson.id}`} className="block hover:bg-[#fafafa]">
+    <Link href={`/lesson/${slug}/${lesson.id}?preview=true`} className="block hover:bg-[#fafafa]">
       {content}
     </Link>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main content
-// ---------------------------------------------------------------------------
-
-function CoursePathContent() {
-  const params = useParams();
+function CreatorPreviewContent({ slug }: { slug: string }) {
   const router = useRouter();
-  const searchParamsHook = useSearchParams();
-  const slug = params.slug as string;
-  const isPreview = searchParamsHook.get('preview') === 'true';
   const [data, setData] = useState<PathResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPath() {
       try {
-        const url = `/api/courses/${slug}/path${isPreview ? '?preview=true' : ''}`;
-        const res = await fetch(url);
-        if (res.status === 403) {
-          router.replace(`/course/${slug}`);
-          return;
-        }
+        const res = await fetch(`/api/courses/${slug}/path?preview=true`);
+        if (res.status === 403) { router.replace(`/course/${slug}`); return; }
         if (!res.ok) throw new Error('Failed to fetch');
         setData(await res.json());
       } catch {
@@ -171,7 +193,7 @@ function CoursePathContent() {
       setLoading(false);
     }
     fetchPath();
-  }, [slug, router, isPreview]);
+  }, [slug, router]);
 
   if (loading) {
     return (
@@ -181,7 +203,6 @@ function CoursePathContent() {
         {[1, 2, 3].map(i => (
           <div key={i} className="space-y-3">
             <div className="h-6 bg-gray-100 rounded-lg w-1/2" />
-            <div className="h-16 bg-gray-100 rounded-xl" />
             <div className="h-16 bg-gray-100 rounded-xl" />
           </div>
         ))}
@@ -193,9 +214,7 @@ function CoursePathContent() {
     return (
       <div className="text-center py-12">
         <p style={{ color: '#999', marginBottom: 16 }}>{error || 'Path not found'}</p>
-        <button onClick={() => router.push('/home')} style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500 }}>
-          Back to home
-        </button>
+        <button onClick={() => router.push('/home')} style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500 }}>Back to home</button>
       </div>
     );
   }
@@ -206,52 +225,29 @@ function CoursePathContent() {
 
   return (
     <div className="pb-8">
-      {/* Preview banner */}
-      {isPreview && (
-        <div style={{
-          backgroundColor: '#FEF3CD', color: '#856404', fontSize: 12,
-          textAlign: 'center', padding: '8px 0', marginBottom: 16,
-        }}>
-          Preview mode — this course is not yet published
-        </div>
-      )}
-
-      {/* Header */}
+      <div style={{ backgroundColor: '#FEF3CD', color: '#856404', fontSize: 12, textAlign: 'center', padding: '8px 0', marginBottom: 16 }}>
+        Preview mode -- this course is not yet published
+      </div>
       <div style={{ backgroundColor: '#fafafa', padding: '16px 20px', borderBottom: '1px solid #eee', margin: '-16px -16px 0' }}>
-        <Link
-          href={`/course/${slug}`}
-          style={{ fontSize: 13, color: '#888', marginBottom: 8, display: 'inline-block' }}
-          className="hover:text-[#555]"
-        >
-          &larr; Back
-        </Link>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>
-          {data.course.title}
-        </h1>
+        <Link href={`/course/${slug}`} style={{ fontSize: 13, color: '#888', marginBottom: 8, display: 'inline-block' }}>&larr; Back</Link>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>{data.course.title}</h1>
         <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 12, color: '#999' }}>Progress</span>
-          <span style={{ fontSize: 12, color: '#999' }}>
-            {data.progress.completed} of {data.progress.total} lessons completed
-          </span>
+          <span style={{ fontSize: 12, color: '#999' }}>{data.progress.completed} of {data.progress.total} lessons</span>
         </div>
         <div style={{ height: 4, backgroundColor: '#eee', borderRadius: 2 }}>
           <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: '#1D9E75', borderRadius: 2, transition: 'width 0.5s' }} />
         </div>
       </div>
-
-      {/* Modules + Lessons */}
       {data.modules.map((mod, modIdx) => (
         <div key={mod.id}>
-          {/* Module title */}
           <div style={{ padding: '16px 20px 8px 20px' }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{mod.title}</h3>
           </div>
-
-          {/* Lesson rows */}
           {mod.lessons.map((lesson, lessonIdx) => (
             <LessonRow
               key={lesson.id}
-              lesson={isPreview ? { ...lesson, state: lesson.state === 'locked' ? 'available' : lesson.state } : lesson}
+              lesson={{ ...lesson, state: lesson.state === 'locked' ? 'available' : lesson.state }}
               moduleIndex={modIdx}
               lessonIndex={lessonIdx}
               slug={slug}
@@ -259,19 +255,25 @@ function CoursePathContent() {
           ))}
         </div>
       ))}
-
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 50, padding: '8px 16px', borderRadius: 8,
-          backgroundColor: '#1a1a1a', color: '#fff', fontSize: 14, fontWeight: 500,
-        }}>
-          {toast}
-        </div>
-      )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Main page — show preview for creators, "get the app" for learners
+// ---------------------------------------------------------------------------
+
+function CoursePathContent() {
+  const params = useParams();
+  const searchParamsHook = useSearchParams();
+  const slug = params.slug as string;
+  const isPreview = searchParamsHook.get('preview') === 'true';
+
+  if (isPreview) {
+    return <CreatorPreviewContent slug={slug} />;
+  }
+
+  return <GetTheAppView slug={slug} />;
 }
 
 export default function CoursePathPage() {
