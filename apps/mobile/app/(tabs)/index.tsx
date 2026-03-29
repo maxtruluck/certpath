@@ -45,8 +45,17 @@ interface DashboardCourse {
   questions_correct: number;
   questions_total: number;
   lessons_total: number;
+  lessons_completed: number;
   sessions_completed: number;
   last_session_at: string | null;
+  progress_percent: number;
+  resume_point: {
+    module_title: string;
+    lesson_title: string;
+    lesson_id: string;
+    step_index: number;
+    step_total: number;
+  } | null;
 }
 
 interface BrowseCourse {
@@ -206,17 +215,14 @@ function ReturningUserView({
   discoveryCourses: BrowseCourse[];
   router: ReturnType<typeof useRouter>;
 }) {
-  const heroProgress =
-    heroCourse.questions_total > 0
-      ? Math.round(
-          (heroCourse.questions_seen / heroCourse.questions_total) * 100,
-        )
-      : 0;
+  const heroProgress = heroCourse.progress_percent ?? 0;
 
-  const heroSubtitle =
-    heroCourse.lessons_total > 0
-      ? `${heroProgress}% complete`
-      : `${heroCourse.sessions_completed} sessions completed`;
+  const rp = heroCourse.resume_point;
+  const heroSubtitle = rp
+    ? `${rp.lesson_title} \u00B7 ${rp.step_index}/${rp.step_total} steps`
+    : heroCourse.lessons_total > 0
+      ? `${heroCourse.lessons_completed ?? 0}/${heroCourse.lessons_total} lessons complete`
+      : `${heroProgress}% complete`;
 
   return (
     <>
@@ -244,12 +250,7 @@ function ReturningUserView({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalList}
             renderItem={({ item }) => {
-              const pct =
-                item.questions_total > 0
-                  ? Math.round(
-                      (item.questions_seen / item.questions_total) * 100,
-                    )
-                  : 0;
+              const pct = item.progress_percent ?? 0;
               return (
                 <CompactCourseCard
                   title={item.course.title}

@@ -71,6 +71,8 @@ function latexToPlainText(tex: string): string {
   s = s.replace(/\\qquad/g, '    ');
   // \, \; \! -> space or nothing
   s = s.replace(/\\[,;!]/g, ' ');
+  // Math functions - keep as readable text
+  s = s.replace(/\\(sin|cos|tan|log|ln|exp|lim|max|min|sup|inf|det|deg|dim|gcd|ker|arg|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh)/g, '$1');
   // Remove remaining backslash commands we didn't handle
   s = s.replace(/\\[a-zA-Z]+/g, '');
   // Clean up extra braces
