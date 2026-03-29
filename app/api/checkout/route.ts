@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Create Stripe Checkout Session
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const origin = request.headers.get('origin')
+      || `https://${request.headers.get('host')}`
+      || process.env.NEXT_PUBLIC_APP_URL
+      || 'http://localhost:3000';
 
     const creatorInfo = course.creators as unknown as { creator_name: string } | null;
 
@@ -70,8 +73,8 @@ export async function POST(request: NextRequest) {
         creator_id: course.creator_id,
         course_slug: course.slug,
       },
-      success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}&course=${course.slug}`,
-      cancel_url: `${appUrl}/course/${course.slug}`,
+      success_url: `${origin}/checkout/success?slug=${course.slug}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/course/${course.slug}`,
     });
 
     return NextResponse.json({ url: session.url });

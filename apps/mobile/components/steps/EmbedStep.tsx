@@ -1,5 +1,7 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors, spacing, fontSize, radii } from '@/lib/theme';
+import { CoordinateDiagram } from '../CoordinateDiagram';
+import type { DiagramData } from '../CoordinateDiagram';
 
 interface EmbedContent {
   sub_type: string;
@@ -7,7 +9,7 @@ interface EmbedContent {
   alt?: string;
   caption?: string;
   mermaid?: string;
-  graph_data?: any;
+  graph_data?: DiagramData;
 }
 
 interface EmbedStepProps {
@@ -42,10 +44,12 @@ export function EmbedStep({ title, content }: EmbedStepProps) {
             <Text style={styles.caption}>{content.caption}</Text>
           ) : null}
         </View>
+      ) : sub === 'math_graph' && content.graph_data ? (
+        <CoordinateDiagram data={content.graph_data} />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.placeholderText}>
-            {sub === 'math_graph' ? 'Graph visualization' : sub === 'diagram' ? 'Diagram' : 'Embedded content'}
+            {sub === 'diagram' ? 'Diagram' : 'Embedded content'}
           </Text>
           <Text style={styles.placeholderSub}>
             Best viewed on web

@@ -87,15 +87,22 @@ export default function CourseDetailScreen() {
   const handleEnroll = async () => {
     if (!course) return;
 
-    // Paid course: open web checkout
+    // Paid course: create Stripe checkout session, then open in browser
     if (course.price_cents && course.price_cents > 0) {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL!;
-      await Linking.openURL(
-        `${apiUrl}/checkout?course=${course.slug}`,
-      );
-      // Re-fetch course to check enrollment status
-      const updated = await apiFetch<CourseDetail>(`/api/courses/${slug}`);
-      setCourse(updated);
+      setEnrolling(true);
+      try {
+        const { url } = await apiFetch<{ url: string }>('/api/checkout', {
+          method: 'POST',
+          body: JSON.stringify({ course_id: course.id }),
+        });
+        if (url) {
+          await Linking.openURL(url);
+        }
+      } catch (err: any) {
+        Alert.alert('Checkout failed', err.message);
+      } finally {
+        setEnrolling(false);
+      }
       return;
     }
 

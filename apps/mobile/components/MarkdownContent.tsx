@@ -7,6 +7,34 @@ interface MarkdownContentProps {
   content: string;
 }
 
+const SUPERSCRIPT_MAP: Record<string, string> = {
+  '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3',
+  '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077',
+  '8': '\u2078', '9': '\u2079', '+': '\u207A', '-': '\u207B',
+  '=': '\u207C', '(': '\u207D', ')': '\u207E', 'n': '\u207F',
+  'i': '\u2071',
+};
+
+const SUBSCRIPT_MAP: Record<string, string> = {
+  '0': '\u2080', '1': '\u2081', '2': '\u2082', '3': '\u2083',
+  '4': '\u2084', '5': '\u2085', '6': '\u2086', '7': '\u2087',
+  '8': '\u2088', '9': '\u2089', '+': '\u208A', '-': '\u208B',
+  '=': '\u208C', '(': '\u208D', ')': '\u208E',
+  'a': '\u2090', 'e': '\u2091', 'o': '\u2092', 'x': '\u2093',
+  'h': '\u2095', 'k': '\u2096', 'l': '\u2097', 'm': '\u2098',
+  'n': '\u2099', 'p': '\u209A', 's': '\u209B', 't': '\u209C',
+  'i': '\u1D62', 'r': '\u1D63', 'u': '\u1D64', 'v': '\u1D65',
+  'f': '\u1DA0', // Use modifier letter small f as fallback
+};
+
+function toSuperscript(s: string): string {
+  return s.split('').map(c => SUPERSCRIPT_MAP[c] ?? c).join('');
+}
+
+function toSubscript(s: string): string {
+  return s.split('').map(c => SUBSCRIPT_MAP[c] ?? c).join('');
+}
+
 /**
  * Convert LaTeX expressions to readable plain text, then render
  * block math as fenced code blocks and inline math as inline code.
@@ -27,10 +55,10 @@ function latexToPlainText(tex: string): string {
   s = s.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2');
   // \sqrt{x} -> sqrt(x)
   s = s.replace(/\\sqrt\{([^}]*)\}/g, 'sqrt($1)');
-  // subscript _{...} -> _content (remove braces)
-  s = s.replace(/\_{([^}]*)}/g, '_$1');
-  // superscript ^{...} -> ^content (remove braces)
-  s = s.replace(/\^\{([^}]*)}/g, '^$1');
+  // subscript _{...} -> Unicode subscript
+  s = s.replace(/\_{([^}]*)}/g, (_m, g: string) => toSubscript(g));
+  // superscript ^{...} -> Unicode superscript
+  s = s.replace(/\^\{([^}]*)}/g, (_m, g: string) => toSuperscript(g));
   // Named operators / symbols
   s = s.replace(/\\Longleftrightarrow/g, '\u21D4');
   s = s.replace(/\\Rightarrow/g, '\u21D2');
@@ -77,6 +105,10 @@ function latexToPlainText(tex: string): string {
   s = s.replace(/\\[a-zA-Z]+/g, '');
   // Clean up extra braces
   s = s.replace(/[{}]/g, '');
+  // Bare superscript ^X (single char, no braces) -> Unicode
+  s = s.replace(/\^([0-9a-zA-Z])/g, (_m, c: string) => toSuperscript(c));
+  // Bare subscript _X (single char, no braces) -> Unicode
+  s = s.replace(/_([0-9a-zA-Z])/g, (_m, c: string) => toSubscript(c));
   // Collapse multiple spaces
   s = s.replace(/  +/g, ' ');
   return s.trim();

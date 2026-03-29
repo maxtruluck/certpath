@@ -118,6 +118,12 @@ export default function HomeScreen() {
   const heroCourse = useMemo(() => {
     if (enrolled.length === 0) return null;
     const sorted = [...enrolled].sort((a, b) => {
+      // Prefer courses with actual progress over untouched ones
+      const aHasProgress = a.progress_percent > 0 || a.sessions_completed > 0;
+      const bHasProgress = b.progress_percent > 0 || b.sessions_completed > 0;
+      if (aHasProgress && !bHasProgress) return -1;
+      if (!aHasProgress && bHasProgress) return 1;
+      // Then sort by most recent session
       const aTime = a.last_session_at
         ? new Date(a.last_session_at).getTime()
         : 0;
@@ -131,7 +137,11 @@ export default function HomeScreen() {
 
   const otherEnrolled = useMemo(() => {
     if (!heroCourse) return [];
-    return enrolled.filter((c) => c.id !== heroCourse.id);
+    // Show all enrolled courses, with the hero course first
+    return [
+      heroCourse,
+      ...enrolled.filter((c) => c.id !== heroCourse.id),
+    ];
   }, [enrolled, heroCourse]);
 
   const enrolledCourseIds = useMemo(

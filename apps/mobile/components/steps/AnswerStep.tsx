@@ -10,6 +10,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, radii } from '@/lib/theme';
+import MarkdownContent from '../MarkdownContent';
 
 const MAX_WRONG_ATTEMPTS = 2;
 
@@ -216,7 +217,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
   return (
     <View style={styles.container}>
       {/* Question text */}
-      <Text style={styles.questionText}>{question.question_text}</Text>
+      <MarkdownContent content={question.question_text} />
       {question.question_type === 'multiple_select' && <Text style={styles.hint}>Select all that apply</Text>}
       {question.question_type === 'fill_blank' && <Text style={styles.hint}>Type your answer</Text>}
       {question.question_type === 'ordering' && <Text style={styles.hint}>Arrange items in the correct order</Text>}
@@ -441,12 +442,12 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
           {!readOnly && !effectiveResult.is_correct && shouldReveal && effectiveResult.option_explanation && (
             <View style={styles.optionExplanation}>
               <Text style={styles.optionExplanationLabel}>Why your answer is wrong:</Text>
-              <Text style={styles.optionExplanationText}>{effectiveResult.option_explanation}</Text>
+              <MarkdownContent content={effectiveResult.option_explanation} />
             </View>
           )}
 
           {shouldReveal && effectiveResult.explanation ? (
-            <Text style={styles.explanationText}>{effectiveResult.explanation}</Text>
+            <MarkdownContent content={effectiveResult.explanation} />
           ) : null}
 
           {!readOnly && !effectiveResult.is_correct && !shouldReveal && (
