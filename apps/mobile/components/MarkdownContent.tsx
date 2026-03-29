@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { colors, fontSize } from '@/lib/theme';
@@ -6,10 +7,31 @@ interface MarkdownContentProps {
   content: string;
 }
 
+/**
+ * Convert LaTeX delimiters to markdown code blocks so they render
+ * as styled monospace text instead of raw `$$...$$` strings.
+ * Block math ($$...$$) becomes fenced code blocks.
+ * Inline math ($...$) becomes inline code.
+ */
+function preprocessMath(md: string): string {
+  // Block math: $$...$$ (may span multiple lines)
+  let result = md.replace(/\$\$([\s\S]*?)\$\$/g, (_match, expr: string) => {
+    const cleaned = expr.trim();
+    return '\n```\n' + cleaned + '\n```\n';
+  });
+  // Inline math: $...$ (single line, non-greedy)
+  result = result.replace(/\$([^\n$]+?)\$/g, (_match, expr: string) => {
+    return '`' + expr.trim() + '`';
+  });
+  return result;
+}
+
 export default function MarkdownContent({ content }: MarkdownContentProps) {
+  const processed = useMemo(() => preprocessMath(content), [content]);
+
   return (
     <Markdown style={markdownStyles}>
-      {content}
+      {processed}
     </Markdown>
   );
 }
