@@ -67,6 +67,11 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
 
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F']
 
+  const supportedTypes = ['multiple_choice', 'multiple_select', 'true_false', 'fill_blank', 'ordering', 'matching']
+  const needsOptions = ['multiple_choice', 'multiple_select', 'true_false']
+  const isUnsupported = !supportedTypes.includes(question.question_type)
+    || (needsOptions.includes(question.question_type) && (!question.options || question.options.length === 0))
+
   const canSubmit = (() => {
     if (readOnly || answerResult) return false
     if (question.question_type === 'fill_blank') return fillBlankAnswer.trim().length > 0
@@ -222,6 +227,22 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
         {question.question_type === 'ordering' && <p className="text-xs text-[#A39B90] mt-2">Drag items into the correct order</p>}
         {question.question_type === 'matching' && <p className="text-xs text-[#A39B90] mt-2">Match each item on the left with the correct item on the right</p>}
       </div>
+
+      {/* Unsupported question type fallback */}
+      {isUnsupported && (
+        <div className="rounded-2xl p-5 space-y-3 bg-[#F5F3EF] border border-[#E8E4DD]">
+          <p className="text-sm font-medium text-[#6B635A]">This question type is not yet supported in the lesson player.</p>
+          <p className="text-xs text-[#A39B90]">You can skip this step to continue.</p>
+          {!readOnly && (
+            <button
+              onClick={() => onComplete(false)}
+              className="w-full py-3 rounded-xl font-semibold text-sm transition-colors bg-[#2C2825] text-[#F5F3EF] hover:bg-[#1A1816]"
+            >
+              Skip and continue
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Fill Blank */}
       {question.question_type === 'fill_blank' && !effectiveResult && (
@@ -406,7 +427,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
       )}
 
       {/* Check button */}
-      {!effectiveResult && !readOnly && (
+      {!effectiveResult && !readOnly && !isUnsupported && (
         <button
           onClick={handleSubmitAnswer}
           disabled={!canSubmit || submitting}
