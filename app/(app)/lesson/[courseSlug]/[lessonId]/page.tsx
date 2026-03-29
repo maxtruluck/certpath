@@ -158,11 +158,8 @@ export default function LessonPlayerPage() {
 
       // Load progress
       if (!isPreview) {
-        const { data: progress } = await supabase
-          .from('user_lesson_progress')
-          .select('status, current_step_index, step_completions')
-          .eq('lesson_id', lessonId)
-          .maybeSingle()
+        const progressRes = await fetch(`/api/lesson/${lessonId}/progress`)
+        const { progress } = await progressRes.json()
 
         if (progress && progress.status !== 'completed') {
           const completedSet = new Set<number>()
