@@ -8,20 +8,81 @@ interface MarkdownContentProps {
 }
 
 /**
- * Convert LaTeX delimiters to markdown code blocks so they render
- * as styled monospace text instead of raw `$$...$$` strings.
- * Block math ($$...$$) becomes fenced code blocks.
- * Inline math ($...$) becomes inline code.
+ * Convert LaTeX expressions to readable plain text, then render
+ * block math as fenced code blocks and inline math as inline code.
  */
+function latexToPlainText(tex: string): string {
+  let s = tex;
+  // \text{...} -> content
+  s = s.replace(/\\text\{([^}]*)\}/g, '$1');
+  // \vec{x} -> x (vector arrow not available in plain text)
+  s = s.replace(/\\vec\{([^}]*)\}/g, '$1');
+  // \hat{x} -> x
+  s = s.replace(/\\hat\{([^}]*)\}/g, '$1');
+  // \bar{x} -> x
+  s = s.replace(/\\bar\{([^}]*)\}/g, '$1');
+  // \dot{x} -> x
+  s = s.replace(/\\dot\{([^}]*)\}/g, '$1');
+  // \frac{a}{b} -> a/b
+  s = s.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2');
+  // \sqrt{x} -> sqrt(x)
+  s = s.replace(/\\sqrt\{([^}]*)\}/g, 'sqrt($1)');
+  // subscript _{...} -> _content (remove braces)
+  s = s.replace(/\_{([^}]*)}/g, '_$1');
+  // superscript ^{...} -> ^content (remove braces)
+  s = s.replace(/\^\{([^}]*)}/g, '^$1');
+  // Named operators / symbols
+  s = s.replace(/\\Longleftrightarrow/g, '<=>');
+  s = s.replace(/\\Rightarrow/g, '=>');
+  s = s.replace(/\\Leftarrow/g, '<=');
+  s = s.replace(/\\rightarrow/g, '->');
+  s = s.replace(/\\leftarrow/g, '<-');
+  s = s.replace(/\\leftrightarrow/g, '<->');
+  s = s.replace(/\\geq/g, '>=');
+  s = s.replace(/\\leq/g, '<=');
+  s = s.replace(/\\neq/g, '!=');
+  s = s.replace(/\\approx/g, '~');
+  s = s.replace(/\\times/g, '*');
+  s = s.replace(/\\cdot/g, '*');
+  s = s.replace(/\\pm/g, '+/-');
+  s = s.replace(/\\infty/g, 'inf');
+  s = s.replace(/\\pi/g, 'pi');
+  s = s.replace(/\\theta/g, 'theta');
+  s = s.replace(/\\alpha/g, 'alpha');
+  s = s.replace(/\\beta/g, 'beta');
+  s = s.replace(/\\gamma/g, 'gamma');
+  s = s.replace(/\\delta/g, 'delta');
+  s = s.replace(/\\Delta/g, 'Delta');
+  s = s.replace(/\\omega/g, 'omega');
+  s = s.replace(/\\mu/g, 'mu');
+  s = s.replace(/\\sigma/g, 'sigma');
+  s = s.replace(/\\sum/g, 'Sum');
+  s = s.replace(/\\int/g, 'Integral');
+  s = s.replace(/\\partial/g, 'd');
+  // \quad -> space
+  s = s.replace(/\\quad/g, '  ');
+  s = s.replace(/\\qquad/g, '    ');
+  // \, \; \! -> space or nothing
+  s = s.replace(/\\[,;!]/g, ' ');
+  // Remove remaining backslash commands we didn't handle
+  s = s.replace(/\\[a-zA-Z]+/g, '');
+  // Clean up extra braces
+  s = s.replace(/[{}]/g, '');
+  // Collapse multiple spaces
+  s = s.replace(/  +/g, ' ');
+  return s.trim();
+}
+
 function preprocessMath(md: string): string {
   // Block math: $$...$$ (may span multiple lines)
   let result = md.replace(/\$\$([\s\S]*?)\$\$/g, (_match, expr: string) => {
-    const cleaned = expr.trim();
-    return '\n```\n' + cleaned + '\n```\n';
+    const plain = latexToPlainText(expr);
+    return '\n```\n' + plain + '\n```\n';
   });
   // Inline math: $...$ (single line, non-greedy)
   result = result.replace(/\$([^\n$]+?)\$/g, (_match, expr: string) => {
-    return '`' + expr.trim() + '`';
+    const plain = latexToPlainText(expr);
+    return '`' + plain + '`';
   });
   return result;
 }
