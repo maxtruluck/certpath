@@ -27,15 +27,18 @@ export default function LessonCompletePage() {
   useEffect(() => {
     // Load stats from sessionStorage
     const stored = sessionStorage.getItem('lessonComplete')
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      setStats(parsed)
-      sessionStorage.removeItem('lessonComplete')
-
-      // Fetch next lesson info
-      fetchNextLesson(parsed.courseSlug)
+    if (!stored) {
+      // Direct navigation without session data — redirect to course path
+      router.replace(`/course/${courseSlug}/path`)
+      return
     }
-  }, [])
+    const parsed = JSON.parse(stored)
+    setStats(parsed)
+    sessionStorage.removeItem('lessonComplete')
+
+    // Fetch next lesson info
+    fetchNextLesson(parsed.courseSlug)
+  }, [courseSlug, router])
 
   async function fetchNextLesson(slug: string) {
     try {

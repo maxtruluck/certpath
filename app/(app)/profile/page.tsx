@@ -105,10 +105,6 @@ export default function ProfilePage() {
             <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{lessonsDone}</p>
             <p style={{ fontSize: 11, color: '#999' }}>Lessons done</p>
           </div>
-          <div className="text-center">
-            <p style={{ fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>{stats?.total_questions_seen || 0}</p>
-            <p style={{ fontSize: 11, color: '#999' }}>Questions</p>
-          </div>
         </div>
       </div>
 

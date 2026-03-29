@@ -46,6 +46,7 @@ export default function LessonPlayerPage() {
   const [steps, setSteps] = useState<StepData[]>([])
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
+  const [completedStepsData, setCompletedStepsData] = useState<any[]>([])
   const [exitConfirm, setExitConfirm] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -163,10 +164,12 @@ export default function LessonPlayerPage() {
 
         if (progress && progress.status !== 'completed') {
           const completedSet = new Set<number>()
-          for (const sc of (progress.step_completions || [])) {
+          const stepCompletions = progress.step_completions || []
+          for (const sc of stepCompletions) {
             completedSet.add((sc as any).step_index)
           }
           setCompletedSteps(completedSet)
+          setCompletedStepsData(stepCompletions)
           const savedIdx = progress.current_step_index || 0
           let targetIndex = Math.min(savedIdx + 1, stepsData.length - 1)
           if (completedSet.has(targetIndex)) {
@@ -184,6 +187,7 @@ export default function LessonPlayerPage() {
           const completedSet = new Set<number>()
           for (let i = 0; i < stepsData.length; i++) completedSet.add(i)
           setCompletedSteps(completedSet)
+          setCompletedStepsData(progress.step_completions || [])
           setCurrentStepIndex(0)
         }
       }
@@ -370,14 +374,24 @@ export default function LessonPlayerPage() {
           />
         )}
 
-        {currentStep?.type === 'answer' && currentStep.question && (
-          <AnswerStep
-            key={currentStepIndex}
-            question={currentStep.question}
-            onComplete={handleAnswerComplete}
-            readOnly={isViewingCompleted}
-          />
-        )}
+        {currentStep?.type === 'answer' && currentStep.question && (() => {
+          const stepCompletion = completedStepsData.find(
+            (c: any) => c.step_index === currentStepIndex
+          )
+          return (
+            <AnswerStep
+              key={currentStepIndex}
+              question={currentStep.question}
+              onComplete={handleAnswerComplete}
+              readOnly={isViewingCompleted}
+              previousResult={isViewingCompleted && stepCompletion ? {
+                is_correct: stepCompletion.is_correct,
+                correct_option_ids: currentStep.question.correct_option_ids || [],
+                explanation: currentStep.question.explanation || '',
+              } : undefined}
+            />
+          )
+        })()}
 
         {currentStep?.type === 'embed' && currentStep.embedContent && (
           <EmbedStep

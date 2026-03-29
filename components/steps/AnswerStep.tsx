@@ -154,19 +154,28 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
 
   // Whether we should reveal correct answers (only after retries exhausted or correct)
   const retriesExhausted = wrongAttempts >= MAX_WRONG_ATTEMPTS
-  const shouldReveal = answerResult?.is_correct || retriesExhausted
+  const shouldReveal = readOnly || answerResult?.is_correct || retriesExhausted
+
+  // If read-only, show the previous answer state
+  const effectiveResult = readOnly ? (previousResult || answerResult) : answerResult
 
   // Auto-fire onComplete when answer is finalized (correct or retries exhausted)
   // This enables the parent's Next button immediately without requiring a Continue click
   const completedRef = useRef(false)
   useEffect(() => {
+    if (readOnly) return // Don't fire onComplete in review mode
     if (shouldReveal && answerResult && !completedRef.current) {
       completedRef.current = true
       onComplete(answerResult.is_correct)
     }
-  }, [shouldReveal, answerResult, onComplete])
+  }, [shouldReveal, answerResult, onComplete, readOnly])
 
   function getOptionState(optionId: string): 'default' | 'selected' | 'correct' | 'incorrect' {
+    // In readOnly review mode, highlight correct answers from previousResult
+    if (readOnly && effectiveResult) {
+      if (effectiveResult.correct_option_ids?.includes(optionId)) return 'correct'
+      return 'default'
+    }
     if (!answerResult) return selectedIds.includes(optionId) ? 'selected' : 'default'
     if (shouldReveal) {
       if (answerResult.correct_option_ids?.includes(optionId)) return 'correct'
@@ -196,9 +205,6 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
     ;[items[index], items[target]] = [items[target], items[index]]
     setOrderItems(items)
   }
-
-  // If read-only, show the previous answer state
-  const effectiveResult = readOnly ? (previousResult || answerResult) : answerResult
 
   return (
     <div className="pb-8">
@@ -232,11 +238,20 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
       )}
       {question.question_type === 'fill_blank' && effectiveResult && (
         <div className="mb-6">
-          <div className={`px-4 py-3 rounded-xl border-2 text-sm font-medium ${effectiveResult.is_correct ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
-            {fillBlankAnswer || '(empty)'}
-          </div>
-          {!effectiveResult.is_correct && shouldReveal && effectiveResult.acceptable_answers && (
-            <p className="text-xs text-[#6B635A] mt-2">Correct answer: <span className="font-semibold">{effectiveResult.acceptable_answers[0]}</span></p>
+          {readOnly ? (
+            // Review mode: show the correct answer
+            <div className="px-4 py-3 rounded-xl border-2 border-green-400 bg-green-50 text-sm font-medium text-green-700">
+              {effectiveResult.acceptable_answers?.[0] || '(answer)'}
+            </div>
+          ) : (
+            <>
+              <div className={`px-4 py-3 rounded-xl border-2 text-sm font-medium ${effectiveResult.is_correct ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
+                {fillBlankAnswer || '(empty)'}
+              </div>
+              {!effectiveResult.is_correct && shouldReveal && effectiveResult.acceptable_answers && (
+                <p className="text-xs text-[#6B635A] mt-2">Correct answer: <span className="font-semibold">{effectiveResult.acceptable_answers[0]}</span></p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -265,20 +280,33 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
       )}
       {question.question_type === 'ordering' && effectiveResult && (
         <div className="mb-6 space-y-2">
-          {orderItems.map((item, idx) => {
-            const isCorrectPosition = effectiveResult.correct_order && effectiveResult.correct_order[idx] === item.id
-            const showPositionFeedback = shouldReveal
-            return (
-              <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
-                showPositionFeedback
-                  ? (isCorrectPosition ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
-                  : 'border-red-200 bg-red-50/50'
-              }`}>
-                <span className="text-sm font-medium text-[#6B635A] w-5">{idx + 1}.</span>
-                <span className="text-sm text-[#2C2825] flex-1">{item.text.includes('$') ? <MathText text={item.text} /> : item.text}</span>
-              </div>
-            )
-          })}
+          {readOnly ? (
+            // Review mode: show correct order from question options mapped by correct_order IDs
+            (effectiveResult.correct_order || []).map((id: string, idx: number) => {
+              const item = question.options.find(o => o.id === id)
+              return (
+                <div key={id} className="flex items-center gap-3 p-3 rounded-xl border-2 border-green-400 bg-green-50">
+                  <span className="text-sm font-medium text-[#6B635A] w-5">{idx + 1}.</span>
+                  <span className="text-sm text-[#2C2825] flex-1">{item ? (item.text.includes('$') ? <MathText text={item.text} /> : item.text) : id}</span>
+                </div>
+              )
+            })
+          ) : (
+            orderItems.map((item, idx) => {
+              const isCorrectPosition = effectiveResult.correct_order && effectiveResult.correct_order[idx] === item.id
+              const showPositionFeedback = shouldReveal
+              return (
+                <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
+                  showPositionFeedback
+                    ? (isCorrectPosition ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
+                    : 'border-red-200 bg-red-50/50'
+                }`}>
+                  <span className="text-sm font-medium text-[#6B635A] w-5">{idx + 1}.</span>
+                  <span className="text-sm text-[#2C2825] flex-1">{item.text.includes('$') ? <MathText text={item.text} /> : item.text}</span>
+                </div>
+              )
+            })
+          )}
         </div>
       )}
 
@@ -305,30 +333,43 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
       )}
       {question.question_type === 'matching' && effectiveResult && effectiveResult.matching_pairs && (
         <div className="mb-6 space-y-2">
-          {question.matching_items!.lefts.map(left => {
-            const userRight = matchSelections[left] || ''
-            const correctRight = effectiveResult.matching_pairs!.find(p => p.left === left)?.right
-            const isCorrectPair = userRight.toLowerCase() === correctRight?.toLowerCase()
-            return (
-              <div key={left} className={`p-3 rounded-xl border-2 ${
-                shouldReveal
-                  ? (isCorrectPair ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
-                  : 'border-red-200 bg-red-50/50'
-              }`}>
+          {readOnly ? (
+            // Review mode: show correct pairs
+            effectiveResult.matching_pairs!.map((pair: { left: string; right: string }) => (
+              <div key={pair.left} className="p-3 rounded-xl border-2 border-green-400 bg-green-50">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-[#2C2825]">{left}</span>
+                  <span className="text-sm font-semibold text-[#2C2825]">{pair.left}</span>
                   <span className="text-xs text-[#A39B90]">&rarr;</span>
-                  <span className={`text-sm ${isCorrectPair ? 'text-[#2C2825]' : 'text-red-600 line-through'}`}>{userRight || '(no answer)'}</span>
+                  <span className="text-sm text-[#2C2825]">{pair.right}</span>
                 </div>
-                {shouldReveal && !isCorrectPair && (
-                  <div className="mt-1 flex items-center gap-1">
-                    <span className="text-xs text-[#A39B90]">Correct:</span>
-                    <span className="text-xs font-medium text-green-700">{correctRight}</span>
-                  </div>
-                )}
               </div>
-            )
-          })}
+            ))
+          ) : (
+            question.matching_items!.lefts.map(left => {
+              const userRight = matchSelections[left] || ''
+              const correctRight = effectiveResult.matching_pairs!.find(p => p.left === left)?.right
+              const isCorrectPair = userRight.toLowerCase() === correctRight?.toLowerCase()
+              return (
+                <div key={left} className={`p-3 rounded-xl border-2 ${
+                  shouldReveal
+                    ? (isCorrectPair ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50')
+                    : 'border-red-200 bg-red-50/50'
+                }`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-[#2C2825]">{left}</span>
+                    <span className="text-xs text-[#A39B90]">&rarr;</span>
+                    <span className={`text-sm ${isCorrectPair ? 'text-[#2C2825]' : 'text-red-600 line-through'}`}>{userRight || '(no answer)'}</span>
+                  </div>
+                  {shouldReveal && !isCorrectPair && (
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className="text-xs text-[#A39B90]">Correct:</span>
+                      <span className="text-xs font-medium text-green-700">{correctRight}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
       )}
 
@@ -379,20 +420,22 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
 
       {/* Feedback panel */}
       {effectiveResult && (
-        <div className={`rounded-2xl p-5 space-y-3 animate-slide-up ${effectiveResult.is_correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+        <div className={`rounded-2xl p-5 space-y-3 ${readOnly ? '' : 'animate-slide-up'} ${effectiveResult.is_correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
           <h3 className={`font-bold text-lg ${effectiveResult.is_correct ? 'text-green-700' : 'text-red-700'}`}>
-            {effectiveResult.is_correct ? 'Correct!' : shouldReveal ? 'Answer Revealed' : 'Not quite'}
+            {readOnly
+              ? (effectiveResult.is_correct ? 'You got this right' : 'Review the correct answer above')
+              : (effectiveResult.is_correct ? 'Correct!' : shouldReveal ? 'Answer Revealed' : 'Not quite')}
           </h3>
 
           {/* Only show per-option explanation after retries exhausted */}
-          {!effectiveResult.is_correct && shouldReveal && effectiveResult.option_explanation && (
+          {!readOnly && !effectiveResult.is_correct && shouldReveal && effectiveResult.option_explanation && (
             <div className="bg-red-100/50 rounded-lg p-3 text-sm text-red-800">
               <p className="font-medium mb-1">Why your answer is wrong:</p>
               <p>{effectiveResult.option_explanation}</p>
             </div>
           )}
 
-          {/* Show full explanation only on correct or retries exhausted */}
+          {/* Show full explanation on correct or retries exhausted, or in review mode */}
           {shouldReveal && effectiveResult.explanation && (
             <div className="text-sm text-[#6B635A] leading-relaxed">
               <p>{effectiveResult.explanation.includes('$')
@@ -402,7 +445,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult, pre
           )}
 
           {/* First wrong: just a hint to try again */}
-          {!effectiveResult.is_correct && !shouldReveal && (
+          {!readOnly && !effectiveResult.is_correct && !shouldReveal && (
             <p className="text-sm text-red-600">Give it another try.</p>
           )}
 
