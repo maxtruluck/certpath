@@ -38,6 +38,13 @@ apps/mobile/.env
 # supabase local state
 supabase/.temp/
 
+# expo
+apps/mobile/.expo/
+apps/mobile/dist/
+
+# claude code
+.claude/plans/
+
 # vercel
 .vercel
 
