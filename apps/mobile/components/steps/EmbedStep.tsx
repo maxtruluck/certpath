@@ -1,4 +1,5 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { colors, spacing, fontSize, radii } from '@/lib/theme';
 import { CoordinateDiagram } from '../CoordinateDiagram';
 import type { DiagramData } from '../CoordinateDiagram';
@@ -46,14 +47,37 @@ export function EmbedStep({ title, content }: EmbedStepProps) {
         </View>
       ) : sub === 'math_graph' && content.graph_data ? (
         <CoordinateDiagram data={content.graph_data} />
+      ) : sub === 'diagram' && content.mermaid ? (
+        <View style={styles.diagramContainer}>
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+                <style>
+                  body { margin: 0; padding: 16px; display: flex; justify-content: center; background: transparent; }
+                  .mermaid { font-size: 14px; }
+                </style>
+              </head>
+              <body>
+                <pre class="mermaid">${content.mermaid}</pre>
+                <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+              </body>
+              </html>
+            `}}
+            style={{ height: 300, backgroundColor: 'transparent' }}
+            scrollEnabled={false}
+            javaScriptEnabled={true}
+          />
+          {content.caption ? <Text style={styles.caption}>{content.caption}</Text> : null}
+        </View>
       ) : (
         <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>
-            {sub === 'diagram' ? 'Diagram' : 'Embedded content'}
-          </Text>
-          <Text style={styles.placeholderSub}>
-            Best viewed on web
-          </Text>
+          <Text style={styles.placeholderText}>Embedded content</Text>
+          <Text style={styles.placeholderSub}>Best viewed on web</Text>
         </View>
       )}
     </View>
@@ -98,6 +122,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  diagramContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E8E4DD',
+    backgroundColor: '#ffffff',
   },
   placeholder: {
     backgroundColor: colors.surfaceLight,

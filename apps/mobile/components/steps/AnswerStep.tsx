@@ -279,7 +279,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
             <View key={item.id} style={styles.orderRow}>
               <View style={styles.orderItem}>
                 <Text style={styles.orderNumber}>{idx + 1}.</Text>
-                <Text style={styles.orderText}>{item.text}</Text>
+                <View style={styles.orderContent}><MarkdownContent content={item.text} /></View>
               </View>
               <View style={styles.orderButtons}>
                 <Pressable onPress={() => moveOrderItem(idx, -1)} disabled={idx === 0} style={({ pressed }) => [styles.orderBtn, pressed && { opacity: 0.5 }]}>
@@ -301,7 +301,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
               return (
                 <View key={id} style={[styles.orderItem, { borderColor: '#4ade80', backgroundColor: '#f0fdf4', borderWidth: 2 }]}>
                   <Text style={styles.orderNumber}>{idx + 1}.</Text>
-                  <Text style={styles.orderText}>{item?.text || id}</Text>
+                  <View style={styles.orderContent}><MarkdownContent content={item?.text || id} /></View>
                 </View>
               );
             })
@@ -315,7 +315,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
                   backgroundColor: shouldReveal ? (isCorrectPosition ? '#f0fdf4' : '#fef2f2') : '#fef2f2',
                 }]}>
                   <Text style={styles.orderNumber}>{idx + 1}.</Text>
-                  <Text style={styles.orderText}>{item.text}</Text>
+                  <View style={styles.orderContent}><MarkdownContent content={item.text} /></View>
                 </View>
               );
             })
@@ -328,7 +328,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
         <View style={styles.matchContainer}>
           {question.matching_items.lefts.map((left) => (
             <View key={left} style={styles.matchRow}>
-              <Text style={styles.matchLeft} numberOfLines={2}>{left}</Text>
+              <View style={styles.matchLeftWrap}><MarkdownContent content={left} /></View>
               <Pressable
                 style={[styles.matchDropdown, activeMatchLeft === left && styles.matchDropdownActive]}
                 onPress={() => setActiveMatchLeft(activeMatchLeft === left ? null : left)}
@@ -352,7 +352,7 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
                     setActiveMatchLeft(null);
                   }}
                 >
-                  <Text style={styles.matchOptionText}>{right}</Text>
+                  <MarkdownContent content={right} />
                 </Pressable>
               ))}
             </View>
@@ -364,9 +364,9 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
           {readOnly && effectiveResult.matching_pairs ? (
             effectiveResult.matching_pairs.map((pair) => (
               <View key={pair.left} style={[styles.matchResultRow, { borderColor: '#4ade80', backgroundColor: '#f0fdf4' }]}>
-                <Text style={styles.matchResultLeft}>{pair.left}</Text>
+                <View style={styles.matchResultLeftWrap}><MarkdownContent content={pair.left} /></View>
                 <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
-                <Text style={styles.matchResultRight}>{pair.right}</Text>
+                <View style={styles.matchResultRightWrap}><MarkdownContent content={pair.right} /></View>
               </View>
             ))
           ) : question.matching_items ? (
@@ -379,11 +379,11 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
                   borderColor: shouldReveal ? (isCorrectPair ? '#4ade80' : '#f87171') : '#fca5a5',
                   backgroundColor: shouldReveal ? (isCorrectPair ? '#f0fdf4' : '#fef2f2') : '#fef2f2',
                 }]}>
-                  <Text style={styles.matchResultLeft}>{left}</Text>
+                  <View style={styles.matchResultLeftWrap}><MarkdownContent content={left} /></View>
                   <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
-                  <Text style={[styles.matchResultRight, !isCorrectPair && { textDecorationLine: 'line-through', color: '#dc2626' }]}>
-                    {userRight || '(none)'}
-                  </Text>
+                  <View style={[styles.matchResultRightWrap, !isCorrectPair && { opacity: 0.5 }]}>
+                    <MarkdownContent content={userRight || '(none)'} />
+                  </View>
                   {shouldReveal && !isCorrectPair && (
                     <Text style={styles.matchCorrectHint}>{correctRight}</Text>
                   )}
@@ -408,9 +408,9 @@ export function AnswerStep({ question, onComplete, readOnly, previousResult }: A
                 disabled={isDisabled}
               >
                 <Text style={styles.optionLabel}>{optionLabels[idx]}.</Text>
-                <Text style={[styles.optionText, effectiveResult && getOptionStyle(option.id).borderColor === colors.border && { color: colors.textMuted }]}>
-                  {option.text}
-                </Text>
+                <View style={styles.optionContent}>
+                  <MarkdownContent content={option.text} />
+                </View>
               </Pressable>
             );
           })}
@@ -568,6 +568,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
   },
+  orderContent: {
+    flex: 1,
+  },
   orderButtons: {
     gap: 2,
   },
@@ -589,6 +592,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '500',
     color: colors.text,
+    width: '35%',
+  },
+  matchLeftWrap: {
     width: '35%',
   },
   matchDropdown: {
@@ -644,9 +650,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  matchResultLeftWrap: {
+    maxWidth: '40%',
+  },
   matchResultRight: {
     fontSize: fontSize.sm,
     color: colors.text,
+    flex: 1,
+  },
+  matchResultRightWrap: {
     flex: 1,
   },
   matchCorrectHint: {
@@ -677,6 +689,9 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: fontSize.sm,
     color: colors.text,
+    flex: 1,
+  },
+  optionContent: {
     flex: 1,
   },
 

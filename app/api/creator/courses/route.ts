@@ -44,8 +44,7 @@ export async function POST(request: NextRequest) {
       tags,
       learning_objectives,
       card_color,
-      estimated_duration_minutes,
-      last_wizard_step,
+      estimated_duration,
     } = body
 
     if (!title) {
@@ -79,8 +78,7 @@ export async function POST(request: NextRequest) {
         tags: tags || [],
         learning_objectives: learning_objectives || [],
         card_color: card_color || getCategoryColor(category || 'General'),
-        estimated_duration_minutes: estimated_duration_minutes || null,
-        last_wizard_step: last_wizard_step || null,
+        estimated_duration: estimated_duration || null,
         status: 'draft',
       })
       .select('id, slug, status')

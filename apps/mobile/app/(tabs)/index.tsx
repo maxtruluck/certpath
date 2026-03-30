@@ -2,28 +2,19 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  Pressable,
   ScrollView,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiFetch } from '@/lib/api';
 import { colors, spacing, fontSize } from '@/lib/theme';
-import { getCategoryStyle, getFeaturedGradient, CURATED_CATEGORIES } from '@/lib/category-styles';
 import HeroCourseCard from '@/components/HeroCourseCard';
-import CompactCourseCard from '@/components/CompactCourseCard';
-import DiscoveryCourseCard from '@/components/DiscoveryCourseCard';
-import FeaturedCourseCard from '@/components/FeaturedCourseCard';
-import CategoryIcon from '@/components/CategoryIcon';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_GAP = 8;
 const SCREEN_PAD = 16;
-const GRID_CARD_WIDTH = (SCREEN_WIDTH - SCREEN_PAD * 2 - CARD_GAP) / 2;
 
 /* ─── Types ─── */
 
@@ -70,7 +61,7 @@ interface BrowseCourse {
   price_cents: number | null;
   stats: {
     module_count: number;
-    topic_count: number;
+    lesson_count: number;
     question_count: number;
   };
   tags?: string[];
@@ -86,18 +77,21 @@ interface BrowseCourse {
 export default function HomeScreen() {
   const router = useRouter();
   const [enrolled, setEnrolled] = useState<DashboardCourse[]>([]);
-  const [allCourses, setAllCourses] = useState<BrowseCourse[]>([]);
+  const [browseCourses, setBrowseCourses] = useState<BrowseCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [dashRes, browseRes] = await Promise.all([
-        apiFetch<{ active_courses: DashboardCourse[] }>('/api/dashboard'),
-        apiFetch<{ courses: BrowseCourse[] }>('/api/courses'),
-      ]);
-      setEnrolled(dashRes.active_courses || []);
-      setAllCourses(browseRes.courses || []);
+      const dashRes = await apiFetch<{ active_courses: DashboardCourse[] }>('/api/dashboard');
+      const courses = dashRes.active_courses || [];
+      setEnrolled(courses);
+
+      // Only fetch browse courses if user has no enrollments
+      if (courses.length === 0) {
+        const browseRes = await apiFetch<{ courses: BrowseCourse[] }>('/api/courses?limit=6');
+        setBrowseCourses(browseRes.courses || []);
+      }
     } catch (err) {
       console.error('Home fetch error:', err);
     }
@@ -113,23 +107,11 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
-  const isReturningUser = enrolled.length > 0;
-
   const heroCourse = useMemo(() => {
     if (enrolled.length === 0) return null;
     const sorted = [...enrolled].sort((a, b) => {
-      // Prefer courses with actual progress over untouched ones
-      const aHasProgress = a.progress_percent > 0 || a.sessions_completed > 0;
-      const bHasProgress = b.progress_percent > 0 || b.sessions_completed > 0;
-      if (aHasProgress && !bHasProgress) return -1;
-      if (!aHasProgress && bHasProgress) return 1;
-      // Then sort by most recent session
-      const aTime = a.last_session_at
-        ? new Date(a.last_session_at).getTime()
-        : 0;
-      const bTime = b.last_session_at
-        ? new Date(b.last_session_at).getTime()
-        : 0;
+      const aTime = a.last_session_at ? new Date(a.last_session_at).getTime() : 0;
+      const bTime = b.last_session_at ? new Date(b.last_session_at).getTime() : 0;
       return bTime - aTime;
     });
     return sorted[0];
@@ -137,31 +119,8 @@ export default function HomeScreen() {
 
   const otherEnrolled = useMemo(() => {
     if (!heroCourse) return [];
-    // Show all enrolled courses, with the hero course first
-    return [
-      heroCourse,
-      ...enrolled.filter((c) => c.id !== heroCourse.id),
-    ];
+    return enrolled.filter((c) => c.id !== heroCourse.id);
   }, [enrolled, heroCourse]);
-
-  const enrolledCourseIds = useMemo(
-    () => new Set(enrolled.map((c) => c.course_id)),
-    [enrolled],
-  );
-
-  const discoveryCourses = useMemo(
-    () => allCourses.filter((c) => !enrolledCourseIds.has(c.id)).slice(0, 6),
-    [allCourses, enrolledCourseIds],
-  );
-
-  const featuredCourses = useMemo(() => allCourses.slice(0, 6), [allCourses]);
-
-  const categories = useMemo(() => {
-    return CURATED_CATEGORIES.map((name) => {
-      const style = getCategoryStyle(name);
-      return { name, icon: style.icon, bgColor: style.bgColor, iconColor: style.textColor };
-    });
-  }, []);
 
   if (loading) {
     return (
@@ -192,18 +151,15 @@ export default function HomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {isReturningUser ? (
+        {enrolled.length > 0 ? (
           <ReturningUserView
             heroCourse={heroCourse!}
             otherEnrolled={otherEnrolled}
-            discoveryCourses={discoveryCourses}
             router={router}
           />
         ) : (
           <NewUserView
-            courses={allCourses.slice(0, 10)}
-            featuredCourses={featuredCourses}
-            categories={categories}
+            courses={browseCourses}
             router={router}
           />
         )}
@@ -217,12 +173,10 @@ export default function HomeScreen() {
 function ReturningUserView({
   heroCourse,
   otherEnrolled,
-  discoveryCourses,
   router,
 }: {
   heroCourse: DashboardCourse;
   otherEnrolled: DashboardCourse[];
-  discoveryCourses: BrowseCourse[];
   router: ReturnType<typeof useRouter>;
 }) {
   const heroProgress = heroCourse.progress_percent ?? 0;
@@ -236,7 +190,7 @@ function ReturningUserView({
 
   return (
     <>
-      {/* Section A: Continue Learning Hero */}
+      {/* Hero: Continue Learning */}
       <View style={styles.heroSection}>
         <HeroCourseCard
           title={heroCourse.course.title}
@@ -249,53 +203,44 @@ function ReturningUserView({
         />
       </View>
 
-      {/* Section B: Your Courses (horizontal) */}
+      {/* Your Courses: full-width vertical list */}
       {otherEnrolled.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>YOUR COURSES</Text>
-          <FlatList
-            horizontal
-            data={otherEnrolled}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            renderItem={({ item }) => {
-              const pct = item.progress_percent ?? 0;
-              return (
-                <CompactCourseCard
-                  title={item.course.title}
-                  progressPercent={pct}
-                  onPress={() =>
-                    router.push(`/course/${item.course.slug}/path`)
-                  }
-                />
-              );
-            }}
-            ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
-          />
-        </View>
-      )}
-
-      {/* Section C: Recommended (2-col grid) */}
-      {discoveryCourses.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>RECOMMENDED FOR YOU</Text>
-          <View style={styles.grid}>
-            {discoveryCourses.map((course) => (
-              <DiscoveryCourseCard
-                key={course.id}
-                title={course.title}
-                creatorName={course.provider_name}
-                description={course.description}
-                lessonCount={course.stats.topic_count}
-                category={course.category}
-                priceCents={course.price_cents}
-                tags={course.tags}
-                width={GRID_CARD_WIDTH}
-                onPress={() => router.push(`/course/${course.slug}`)}
-              />
-            ))}
-          </View>
+          {otherEnrolled.map((item) => {
+            const pct = item.progress_percent ?? 0;
+            const lessonLabel = item.lessons_total > 0
+              ? `${item.lessons_completed ?? 0}/${item.lessons_total} lessons`
+              : null;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => router.push(`/course/${item.course.slug}/path`)}
+                style={({ pressed }) => [
+                  styles.courseRow,
+                  pressed && styles.courseRowPressed,
+                ]}
+              >
+                <View style={styles.courseRowTop}>
+                  <Text style={styles.courseRowTitle} numberOfLines={1}>
+                    {item.course.title}
+                  </Text>
+                  <Text style={styles.courseRowPercent}>{pct}%</Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min(Math.max(pct, 0), 100)}%` },
+                    ]}
+                  />
+                </View>
+                {lessonLabel && (
+                  <Text style={styles.courseRowMeta}>{lessonLabel}</Text>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </>
@@ -306,106 +251,49 @@ function ReturningUserView({
 
 function NewUserView({
   courses,
-  featuredCourses,
-  categories,
   router,
 }: {
   courses: BrowseCourse[];
-  featuredCourses: BrowseCourse[];
-  categories: { name: string; icon: string; bgColor: string; iconColor: string }[];
   router: ReturnType<typeof useRouter>;
 }) {
+  const formatPrice = (cents: number | null) =>
+    cents && cents > 0 ? `$${(cents / 100).toFixed(2)}` : 'Free';
+
   return (
     <>
-      {/* Section A: Hero */}
-      <View style={styles.heroSection}>
-        <HeroCourseCard
-          title="Start learning today"
-          subtitle="Bite-sized interactive courses from expert creators"
-          buttonLabel="Explore courses"
-          onPress={() => router.push('/(tabs)/browse')}
-        />
+      {/* Popular Courses */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>POPULAR COURSES</Text>
+        {courses.length === 0 ? (
+          <Text style={styles.emptyText}>No courses available yet.</Text>
+        ) : (
+          courses.map((course) => (
+            <Pressable
+              key={course.id}
+              onPress={() => router.push(`/course/${course.slug}`)}
+              style={({ pressed }) => [
+                styles.courseRow,
+                pressed && styles.courseRowPressed,
+              ]}
+            >
+              <Text style={styles.courseRowTitle} numberOfLines={1}>
+                {course.title}
+              </Text>
+              <View style={styles.browseRowMeta}>
+                {course.stats.lesson_count > 0 && (
+                  <Text style={styles.courseRowMeta}>
+                    {course.stats.lesson_count} lessons
+                  </Text>
+                )}
+                <Text style={styles.courseRowMeta}>{course.category}</Text>
+                <Text style={styles.courseRowPrice}>
+                  {formatPrice(course.price_cents)}
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        )}
       </View>
-
-      {/* Section B: Category Icons */}
-      {categories.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>CATEGORIES</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryRow}
-          >
-            {categories.map((cat) => (
-              <CategoryIcon
-                key={cat.name}
-                name={cat.name}
-                icon={cat.icon}
-                bgColor={cat.bgColor}
-                iconColor={cat.iconColor}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(tabs)/browse',
-                    params: { category: cat.name },
-                  })
-                }
-              />
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Section C: Featured (horizontal scroll) */}
-      {featuredCourses.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>FEATURED</Text>
-          <FlatList
-            horizontal
-            data={featuredCourses}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            snapToInterval={170}
-            decelerationRate="fast"
-            renderItem={({ item, index }) => (
-              <FeaturedCourseCard
-                title={item.title}
-                creatorName={item.provider_name}
-                lessonCount={item.stats.topic_count}
-                priceCents={item.price_cents}
-                thumbnailUrl={item.thumbnail_url}
-                tags={item.tags}
-                gradientColors={getFeaturedGradient(index)}
-                onPress={() => router.push(`/course/${item.slug}`)}
-              />
-            )}
-            ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
-          />
-        </View>
-      )}
-
-      {/* Section D: New on openED (2-col grid) */}
-      {courses.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>NEW ON OPENED</Text>
-          <View style={styles.grid}>
-            {courses.map((course) => (
-              <DiscoveryCourseCard
-                key={course.id}
-                title={course.title}
-                creatorName={course.provider_name}
-                description={course.description}
-                lessonCount={course.stats.topic_count}
-                category={course.category}
-                priceCents={course.price_cents}
-                tags={course.tags}
-                width={GRID_CARD_WIDTH}
-                onPress={() => router.push(`/course/${course.slug}`)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
     </>
   );
 }
@@ -466,15 +354,65 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 8,
   },
-  horizontalList: {
-    paddingRight: SCREEN_PAD,
+  courseRow: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: 8,
   },
-  categoryRow: {
-    gap: 12,
+  courseRowPressed: {
+    backgroundColor: colors.surfaceLight,
   },
-  grid: {
+  courseRowTop: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: CARD_GAP,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  courseRowTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  courseRowPercent: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
+  courseRowMeta: {
+    fontSize: fontSize.xs,
+    color: '#999',
+    marginTop: 6,
+  },
+  browseRowMeta: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 6,
+  },
+  courseRowPrice: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: '#999',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
 });

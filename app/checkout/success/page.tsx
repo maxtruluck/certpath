@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const courseSlug = searchParams.get('course');
+  const courseSlug = searchParams.get('slug');
   const [enrolled, setEnrolled] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
 

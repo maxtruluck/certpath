@@ -120,7 +120,7 @@ export async function PATCH(
     const SAFE_FIELDS = [
       'title', 'description', 'category', 'difficulty', 'is_free', 'price_cents',
       'currency', 'tags', 'learning_objectives', 'card_color', 'status', 'slug',
-      'estimated_duration_minutes', 'last_wizard_step',
+      'estimated_duration',
     ]
 
     const updates: Record<string, unknown> = {}
